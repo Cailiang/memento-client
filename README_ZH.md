@@ -26,7 +26,7 @@ Memento 用来发现被遗忘的后台服务、占用空间较大的临时文件
 | macOS Intel | `Memento-*-x64.dmg` | 完整维护与诊断功能 |
 | macOS Apple 芯片 | `Memento-*-arm64.dmg` | 完整维护与诊断功能 |
 | Windows x64 | `Memento-*-x64.exe` | 桌面界面与 AI 设置预览 |
-| Linux x64 | `Memento-*-x64.AppImage` 或 `.deb` | 桌面界面与 AI 设置预览 |
+| Linux x64 | `Memento-*-x86_64.AppImage` 或 `Memento-*-amd64.deb` | 桌面界面与 AI 设置预览 |
 
 当前维护扫描引擎只支持 macOS。Windows 和 Linux 版本可以安全启动，但不会提供 macOS 清理操作；发布这些版本是为了在原生扫描能力开发期间验证跨平台桌面界面。
 

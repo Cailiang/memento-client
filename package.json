@@ -2,7 +2,10 @@
   "name": "memento",
   "version": "0.6.2",
   "private": true,
-  "author": "Memento Contributors",
+  "author": {
+    "name": "Cailiang",
+    "email": "1006980793@qq.com"
+  },
   "description": "A careful macOS maintenance and startup diagnostics app.",
   "main": "./out/main/index.js",
   "scripts": {
@@ -12,9 +15,9 @@
     "ai:gateway:smoke": "node examples/ai-gateway-smoke/server.mjs",
     "ai:gateway:client": "node examples/ai-gateway-smoke/client.mjs",
     "build": "npm run typecheck && electron-vite build",
-    "dist:mac": "npm run build && electron-builder --mac dmg",
-    "dist:win": "npm run build && electron-builder --win nsis",
-    "dist:linux": "npm run build && electron-builder --linux AppImage deb",
+    "dist:mac": "npm run build && electron-builder --mac dmg --publish never",
+    "dist:win": "npm run build && electron-builder --win nsis --publish never",
+    "dist:linux": "npm run build && electron-builder --linux AppImage deb --publish never",
     "preview": "electron-vite preview",
     "scan:smoke": "vite-node scripts/smoke-scan.ts",
     "test": "vitest run",
@@ -51,10 +54,6 @@
       "package.json"
     ],
     "extraResources": [
-      {
-        "from": "build/icon.icns",
-        "to": "icon.icns"
-      },
       {
         "from": "build/icon.png",
         "to": "icon.png"

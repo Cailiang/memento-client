@@ -26,7 +26,7 @@ Download the latest build from [GitHub Releases](https://github.com/Cailiang/mem
 | macOS Intel | `Memento-*-x64.dmg` | Full maintenance and diagnostics support |
 | macOS Apple silicon | `Memento-*-arm64.dmg` | Full maintenance and diagnostics support |
 | Windows x64 | `Memento-*-x64.exe` | Desktop shell and AI settings preview |
-| Linux x64 | `Memento-*-x64.AppImage` or `.deb` | Desktop shell and AI settings preview |
+| Linux x64 | `Memento-*-x86_64.AppImage` or `Memento-*-amd64.deb` | Desktop shell and AI settings preview |
 
 The maintenance scanner currently targets macOS. Windows and Linux builds launch safely without exposing macOS cleanup actions; they are published so the cross-platform desktop shell can be tested while native scanners are developed.
 
