@@ -1,0 +1,82 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify release tag
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          package_version="$(node -p "require('./package.json').version")"
+          test "v${package_version}" = "${GITHUB_REF_NAME}"
+
+  build:
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: macos-x64
+            os: macos-14
+            command: npm run dist:mac -- --x64
+          - id: macos-arm64
+            os: macos-14
+            command: npm run dist:mac -- --arm64
+          - id: windows-x64
+            os: windows-2022
+            command: npm run dist:win -- --x64
+          - id: linux-x64
+            os: ubuntu-22.04
+            command: npm run dist:linux -- --x64
+    runs-on: ${{ matrix.os }}
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Build ${{ matrix.id }}
+        run: ${{ matrix.command }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.id }}
+          if-no-files-found: error
+          path: |
+            release/*.dmg
+            release/*.exe
+            release/*.AppImage
+            release/*.deb
+
+  release:
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Publish bilingual GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: >-
+          gh release create "${GITHUB_REF_NAME}"
+          artifacts/*/*
+          --repo "${GITHUB_REPOSITORY}"
+          --title "Memento ${GITHUB_REF_NAME#v}"
+          --notes-file RELEASE_NOTES.md
