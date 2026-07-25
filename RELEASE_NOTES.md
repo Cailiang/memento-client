@@ -1,17 +1,16 @@
-# Memento 0.6.2
+# Memento 0.6.12
 
 ## English
 
-This release focuses on clearer decisions, safer service cleanup, complete language switching, and a more polished settings experience.
+This release simplifies navigation and keeps every maintenance decision close to the item being reviewed.
 
 ### Highlights
 
-- AI now explains items in plain language and gives a direct answer: stop/remove/clean, or leave it alone.
-- Stopped services remain visible. When an uninstall option is available, users can continue with **Uninstall & clean**.
-- Chinese and English action labels now update correctly after switching languages in either direction.
-- Appearance settings use a smaller four-column theme grid with eight distinct palettes.
-- The application Bundle ID is now `com.fcl.memento`.
-- Release automation builds macOS Intel, macOS Apple silicon, Windows x64, and Linux x64 packages.
+- Service, storage, and application rows no longer open redundant detail drawers. Useful context, Finder locations, AI analysis, and actions stay in the list.
+- General and AI preferences now share one **Settings** destination with a compact tab switcher.
+- All eight themes remain available through concise palette swatches that use much less space.
+- **Ask AI** clearly distinguishes starting, running, viewing, and collapsing an analysis while keeping results directly below the selected item.
+- Primary navigation now contains six destinations and remains readable on narrow mobile layouts.
 
 ### Platform note
 
@@ -19,16 +18,15 @@ Full maintenance scanning and cleanup currently support macOS. Windows and Linux
 
 ## 简体中文
 
-这个版本重点改进了 AI 结论、后台服务处理、多语言切换和设置页的使用体验。
+这个版本进一步简化导航，让维护判断和有效操作始终靠近正在查看的项目。
 
 ### 主要变化
 
-- AI 使用日常语言解释项目，并直接回答应该停止、删除、清理，还是先不要处理。
-- 服务停止后仍保留在列表中；存在卸载能力时，可以继续选择“卸载并清理”。
-- 中文和英文来回切换后，操作按钮会完整更新，不再残留旧语言。
-- 外观设置改为更紧凑的四列主题网格，并提供八种不同配色。
-- 应用 Bundle ID 修改为 `com.fcl.memento`。
-- 发布流程会构建 macOS Intel、macOS Apple 芯片、Windows x64 和 Linux x64 安装包。
+- 后台服务、存储空间和应用列表不再打开信息重复的详情侧栏；说明、Finder 位置、AI 分析与操作直接保留在列表中。
+- 通用设置和 AI 设置合并到同一个“设置”入口，并通过紧凑标签切换。
+- 八套主题全部保留，以占用空间更小的色板方式呈现。
+- “问 AI”明确区分开始、分析中、查看结果和收起状态，结果继续在当前项目下方展示。
+- 主导航精简为六个入口，在窄屏手机布局中也保持清晰。
 
 ### 平台说明
 

@@ -2,16 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   BrainCircuit,
   Check,
-  ChevronDown,
-  Database,
   Info,
   LoaderCircle,
   LockKeyhole,
   RefreshCw,
-  Send,
   Settings2,
-  ShieldCheck,
-  Square
+  Square,
+  X
 } from 'lucide-react'
 import type {
   AiDataPreview,
@@ -25,21 +22,7 @@ import type { ScanCandidate, ScanResult } from '../../../shared/types'
 import { demoAiApi } from './demo-ai'
 import { useI18n } from '../i18n'
 import { parseLocalizedAiError } from './error-copy'
-
-type PanelState =
-  | { status: 'idle' }
-  | { status: 'preparing' }
-  | { status: 'preview'; preview: AiDataPreview }
-  | { status: 'analyzing'; preview: AiDataPreview }
-  | { status: 'succeeded'; analysis: AiTerminalAnalysis }
-  | { status: 'failed'; error: PublicAiError }
-
-function providerLabel(settings: PublicAiSettings, english: boolean): string {
-  if (settings.mode === 'local') return english ? 'Local Ollama' : '本地 Ollama'
-  if (settings.mode === 'byok') return english ? 'Your API Key' : '自己的 API Key'
-  if (settings.mode === 'hosted') return 'Memento Server'
-  return english ? 'Disabled' : '未启用'
-}
+import { aiAnalysisTaskKey, useAiAnalysisTask } from './AiAnalysisTasks'
 
 function riskLabel(risk: AiTerminalAnalysis['suggestions'][number]['risk'], english: boolean): string {
   if (risk === 'behavior-change') return english ? 'May change behavior' : '可能改变行为'
@@ -102,6 +85,7 @@ export function AiAnalysisPanel({
   compact = false,
   autoPrepare = false,
   onAutoPrepared,
+  onClose,
   onOpenSettings
 }: {
   result: ScanResult
@@ -109,6 +93,7 @@ export function AiAnalysisPanel({
   compact?: boolean
   autoPrepare?: boolean
   onAutoPrepared?: () => void
+  onClose?: () => void
   onOpenSettings: () => void
 }): React.JSX.Element {
   const { language, text } = useI18n()
@@ -116,8 +101,9 @@ export function AiAnalysisPanel({
   const api: MementoAiApi = window.memento ?? demoAiApi
   const [settings, setSettings] = useState<PublicAiSettings | null>(null)
   const [hostedSession, setHostedSession] = useState<HostedSessionState | null>(null)
-  const [state, setState] = useState<PanelState>({ status: 'idle' })
-  const autoPrepareHandled = useRef(false)
+  const taskKey = aiAnalysisTaskKey(result.scanId, candidate?.id)
+  const { state, setState } = useAiAnalysisTask(taskKey)
+  const autoPrepareHandled = useRef<string | null>(null)
   const copy = contextCopy(candidate, english)
   const evidenceNames = useMemo(
     () => candidate
@@ -125,11 +111,6 @@ export function AiAnalysisPanel({
       : new Map(result.terminal.findings.map((finding) => [finding.id, finding.title])),
     [candidate, result.terminal.findings]
   )
-
-  useEffect(() => {
-    setState({ status: 'idle' })
-    autoPrepareHandled.current = false
-  }, [candidate?.id, result.scanId])
 
   useEffect(() => {
     let active = true
@@ -156,7 +137,7 @@ export function AiAnalysisPanel({
       const preview = candidate
         ? await api.prepareCandidateAnalysis({ scanId: result.scanId, candidateId: candidate.id })
         : await api.prepareTerminalAnalysis(result.scanId)
-      setState({ status: 'preview', preview })
+      await analyze(preview)
     } catch (error) {
       setState({ status: 'failed', error: parseAiError(error, english) })
     }
@@ -168,7 +149,7 @@ export function AiAnalysisPanel({
       const analysis = candidate
         ? await api.analyzeCandidate({ previewId: preview.previewId, providerId: preview.providerId })
         : await api.analyzeTerminal({ previewId: preview.previewId, providerId: preview.providerId })
-      setState({ status: 'succeeded', analysis })
+      setState({ status: 'succeeded', analysis, completedAt: Date.now() })
     } catch (error) {
       const publicError = parseAiError(error, english)
       if (publicError.code === 'AI_CANCELLED') setState({ status: 'idle' })
@@ -182,13 +163,13 @@ export function AiAnalysisPanel({
   }
 
   useEffect(() => {
-    if (!autoPrepare || autoPrepareHandled.current || !settings) return
+    if (!autoPrepare || autoPrepareHandled.current === taskKey || !settings) return
     if (settings.mode === 'disabled') return
     if (settings.mode === 'hosted' && !hostedSession?.authenticated) return
-    autoPrepareHandled.current = true
+    autoPrepareHandled.current = taskKey
     onAutoPrepared?.()
-    void prepare()
-  }, [autoPrepare, hostedSession, onAutoPrepared, settings])
+    if (state.status === 'idle') void prepare()
+  }, [autoPrepare, hostedSession, onAutoPrepared, settings, state.status, taskKey])
 
   if (!settings) {
     return (
@@ -212,9 +193,16 @@ export function AiAnalysisPanel({
             <p>{copy.description}</p>
           </div>
         </div>
-        <button type="button" className="icon-button" onClick={onOpenSettings} title={text('打开 AI 设置', 'Open AI settings')}>
-          <Settings2 size={17} />
-        </button>
+        <div className="ai-panel-actions">
+          <button type="button" className="icon-button" onClick={onOpenSettings} title={text('打开 AI 设置', 'Open AI settings')}>
+            <Settings2 size={17} />
+          </button>
+          {onClose && (
+            <button type="button" className="icon-button" onClick={onClose} title={text('收起 AI 分析', 'Collapse AI analysis')}>
+              <X size={17} />
+            </button>
+          )}
+        </div>
       </div>
 
       {unavailable ? (
@@ -230,19 +218,8 @@ export function AiAnalysisPanel({
         </div>
       ) : (
         <div className="ai-workspace">
-          <div className="ai-context-strip">
-            <div><span>{providerLabel(settings, english)}</span><strong>{settings.model ?? text('服务端管理模型', 'Server-managed model')}</strong></div>
-            {settings.mode === 'hosted' && hostedSession?.authenticated && (
-              <span>{text(`今日剩余 ${hostedSession.dailyRemaining ?? 0} 次`, `${hostedSession.dailyRemaining ?? 0} remaining today`)}</span>
-            )}
-          </div>
-
           {state.status === 'idle' && (
-            <div className="ai-start-state">
-              <div>
-                <ShieldCheck size={18} />
-                <span>{candidate ? text('不发送完整路径、文件内容或本机操作目标。', 'Full paths, file contents, and local action targets are not sent.') : text('不发送配置原文、环境变量值、主机名或用户目录。', 'Raw configuration, environment values, hostnames, and user directories are not sent.')}</span>
-              </div>
+            <div className="ai-start-state is-direct">
               <button type="button" className="primary-button" onClick={() => void prepare()}>
                 <BrainCircuit size={16} />{copy.idle}
               </button>
@@ -252,37 +229,14 @@ export function AiAnalysisPanel({
           {state.status === 'preparing' && (
             <div className="ai-progress-state" role="status">
               <LoaderCircle className="spinning" size={20} />
-              <div><strong>{text('正在生成脱敏报告', 'Preparing redacted report')}</strong><span>{text('只使用当前扫描的白名单字段。', 'Only allowlisted fields from the current scan are used.')}</span></div>
-            </div>
-          )}
-
-          {state.status === 'preview' && (
-            <div className="ai-preview">
-              <div className="ai-preview-summary">
-                <div><Database size={17} /><span>{text('记录', 'Records')}</span><strong>{state.preview.summary.recordCount}</strong></div>
-                <div><LockKeyhole size={17} /><span>{text('原始内容', 'Raw content')}</span><strong>{text('不包含', 'Excluded')}</strong></div>
-                <div><Send size={17} /><span>{text('预估输入', 'Estimated input')}</span><strong>{state.preview.summary.approximateInputTokens} tokens</strong></div>
-              </div>
-              <details>
-                <summary><ChevronDown size={15} />{text('查看将发送的 JSON', 'View JSON to be sent')}</summary>
-                <pre>{JSON.stringify(state.preview.payload, null, 2)}</pre>
-              </details>
-              <div className="ai-consent">
-                <p>{text(`确认后发送到 ${providerLabel(settings, english)}。`, `After confirmation, this will be sent to ${providerLabel(settings, english)}.`)}</p>
-                <div>
-                  <button type="button" className="secondary-button" onClick={() => setState({ status: 'idle' })}>{text('取消', 'Cancel')}</button>
-                  <button type="button" className="primary-button" onClick={() => void analyze(state.preview)}>
-                    <Send size={16} />{text('确认并分析', 'Confirm and analyze')}
-                  </button>
-                </div>
-              </div>
+              <div><strong>{text('正在开始分析', 'Starting analysis')}</strong></div>
             </div>
           )}
 
           {state.status === 'analyzing' && (
             <div className="ai-progress-state" role="status">
               <LoaderCircle className="spinning" size={20} />
-              <div><strong>{copy.analyzing}</strong><span>{text('AI 不会修改规则结论或可执行操作。', 'AI cannot change rule-based findings or executable actions.')}</span></div>
+              <div><strong>{copy.analyzing}</strong></div>
               <button type="button" className="secondary-button" onClick={() => void cancel(state.preview.previewId)}>
                 <Square size={13} fill="currentColor" />{text('停止', 'Stop')}
               </button>

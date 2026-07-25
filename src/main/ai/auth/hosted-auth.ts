@@ -1,7 +1,7 @@
 import { shell } from 'electron'
 import { createHash, randomBytes } from 'node:crypto'
 import type { HostedLoginState, HostedSessionState } from '../../../shared/ai-types'
-import { SecureCredentialStore } from '../credentials/secure-store'
+import { LocalCredentialStore } from '../credentials/local-store'
 import { AiError } from '../errors'
 import { fetchWithTimeout } from '../providers/responses-stream'
 
@@ -25,10 +25,11 @@ function base64Url(value: Buffer): string {
 
 export class HostedAuth {
   private pending: PendingLogin | null = null
+  private refreshInFlight: Promise<string> | null = null
 
   constructor(
     private readonly gatewayUrl: string,
-    private readonly credentials: SecureCredentialStore
+    private readonly credentials: LocalCredentialStore
   ) {}
 
   private requireGateway(): void {
@@ -115,7 +116,7 @@ export class HostedAuth {
     this.pending = null
   }
 
-  private async refresh(): Promise<string> {
+  private async performRefresh(): Promise<string> {
     this.requireGateway()
     const refreshToken = await this.credentials.get('hosted-refresh-token')
     if (!refreshToken) throw new AiError('AI_AUTH_REQUIRED', '请先登录官方服务')
@@ -137,6 +138,15 @@ export class HostedAuth {
     const tokens = (await response.json()) as TokenResponse
     await this.saveTokens(tokens)
     return tokens.accessToken
+  }
+
+  private refresh(): Promise<string> {
+    if (!this.refreshInFlight) {
+      this.refreshInFlight = this.performRefresh().finally(() => {
+        this.refreshInFlight = null
+      })
+    }
+    return this.refreshInFlight
   }
 
   async accessToken(): Promise<string> {

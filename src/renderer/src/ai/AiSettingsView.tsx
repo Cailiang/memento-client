@@ -22,6 +22,7 @@ import type {
 } from '../../../shared/ai-types'
 import { demoAiApi } from './demo-ai'
 import { useI18n } from '../i18n'
+import { SettingsTabs } from '../SettingsView'
 import { parseLocalizedAiError } from './error-copy'
 
 const MODE_COPY: Array<{
@@ -46,7 +47,11 @@ function modeLabel(mode: AiMode, english: boolean): string {
   return english ? 'Disabled' : '已关闭'
 }
 
-export function AiSettingsView(): React.JSX.Element {
+export function AiSettingsView({
+  onOpenGeneralSettings
+}: {
+  onOpenGeneralSettings: () => void
+}): React.JSX.Element {
   const { language, text } = useI18n()
   const english = language === 'en-US'
   const api: MementoAiApi = window.memento ?? demoAiApi
@@ -157,7 +162,7 @@ export function AiSettingsView(): React.JSX.Element {
     try {
       setSettings(await api.updateAiSettings({ mode: 'disabled', clearByokKey: true }))
       setApiKey('')
-      setMessage(text('API Key 已从安全存储移除', 'The API Key was removed from secure storage'))
+      setMessage(text('API Key 已从本地配置移除', 'The API Key was removed from local settings'))
     } catch (reason) {
       setError(parseAiError(reason, english))
     } finally {
@@ -187,9 +192,9 @@ export function AiSettingsView(): React.JSX.Element {
   return (
     <div className="view ai-settings-view">
       <div className="page-title-row">
-        <div>
-          <h1>{text('AI 设置', 'AI settings')}</h1>
-          <p>{text('统一管理模型连接、账号和密钥。分析入口只会出现在具体诊断项目中。', 'Manage model connections, accounts, and keys. Analysis is available from individual diagnostic items.')}</p>
+        <div className="settings-heading">
+          <h1>{text('设置', 'Settings')}</h1>
+          <SettingsTabs active="ai" onChange={(tab) => tab === 'general' && onOpenGeneralSettings()} />
         </div>
         <div className={`connection-stat ${connected ? 'is-connected' : ''}`}>
           {connected ? <Check size={17} /> : <Unplug size={17} />}
@@ -200,8 +205,8 @@ export function AiSettingsView(): React.JSX.Element {
       <section className="ai-default-band">
         <Server size={19} />
         <div>
-          <strong>{text('调试默认配置', 'Default development configuration')}</strong>
-          <span>{text('客户端默认使用本机 Memento Server，并在开发登录开启时自动建立会话。', 'The client uses the local Memento Server by default and automatically creates a session when development login is enabled.')}</span>
+          <strong>{text('默认连接', 'Default connection')}</strong>
+          <span>{text('Memento Server 负责安全转发 AI 请求并管理当前会话。', 'Memento Server securely relays AI requests and manages the current session.')}</span>
         </div>
         <code>{settings.hostedGatewayUrl || text('未配置 Gateway', 'Gateway not configured')}</code>
       </section>
@@ -254,7 +259,7 @@ export function AiSettingsView(): React.JSX.Element {
                     placeholder={settings.keyPresent ? text(`已保存，末四位 ${settings.keyHint}`, `Saved, ending in ${settings.keyHint}`) : text('输入新的 API Key', 'Enter a new API Key')}
                     autoComplete="off"
                   />
-                  <small>{text('密钥由 macOS 安全存储加密，Renderer 无法读取。', 'The key is encrypted in macOS secure storage and cannot be read by the renderer.')}</small>
+                  <small>{text('密钥保存在仅当前系统用户可读的 Memento 本地配置中，应用页面无法读取。', 'The key is stored in Memento local settings readable only by the current system user. App pages cannot read it.')}</small>
                 </label>
               )}
             </div>

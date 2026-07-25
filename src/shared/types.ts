@@ -11,6 +11,7 @@ export type ActionKind =
   | 'stop-launch-agent'
   | 'trash-launch-agent-config'
   | 'trash-service-software'
+  | 'trash-service-directory'
   | 'brew-cleanup'
 
 export interface CandidateAction {
@@ -36,6 +37,7 @@ export interface ScanCandidate {
   ageDays?: number
   risk: RiskLevel
   status: string
+  location?: string
   evidence: string[]
   action?: CandidateAction
   operations?: CandidateOperation[]
@@ -119,6 +121,7 @@ export interface MementoApi extends MementoAiApi, MementoSettingsApi {
   getVersion: () => Promise<string>
   scan: (language?: import('./app-settings').AppLanguage) => Promise<ScanResult>
   runActions: (ids: string[]) => Promise<ActionResult[]>
+  revealCandidateLocation: (id: string) => Promise<void>
   onScanProgress: (callback: (progress: ScanProgress) => void) => () => void
   platform: NodeJS.Platform
 }

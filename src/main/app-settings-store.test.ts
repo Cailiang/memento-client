@@ -12,14 +12,18 @@ describe('AppSettingsStore', () => {
       language: 'en-US',
       theme: 'graphite',
       launchAtLogin: true,
-      closeToTray: true
+      closeToTray: true,
+      serviceWhitelist: ['com.example.worker', ' com.example.worker ', 'pinecms'],
+      storageWhitelist: ['~/Library/Caches/example', ' ~/Library/Caches/example ']
     })
 
     expect(value).toEqual({
       language: 'en-US',
       theme: 'graphite',
       launchAtLogin: true,
-      closeToTray: true
+      closeToTray: true,
+      serviceWhitelist: ['com.example.worker', 'pinecms'],
+      storageWhitelist: ['~/Library/Caches/example']
     })
     await expect(readFile(path.join(directory, 'app-settings.json'), 'utf8')).resolves.toContain(
       '"graphite"'
@@ -33,5 +37,7 @@ describe('AppSettingsStore', () => {
 
     expect(value.language).toBe('zh-CN')
     expect(value.theme).toBe('porcelain')
+    expect(value.serviceWhitelist).toEqual([])
+    expect(value.storageWhitelist).toEqual([])
   })
 })

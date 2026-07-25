@@ -13,7 +13,7 @@ import type {
 import type { ScanResult } from '../../shared/types'
 import type { AppLanguage } from '../../shared/app-settings'
 import { HostedAuth } from './auth/hosted-auth'
-import { SecureCredentialStore } from './credentials/secure-store'
+import { LocalCredentialStore } from './credentials/local-store'
 import { AiError } from './errors'
 import { normalizeCandidateReport } from './normalize-candidate'
 import { normalizeTerminalReport } from './normalize-terminal'
@@ -27,7 +27,7 @@ import { AiSettingsStore } from './settings-store'
 
 export class AiService {
   private readonly previews = new PreviewStore()
-  private readonly credentials: SecureCredentialStore
+  private readonly credentials: LocalCredentialStore
   private readonly settings: AiSettingsStore
   private readonly hostedAuth: HostedAuth
   private readonly activeRequests = new Map<string, AbortController>()
@@ -40,7 +40,7 @@ export class AiService {
     private readonly currentScan: () => ScanResult | null,
     private readonly currentLanguage: () => AppLanguage
   ) {
-    this.credentials = new SecureCredentialStore(userDataPath)
+    this.credentials = new LocalCredentialStore(userDataPath)
     this.settings = new AiSettingsStore(userDataPath, this.credentials, gatewayUrl)
     this.hostedAuth = new HostedAuth(gatewayUrl, this.credentials)
   }
@@ -175,9 +175,6 @@ export class AiService {
       input.providerId.length > 100
     ) {
       throw new AiError('AI_PREVIEW_EXPIRED', '分析参数无效')
-    }
-    if (this.activeRequests.size > 0) {
-      throw new AiError('AI_RATE_LIMITED', '已有一个分析正在进行', true)
     }
     const scan = this.currentScan()
     if (!scan) throw new AiError('AI_SCAN_CHANGED', '请先完成一次扫描')

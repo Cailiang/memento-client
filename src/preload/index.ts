@@ -7,6 +7,7 @@ const api: MementoApi = {
   updateAppSettings: (input) => ipcRenderer.invoke('memento:settings:update', input),
   scan: (language) => ipcRenderer.invoke('memento:scan', language),
   runActions: (ids) => ipcRenderer.invoke('memento:run-actions', ids),
+  revealCandidateLocation: (id) => ipcRenderer.invoke('memento:reveal-candidate-location', id),
   getAiSettings: () => ipcRenderer.invoke('memento:ai:get-settings'),
   updateAiSettings: (input) => ipcRenderer.invoke('memento:ai:update-settings', input),
   testAiProvider: (providerId) => ipcRenderer.invoke('memento:ai:test-provider', providerId),

@@ -34,11 +34,11 @@ macOS builds may not yet be notarized. If macOS blocks the first launch, right-c
 
 ## What Memento checks
 
-- **Background services:** running Homebrew services and LaunchAgents, including the owning application and safe stop or uninstall choices.
+- **Background services:** running and stopped LaunchAgents plus running Homebrew services, with separate choices to stop a service, remove only its startup item, or move an explicitly identified related directory to Trash.
 - **Storage:** large temporary files created by Xcode, Homebrew, npm, pnpm, Yarn, Gradle, CocoaPods, and applications.
 - **Applications:** old Homebrew versions, duplicate application copies, and applications that have not been used recently.
 - **Terminal startup:** clean-shell baseline, interactive startup time, synchronous initialization, and PATH problems.
-- **Optional AI analysis:** a short, plain-language answer to what an item is and whether stopping, removing, or cleaning it will cause problems.
+- **Optional AI analysis:** a short, plain-language explanation of the software's actual purpose and whether stopping, removing its startup item, deleting it, or cleaning its data will cause problems. Analysis continues in the background while other items are reviewed.
 
 ![AI service analysis](.artifacts/memento-service-ai-result.png)
 
@@ -57,9 +57,9 @@ Memento supports three provider modes from **AI settings**:
 
 - **Memento Server:** defaults to `http://127.0.0.1:8787` for local development and can be overridden with `MEMENTO_GATEWAY_URL`.
 - **Local Ollama:** connects to `http://127.0.0.1:11434`.
-- **Bring your own key:** uses a Responses-compatible API and encrypts the key with Electron `safeStorage`.
+- **Bring your own key:** uses a Responses-compatible API and stores the key in Memento's local application data, restricted to the current operating-system user. It does not request Keychain access.
 
-AI analysis is opt-in for each terminal finding, background service, or storage item. The preview shown before submission describes exactly which structured fields will be sent.
+AI analysis is opt-in for each terminal finding, background service, or storage item. Clicking **Ask AI** starts immediately and continues in the background. Multiple analyses can run in parallel, and completed results remain in the AI task panel until opened or dismissed.
 
 ## Development
 

@@ -23,6 +23,7 @@ export const demoResult: ScanResult = {
       section: 'storage',
       name: 'Xcode DerivedData',
       subtitle: '~/Library/Developer/Xcode/DerivedData',
+      location: '~/Library/Developer/Xcode/DerivedData',
       description: '编译中间产物。Xcode 会在下次构建时重新生成。',
       sizeBytes: 12.8 * GB,
       ageDays: 18,
@@ -41,6 +42,7 @@ export const demoResult: ScanResult = {
       section: 'storage',
       name: 'Docker 虚拟磁盘',
       subtitle: '~/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw',
+      location: '~/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw',
       description: '包含 Docker 镜像、容器和卷。请在 Docker 内执行 prune，不应直接删除。',
       sizeBytes: 38.2 * GB,
       ageDays: 0,
@@ -53,6 +55,7 @@ export const demoResult: ScanResult = {
       section: 'storage',
       name: 'npm 内容缓存',
       subtitle: '~/.npm/_cacache',
+      location: '~/.npm/_cacache',
       description: 'npm 下载缓存，后续安装依赖时会重新下载。',
       sizeBytes: 4.6 * GB,
       ageDays: 37,
@@ -72,6 +75,7 @@ export const demoResult: ScanResult = {
       name: 'postgresql@14',
       subtitle: 'Homebrew 后台服务',
       description: '登录后持续运行。停止后不会卸载软件，之后仍可重新启动。',
+      location: '/usr/local/opt/postgresql@14',
       risk: 'review',
       status: '运行中，PID 1148',
       evidence: ['运行用户：fang', '已连续运行 19 天'],
@@ -88,6 +92,7 @@ export const demoResult: ScanResult = {
       name: 'com.oray.sunlogin.desktopagent',
       subtitle: '向日葵远程控制 · 用户登录启动项',
       description: '已从启动配置中的可执行路径定位到关联应用，可选择仅停止，或审阅后移除应用与精确匹配的数据。',
+      location: '/Applications/SunloginClient.app',
       risk: 'review',
       status: '已加载',
       evidence: [
@@ -113,6 +118,37 @@ export const demoResult: ScanResult = {
           reversible: true,
           estimatedBytes: 286 * MB,
           requiresAdmin: true
+        }
+      ]
+    },
+    {
+      id: 'demo-lianghua-webui',
+      section: 'services',
+      name: 'com.lianghua.webui.fangcl',
+      subtitle: '用户登录启动项',
+      description: '已从启动配置确认服务使用的工作目录。可以只移除当前启动项；确认不再需要同目录中的源码和数据后，也可以移除相关服务并将整个目录移到废纸篓。',
+      location: '/Users/fangcl/src/du/Lianghua_BTC_pg',
+      risk: 'review',
+      status: '已停止',
+      evidence: [
+        '配置：~/Library/LaunchAgents/com.lianghua.webui.fangcl.plist',
+        '程序：/bin/bash',
+        '服务目录：/Users/fangcl/src/du/Lianghua_BTC_pg'
+      ],
+      operations: [
+        {
+          id: 'demo-lianghua-remove-startup',
+          kind: 'trash-launch-agent-config',
+          label: '移除启动项',
+          consequence: '将这个已停止服务的启动配置移到废纸篓。程序目录和用户数据都会保留。',
+          reversible: true
+        },
+        {
+          id: 'demo-lianghua-remove-directory',
+          kind: 'trash-service-directory',
+          label: '移除相关服务并删除目录',
+          consequence: '停止引用同一目录的服务，将 2 个启动配置和整个目录 /Users/fangcl/src/du/Lianghua_BTC_pg 移到废纸篓。目录中的源码、虚拟环境和数据都会一起移动。',
+          reversible: true
         }
       ]
     },

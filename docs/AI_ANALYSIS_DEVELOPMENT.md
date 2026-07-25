@@ -85,10 +85,10 @@ AI 负责解释这些事实之间的关系，并生成便于用户理解的处�
 
 ### 4.2 最小权限
 
-- Renderer 不直接访问文件系统、Keychain 或模型服务。
+- Renderer 不直接访问文件系统或模型服务。
 - AI 网络请求由 Electron Main Process 发起。
-- Provider API Key 只在 Main Process 解密和使用。
-- Hosted Refresh Token 使用 Electron `safeStorage` 加密后落盘。
+- Provider API Key 只由 Main Process 读取和使用。
+- Hosted Token 和 Provider API Key 保存在仅当前系统用户可读的本地配置文件中，不访问系统钥匙串。
 - AI 输出不进入 `registeredActions`。
 
 ### 4.3 数据最小化
@@ -128,7 +128,7 @@ Renderer 不得自行组装可包含任意文本的 Hosted 请求。
 ```text
 ┌─────────────────────────────────────────────────────────────┐
 │ Electron Renderer                                           │
-│ 设置、数据预览、分析进度、结构化建议、用户确认              │
+│ 设置、分析进度、后台任务、结构化建议                        │
 └──────────────────────────┬──────────────────────────────────┘
                            │ typed IPC
 ┌──────────────────────────▼──────────────────────────────────┐
@@ -156,8 +156,8 @@ Renderer 不得自行组装可包含任意文本的 Hosted 请求。
 
 | 边界 | 信任级别 | 允许内容 |
 |---|---|---|
-| Renderer | 不可信 UI | Provider ID、扫描 ID、用户确认 |
-| Main Process | 本地可信 | 原始扫描结果、加密凭据、Provider 请求 |
+| Renderer | 不可信 UI | Provider ID、扫描 ID、用户发起分析 |
+| Main Process | 本地可信 | 原始扫描结果、本地凭据、Provider 请求 |
 | Local Provider | 用户选择后可信 | 脱敏报告，可按设置允许更多本地内容 |
 | BYOK Provider | 外部服务 | 脱敏报告，不发送本地凭据 |
 | Official Gateway | 受控服务 | 脱敏报告、账号与额度信息 |
@@ -195,11 +195,10 @@ export interface AiSettings {
 ### 7.3 BYOK
 
 - 用户输入自己的 Provider API Key。
-- Key 使用 `safeStorage.encryptString` 加密。
-- 密文存储在应用配置目录，明文不写入日志。
+- Key 以普通配置形式存储在应用配置目录，文件权限限制为仅当前系统用户可读写，内容不写入日志。
 - 请求由 Main Process 直接发送到已内置的 Provider 域名。
 - MVP 不允许用户设置任意 Base URL。自定义地址放到高级设置，并限制为 HTTPS。
-- 删除 Provider 配置时同时删除加密凭据和最近的 Provider 错误信息。
+- 删除 Provider 配置时同时删除本地凭据和最近的 Provider 错误信息。
 
 ### 7.4 Hosted
 
@@ -217,9 +216,8 @@ export interface AiSettings {
   -> Main Process 检查 scanId 是否为当前扫描
   -> 从内存 ScanResult 生成 NormalizedTerminalReport
   -> 本地 Redactor 脱敏
-  -> 返回 DataPreview 给 Renderer
-  -> 用户确认发送
-  -> Renderer 调用 ai:analyze-terminal(previewId, providerId)
+  -> 返回内部 DataPreview 句柄给 Renderer
+  -> Renderer 立即调用 ai:analyze-terminal(previewId, providerId)
   -> Main Process 校验 previewId、过期时间和内容哈希
   -> Provider Router 调用对应 Provider
   -> 验证模型 JSON Schema
@@ -230,12 +228,12 @@ export interface AiSettings {
 
 ### 8.1 为什么分两次 IPC
 
-准备和发送必须分开：
+准备和发送在内部保持两次 IPC，但对用户表现为一次点击：
 
-1. 用户可以在发送前看到数据。
-2. Renderer 无法在确认后替换请求内容。
-3. `previewId` 绑定规范化报告哈希、Provider 和过期时间。
-4. Hosted 调用可以记录明确的用户同意时间。
+1. Renderer 无法在准备后替换请求内容。
+2. `previewId` 绑定规范化报告哈希、Provider 和过期时间。
+3. Main Process 可以在真正发送前再次验证当前扫描和 Provider。
+4. 用户点击具体项目的“问 AI”即表示发起这一次分析，不再增加第二次确认。
 
 `previewId` 建议 5 分钟后过期。重新扫描会立即使所有旧 preview 失效。
 
@@ -601,7 +599,7 @@ Provider 必须实现统一的超时、取消和错误映射。
 - 最大输入：64 KiB
 - 最大预估输入 Token：12,000
 - 最大输出 Token：2,000
-- 同一客户端并发分析：1
+- 同一用户并发分析：4（由 Gateway 配置）
 
 这些值属于初始工程默认值，应支持服务端配置调整。
 
@@ -643,8 +641,8 @@ MVP 接口：
 ```text
 用户输入 Key
   -> Renderer 通过一次性 IPC 提交
-  -> Main Process 立即加密
-  -> safeStorage ciphertext 落盘
+  -> Main Process 写入独立的 AI 凭据配置
+  -> ai-credentials.json 以当前用户权限落盘
   -> Renderer 只获得 keyPresent: true
 ```
 
@@ -654,7 +652,7 @@ MVP 接口：
 - 日志不得记录请求 Header。
 - 错误信息不得包含 Provider 原始响应 Header。
 - UI 只显示 Key 后四位，后四位单独保存，不需要解密 Key。
-- `safeStorage.isEncryptionAvailable()` 为 false 时拒绝保存长期 Key，可允许仅本次会话使用。
+- 不调用 Electron `safeStorage` 或系统钥匙串；能读取应用数据目录的同一系统用户也能读取凭据。
 
 ### 16.3 网络目的地
 
@@ -757,10 +755,10 @@ OAuth Client ID 可以公开。OAuth Client Secret、模型 Key 和 Refresh Toke
 
 设备绑定用于降低 Token 被复制后的滥用，不用于取代账号鉴权。
 
-可选强化方案：
+可选强化方案（当前客户端不实现，以避免请求钥匙串授权）：
 
 1. 客户端生成 P-256 密钥对。
-2. 私钥由 `safeStorage` 加密保存。
+2. 私钥交由操作系统安全存储保存，并明确向用户说明授权原因。
 3. 公钥注册到 Gateway。
 4. 每个请求附带类似 DPoP 的签名证明，包含 method、URL、时间、随机 ID 和 Access Token 哈希。
 5. Gateway 检查时间窗口、nonce 和重放缓存。
@@ -865,7 +863,7 @@ TLS termination
 |---|---:|
 | Free 每日分析 | 3 次 |
 | Free 每月分析 | 30 次 |
-| 单账号并发 | 1 |
+| 单账号并发 | 4 |
 | 单设备每分钟 | 5 次 |
 | 单 IP 每分钟 | 30 次 |
 | 请求体 | 64 KiB |
@@ -971,22 +969,18 @@ export interface ProposedConfigPatch {
 - 登录官方服务
 - 关闭 AI
 
-实际分析仍必须从终端、后台服务或存储项目的上下文入口发起，并在每次发送前确认脱敏预览。
+实际分析必须从终端、后台服务或存储项目的上下文入口发起。点击“问 AI”后立即开始，用户不需要查看请求体、Token 预估或再次确认。
 
-### 21.2 数据确认
+### 21.2 一键分析与数据边界
 
-调用外部 Provider 前显示：
+界面只显示项目名称与分析状态，不展示 Provider 请求体、字段清单或 Token 用量。主进程仍必须在后台完成：
 
-- Provider 名称
-- 是否离开本机
-- finding 数量
-- 是否包含配置原文，MVP 固定为“否”
-- 预估输入 Token
-- 展开查看 JSON
+- 从当前扫描按字段白名单重新构建报告
+- 路径和敏感内容脱敏
+- 输入 schema、大小和请求完整性校验
+- Provider 与当前配置一致性校验
 
-用户确认后才发送。
-
-可以提供“以后对同类脱敏报告不再确认”，但 Hosted 和 BYOK 默认仍建议保留确认。该偏好必须可随时撤销。
+分析采用应用级异步任务。用户可以关闭详情或继续浏览其他项目；任务面板持续显示原项目名称，完成结果保留到用户查看或关闭。
 
 ### 21.3 分析结果
 
@@ -1009,14 +1003,13 @@ AI 建议不得使用“安全”“可以直接删除”等词替代现有规�
 export type AiAnalysisState =
   | { status: 'idle' }
   | { status: 'preparing' }
-  | { status: 'awaiting-consent'; preview: AiDataPreview }
   | { status: 'analyzing'; requestId: string }
   | { status: 'succeeded'; analysis: AiTerminalAnalysis }
   | { status: 'failed'; error: PublicAiError }
   | { status: 'cancelled' }
 ```
 
-关闭页面不会让分析自动转为清理动作。取消操作使用 `AbortController` 传播到 Provider。
+分析状态由应用级任务存储按 `scanId + candidateId` 保存。关闭详情、切换页面或查看其他项目不会取消正在执行的请求，重新打开原项目时继续显示进度或结果；用户显式取消时才使用 `AbortController` 传播到 Provider。AI 结果仍不会自动转为清理动作。
 
 ## 22. 错误模型
 
@@ -1091,7 +1084,7 @@ export interface PublicAiError {
 | 从开源客户端提取服务密钥 | 客户端不包含服务端密钥 | 无法阻止合法用户自行实现客户端 |
 | 匿名滥用 Gateway | 登录、配额、限流 | 批量注册账号仍需风控 |
 | Access Token 被复制 | 短期 Token、Refresh 轮换、可选设备证明 | 本机被完全控制时仍可能泄露 |
-| Refresh Token 重放 | Token Family 重放检测与撤销 | 离线攻击取决于本地 Keychain 安全 |
+| Refresh Token 重放 | Token Family 重放检测与撤销 | 离线攻击取决于本地应用数据目录的访问权限 |
 | BYOK Key 泄露到日志 | Main Process 使用、日志过滤、错误包装 | 调试工具或恶意本机进程仍可能读取内存 |
 | 上传 shell secret | Allowlist、双重脱敏、数据预览 | 未知格式可能绕过模式规则，因此 MVP 不上传原文 |
 | Prompt injection | 不上传任意配置文本，固定 schema | 后续 raw config 模式需要额外隔离 |
@@ -1199,7 +1192,8 @@ export interface PublicAiError {
 ### 26.5 UI 测试
 
 - 四种模式设置流程。
-- 数据预览与取消。
+- 一键分析、后台任务与取消。
+- 多个完成结果可以按原项目名称逐项返回或关闭。
 - 分析 loading、error、empty 和 success 状态。
 - 额度耗尽和登录过期。
 - 窄窗口无文本遮挡。
@@ -1279,8 +1273,8 @@ MODEL_DEFAULT_TERMINAL_ANALYSIS=
 - 实现 Provider interface。
 - 实现 Ollama Provider。
 - 实现 OpenAI-compatible BYOK Provider。
-- 实现 safeStorage credential store。
-- 增加 IPC、设置页、数据预览和分析结果 UI。
+- 实现独立的本地 credential store，不访问系统钥匙串。
+- 增加 IPC、设置页、一键分析和分析结果 UI。
 - 实现输出 schema 校验、取消和统一错误。
 
 验收：
@@ -1355,7 +1349,7 @@ MODEL_DEFAULT_TERMINAL_ANALYSIS=
 3. 实现 allowlist normalizer。
 4. 实现 Redactor 和 canary 测试。
 5. 实现 preview store 与两阶段 IPC。
-6. 在终端页面增加只展示数据预览的 UI，不接模型。
+6. 在终端页面增加一键分析的 loading、error 和 result UI。
 7. 定义 Provider 合约测试。
 8. 实现 Ollama Provider。
 9. 实现 BYOK secure store 和 OpenAI-compatible Provider。
@@ -1369,7 +1363,7 @@ AI Contextual Analysis 完成必须同时满足：
 
 - 基础扫描和清理完全不依赖 AI。
 - 调试版本默认连接本机 Memento Server，连接失败时本地扫描仍完整可用。
-- 外部 Provider 调用前有数据预览和用户确认。
+- AI 只能从具体项目的上下文入口由用户点击发起，不存在自动上传。
 - MVP 不上传 shell 配置原文。
 - 候选项分析不上传完整路径、原始 evidence、文件内容或清理目标。
 - Provider Key 和 Refresh Token 不暴露给 Renderer。

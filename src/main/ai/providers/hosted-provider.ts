@@ -89,6 +89,10 @@ export class HostedProvider implements AiProvider {
       await response.body?.cancel()
       throw new AiError('AI_QUOTA_EXCEEDED', '本期 AI 分析额度已用完')
     }
+    if (response.status === 504) {
+      await response.body?.cancel()
+      throw new AiError('AI_REQUEST_TIMEOUT', 'AI 请求超时，请重试', true)
+    }
     if (!response.ok) {
       await response.body?.cancel()
       throw new AiError('AI_PROVIDER_UNAVAILABLE', '官方 AI 服务暂时不可用', true)

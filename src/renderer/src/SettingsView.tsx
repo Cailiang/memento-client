@@ -62,10 +62,12 @@ const THEMES: Array<{
 
 export function SettingsView({
   settings,
-  onUpdate
+  onUpdate,
+  onOpenAiSettings
 }: {
   settings: AppSettings
   onUpdate: (input: UpdateAppSettingsInput) => Promise<void>
+  onOpenAiSettings: () => void
 }): React.JSX.Element {
   const { text } = useI18n()
   const [busyKey, setBusyKey] = useState<string | null>(null)
@@ -99,13 +101,15 @@ export function SettingsView({
   return (
     <div className="view settings-view">
       <div className="page-title-row settings-title-row">
-        <div>
+        <div className="settings-heading">
           <h1>{text('设置', 'Settings')}</h1>
-          <p>{text('语言、窗口行为与外观会自动保存到这台 Mac。', 'Language, window behavior, and appearance are saved automatically on this Mac.')}</p>
+          <SettingsTabs active="general" onChange={(tab) => tab === 'ai' && onOpenAiSettings()} />
         </div>
-        <span className={`settings-saved ${saved ? 'is-visible' : ''}`}>
-          <Check size={14} />{text('已保存', 'Saved')}
-        </span>
+        <div className="settings-title-status">
+          <span className={`settings-saved ${saved ? 'is-visible' : ''}`}>
+            <Check size={14} />{text('已保存', 'Saved')}
+          </span>
+        </div>
       </div>
 
       <section className="preference-section">
@@ -166,9 +170,8 @@ export function SettingsView({
                 onClick={() => void update('theme', { theme: theme.id })}
                 disabled={busyKey === 'theme'}
               >
-                <span className="theme-preview" aria-hidden="true">
-                  <span className="theme-preview-sidebar" />
-                  <span className="theme-preview-lines"><i /><i /><i /></span>
+                <span className="theme-swatches" aria-hidden="true">
+                  <i /><i /><i />
                 </span>
                 <span className="theme-option-copy">
                   <strong>{text(theme.name[0], theme.name[1])}</strong>
@@ -180,6 +183,38 @@ export function SettingsView({
           })}
         </div>
       </section>
+    </div>
+  )
+}
+
+export function SettingsTabs({
+  active,
+  onChange
+}: {
+  active: 'general' | 'ai'
+  onChange: (tab: 'general' | 'ai') => void
+}): React.JSX.Element {
+  const { text } = useI18n()
+  return (
+    <div className="settings-tabs" role="tablist" aria-label={text('设置分类', 'Settings categories')}>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={active === 'general'}
+        className={active === 'general' ? 'is-active' : ''}
+        onClick={() => onChange('general')}
+      >
+        {text('通用', 'General')}
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={active === 'ai'}
+        className={active === 'ai' ? 'is-active' : ''}
+        onClick={() => onChange('ai')}
+      >
+        AI
+      </button>
     </div>
   )
 }

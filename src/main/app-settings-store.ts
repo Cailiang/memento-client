@@ -2,6 +2,8 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import {
   DEFAULT_APP_SETTINGS,
+  normalizeServiceWhitelist,
+  normalizeStorageWhitelist,
   type AppLanguage,
   type AppSettings,
   type AppTheme,
@@ -31,7 +33,9 @@ function normalize(value: unknown): AppSettings {
       ? (candidate.theme as AppTheme)
       : DEFAULT_APP_SETTINGS.theme,
     launchAtLogin: candidate.launchAtLogin === true,
-    closeToTray: candidate.closeToTray === true
+    closeToTray: candidate.closeToTray === true,
+    serviceWhitelist: normalizeServiceWhitelist(candidate.serviceWhitelist),
+    storageWhitelist: normalizeStorageWhitelist(candidate.storageWhitelist)
   }
 }
 

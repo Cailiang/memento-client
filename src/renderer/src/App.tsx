@@ -9,6 +9,8 @@ import {
   ChevronRight,
   CircleGauge,
   Clock3,
+  FolderX,
+  FolderOpen,
   HardDrive,
   Info,
   LayoutDashboard,
@@ -19,12 +21,15 @@ import {
   Search,
   Settings2,
   ShieldAlert,
+  ShieldCheck,
   SquareTerminal,
   Trash2,
   X
 } from 'lucide-react'
 import {
+  candidateWhitelistValue,
   DEFAULT_APP_SETTINGS,
+  isCandidateWhitelisted,
   type AppLanguage,
   type AppSettings,
   type UpdateAppSettingsInput
@@ -41,18 +46,33 @@ import type {
 } from '../../shared/types'
 import { runDemoScan } from './demo'
 import { AiAnalysisPanel } from './ai/AiAnalysisPanel'
+import {
+  AiAnalysisTaskProvider,
+  aiAnalysisTaskKey,
+  useAiAnalysisTask,
+  useAiAnalysisTasks,
+  visibleAiAnalysisTasks
+} from './ai/AiAnalysisTasks'
 import { AiSettingsView } from './ai/AiSettingsView'
 import { I18nProvider, useI18n } from './i18n'
 import { SettingsView } from './SettingsView'
-import { applyCompletedCandidateActions, candidateOperations } from './candidate-actions'
+import { WhitelistPanel } from './WhitelistView'
+import {
+  applyCompletedCandidateActions,
+  candidateOperations,
+  selectedCandidateOperations,
+  type SelectedCandidateOperation
+} from './candidate-actions'
 
 type ViewKey = 'overview' | ScanSection | 'ai-settings' | 'settings'
 type ScanPhase = 'idle' | 'scanning' | 'ready' | 'error'
 
-interface SelectedOperation {
-  id: string
-  candidate: ScanCandidate
-  action: CandidateAction
+interface AiActivityItem {
+  key: string
+  name: string
+  status: 'running' | 'completed'
+  view: Exclude<ViewKey, 'overview' | 'ai-settings' | 'settings'>
+  candidateId?: string
 }
 
 const NAV_ITEMS: Array<{
@@ -64,7 +84,6 @@ const NAV_ITEMS: Array<{
   { key: 'storage', icon: HardDrive },
   { key: 'applications', icon: AppWindow },
   { key: 'terminal', icon: SquareTerminal },
-  { key: 'ai-settings', icon: BrainCircuit },
   { key: 'settings', icon: Settings2 }
 ]
 
@@ -82,31 +101,14 @@ function navLabel(key: ViewKey, language: AppLanguage): string {
   return labels[key][english ? 1 : 0]
 }
 
-function viewCopy(
-  section: ScanSection,
-  language: AppLanguage
-): { title: string; description: string } {
-  const copy: Record<ScanSection, [[string, string], [string, string]]> = {
-    services: [
-      ['后台服务', 'Services'],
-      ['查看持续运行的服务和登录启动项，并逐项判断是否需要保留。', 'Review running services and login items, then decide which ones still need to run.']
-    ],
-    storage: [
-      ['存储空间', 'Storage'],
-      ['识别可重建缓存和大体积数据，重要数据只提供分析。', 'Find rebuildable caches and large data sets. Important data is analysis only.']
-    ],
-    applications: [
-      ['应用版本', 'Applications'],
-      ['检查重复版本和长期未使用的应用，保留文稿与偏好设置。', 'Review duplicate versions and apps that have not been used recently.']
-    ],
-    terminal: [
-      ['终端诊断', 'Terminal diagnostics'],
-      ['测量 shell 启动时间，并定位可能造成同步阻塞的配置。', 'Measure shell startup time and locate configuration that may block startup.']
-    ]
+function viewTitle(section: ScanSection, language: AppLanguage): string {
+  const titles: Record<ScanSection, [string, string]> = {
+    services: ['后台服务', 'Services'],
+    storage: ['存储空间', 'Storage'],
+    applications: ['应用版本', 'Applications'],
+    terminal: ['终端诊断', 'Terminal diagnostics']
   }
-  const [title, description] = copy[section]
-  const index = language === 'en-US' ? 1 : 0
-  return { title: title[index], description: description[index] }
+  return titles[section][language === 'en-US' ? 1 : 0]
 }
 
 function formatBytes(bytes = 0): string {
@@ -139,7 +141,9 @@ function operationLabel(operation: CandidateAction, language: AppLanguage): stri
     case 'trash-service-software':
       return english ? 'Uninstall & clean' : '卸载并清理'
     case 'trash-launch-agent-config':
-      return english ? 'Remove' : '移除'
+      return english ? 'Remove startup item' : '移除启动项'
+    case 'trash-service-directory':
+      return english ? 'Delete related directory' : '删除关联目录'
     case 'brew-cleanup':
       return english ? 'Clean up' : '清理'
     case 'trash':
@@ -207,7 +211,9 @@ function App(): React.JSX.Element {
 
   return (
     <I18nProvider language={settings.language}>
-      <AppContent settings={settings} onUpdateSettings={updateSettings} />
+      <AiAnalysisTaskProvider>
+        <AppContent settings={settings} onUpdateSettings={updateSettings} />
+      </AiAnalysisTaskProvider>
     </I18nProvider>
   )
 }
@@ -229,7 +235,7 @@ function AppContent({
     message: text('准备扫描', 'Preparing scan')
   })
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [focusedId, setFocusedId] = useState<string | null>(null)
+  const [aiExpandedId, setAiExpandedId] = useState<string | null>(null)
   const [aiRequestedId, setAiRequestedId] = useState<string | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [directReview, setDirectReview] = useState(false)
@@ -237,24 +243,40 @@ function AppContent({
   const [error, setError] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const [appVersion, setAppVersion] = useState<string | null>(null)
+  const [dismissedAiTaskKeys, setDismissedAiTaskKeys] = useState<Set<string>>(() => new Set())
+  const aiTasks = useAiAnalysisTasks()
+  const previousAiTaskStatuses = useRef<Map<string, string>>(new Map())
   const startedRef = useRef(false)
 
-  const scanNow = useCallback(async () => {
+  const scanNow = useCallback(async (whitelistOverride?: {
+    serviceWhitelist?: readonly string[]
+    storageWhitelist?: readonly string[]
+  }) => {
     setPhase('scanning')
     setError(null)
     setSelected(new Set())
-    setFocusedId(null)
     try {
       const nextResult = window.memento
         ? await window.memento.scan(language)
         : await runDemoScan(setProgress, language)
-      setResult(nextResult)
+      const serviceWhitelist = whitelistOverride?.serviceWhitelist ?? settings.serviceWhitelist
+      const storageWhitelist = whitelistOverride?.storageWhitelist ?? settings.storageWhitelist
+      setResult({
+        ...nextResult,
+        candidates: nextResult.candidates.filter(
+          (candidate) => !isCandidateWhitelisted(
+            candidate,
+            serviceWhitelist,
+            storageWhitelist
+          )
+        )
+      })
       setPhase('ready')
     } catch (scanError) {
       setPhase('error')
       setError(scanError instanceof Error ? scanError.message : text('扫描未完成', 'Scan did not complete'))
     }
-  }, [language, text])
+  }, [language, settings.serviceWhitelist, settings.storageWhitelist, text])
 
   useEffect(() => {
     let active = true
@@ -291,6 +313,33 @@ function AppContent({
   }, [toast])
 
   useEffect(() => {
+    setDismissedAiTaskKeys((current) => {
+      let next = current
+      for (const [key, task] of aiTasks) {
+        if ((task.status === 'preparing' || task.status === 'analyzing') && current.has(key)) {
+          if (next === current) next = new Set(current)
+          next.delete(key)
+        }
+      }
+      return next
+    })
+
+    for (const [key, task] of aiTasks) {
+      if (task.status !== 'succeeded' || previousAiTaskStatuses.current.get(key) === 'succeeded') {
+        continue
+      }
+      const candidate = result?.candidates.find(
+        (item) => aiAnalysisTaskKey(result.scanId, item.id) === key
+      )
+      const name = candidate?.name ?? text('终端诊断', 'Terminal diagnostics')
+      setToast(text(`AI 分析完成：${name}`, `AI analysis completed: ${name}`))
+    }
+    previousAiTaskStatuses.current = new Map(
+      [...aiTasks].map(([key, task]) => [key, task.status])
+    )
+  }, [aiTasks, result, text])
+
+  useEffect(() => {
     if (!confirmOpen) return
     const closeOnEscape = (event: KeyboardEvent): void => {
       if (event.key === 'Escape' && !actionBusy) {
@@ -303,14 +352,42 @@ function AppContent({
     return () => window.removeEventListener('keydown', closeOnEscape)
   }, [actionBusy, confirmOpen, directReview])
 
-  const focused = result?.candidates.find((item) => item.id === focusedId) ?? null
-  const selectedItems = useMemo<SelectedOperation[]>(
-    () =>
-      result?.candidates.flatMap((candidate) =>
-        candidateOperations(candidate)
-          .filter((action) => selected.has(action.id))
-          .map((action) => ({ id: action.id, candidate, action }))
-      ) ?? [],
+  const aiActivityItems = useMemo<AiActivityItem[]>(() => {
+    if (!result) return []
+    const terminalKey = aiAnalysisTaskKey(result.scanId)
+    const expandedKey = aiExpandedId
+      ? aiAnalysisTaskKey(result.scanId, aiExpandedId)
+      : null
+    const items: AiActivityItem[] = []
+    for (const [key, task] of visibleAiAnalysisTasks(aiTasks, dismissedAiTaskKeys)) {
+      if (key === expandedKey) continue
+      const status = task.status === 'succeeded' ? 'completed' : 'running'
+      if (key === terminalKey) {
+        items.push({
+          key,
+          name: text('终端诊断', 'Terminal diagnostics'),
+          status,
+          view: 'terminal'
+        })
+        continue
+      }
+      const candidate = result.candidates.find(
+        (item) => aiAnalysisTaskKey(result.scanId, item.id) === key
+      )
+      if (candidate) {
+        items.push({
+          key,
+          name: candidate.name,
+          status,
+          view: candidate.section,
+          candidateId: candidate.id
+        })
+      }
+    }
+    return items
+  }, [aiExpandedId, aiTasks, dismissedAiTaskKeys, result, text])
+  const selectedItems = useMemo<SelectedCandidateOperation[]>(
+    () => selectedCandidateOperations(result?.candidates ?? [], selected),
     [result, selected]
   )
   const selectedBytes = selectedItems.reduce(
@@ -335,7 +412,6 @@ function AppContent({
 
   const reviewDirectAction = (id: string): void => {
     setSelected(new Set([id]))
-    setFocusedId(null)
     setDirectReview(true)
     setConfirmOpen(true)
   }
@@ -349,14 +425,81 @@ function AppContent({
   const askAi = (id: string): void => {
     const candidate = result?.candidates.find((item) => item.id === id)
     if (candidate) setView(candidate.section)
-    setFocusedId(id)
+    if (result) {
+      const key = aiAnalysisTaskKey(result.scanId, id)
+      setDismissedAiTaskKeys((current) => new Set(current).add(key))
+    }
+    setAiExpandedId(id)
     setAiRequestedId(id)
+  }
+
+  const openAiActivity = (item: AiActivityItem): void => {
+    if (item.status === 'completed') {
+      setDismissedAiTaskKeys((current) => new Set(current).add(item.key))
+    }
+    setView(item.view)
+    setAiExpandedId(item.candidateId ?? null)
+  }
+
+  const dismissAiActivity = (key: string): void => {
+    setDismissedAiTaskKeys((current) => new Set(current).add(key))
+  }
+
+  const revealLocation = (id: string): void => {
+    if (!window.memento) {
+      setToast(text('请在桌面应用中打开此目录', 'Open this location from the desktop app'))
+      return
+    }
+    void window.memento.revealCandidateLocation(id).catch((reason) => {
+      setToast(reason instanceof Error ? reason.message : text('无法打开服务目录', 'Could not open the service location'))
+    })
+  }
+
+  const whitelistCandidate = async (id: string): Promise<void> => {
+    const candidate = result?.candidates.find(
+      (item) => item.id === id && (item.section === 'services' || item.section === 'storage')
+    )
+    if (!candidate) return
+    const value = candidateWhitelistValue(candidate)
+    if (!value) return
+    const currentWhitelist = candidate.section === 'services'
+      ? settings.serviceWhitelist
+      : settings.storageWhitelist
+    if (currentWhitelist.includes(value)) return
+    try {
+      await onUpdateSettings(candidate.section === 'services'
+        ? { serviceWhitelist: [...settings.serviceWhitelist, value] }
+        : { storageWhitelist: [...settings.storageWhitelist, value] })
+      setResult((current) => current
+        ? { ...current, candidates: current.candidates.filter((item) => item.id !== id) }
+        : current)
+      setSelected((current) => {
+        const next = new Set(current)
+        for (const operation of candidateOperations(candidate)) next.delete(operation.id)
+        return next
+      })
+      if (aiExpandedId === id) setAiExpandedId(null)
+      setToast(text(`已将 ${candidate.name} 加入白名单`, `${candidate.name} was added to the whitelist`))
+    } catch (reason) {
+      setToast(reason instanceof Error ? reason.message : text('无法更新白名单', 'Could not update the whitelist'))
+    }
+  }
+
+  const updateSettingsFromView = async (input: UpdateAppSettingsInput): Promise<void> => {
+    await onUpdateSettings(input)
+    if ('serviceWhitelist' in input || 'storageWhitelist' in input) {
+      await scanNow({
+        serviceWhitelist: input.serviceWhitelist ?? settings.serviceWhitelist,
+        storageWhitelist: input.storageWhitelist ?? settings.storageWhitelist
+      })
+    }
   }
 
   const navigate = (nextView: ViewKey): void => {
     setView(nextView)
-    setFocusedId(null)
+    setAiExpandedId(null)
     setAiRequestedId(null)
+    setToast(null)
   }
 
   const executeActions = async (): Promise<void> => {
@@ -376,7 +519,8 @@ function AppContent({
             )
           )
       const successfulIds = new Set(actionResults.filter((item) => item.ok).map((item) => item.id))
-      const failedCount = actionResults.length - successfulIds.size
+      const failures = actionResults.filter((item) => !item.ok)
+      const failedCount = failures.length
       setResult((current) =>
         current
           ? {
@@ -386,15 +530,29 @@ function AppContent({
           : current
       )
       setSelected(new Set())
-      setFocusedId(null)
       setConfirmOpen(false)
       setDirectReview(false)
       const keptStoppedService = selectedItems.some(
         (item) => successfulIds.has(item.id) && item.action.kind.startsWith('stop-')
       )
+      const keptServiceDirectory = selectedItems.some(
+        (item) =>
+          successfulIds.has(item.id) &&
+          item.action.kind === 'trash-launch-agent-config' &&
+          candidateOperations(item.candidate).some(
+            (operation) =>
+              operation.id !== item.id &&
+              (operation.kind === 'trash-service-directory' ||
+                operation.kind === 'trash-service-software')
+          )
+      )
       setToast(
         failedCount
-          ? text(`${successfulIds.size} 项已完成，${failedCount} 项失败，请重新扫描后查看`, `${successfulIds.size} completed and ${failedCount} failed. Scan again to refresh the results.`)
+          ? failedCount === 1
+            ? failures[0].message
+            : text(`${successfulIds.size} 项已完成，${failedCount} 项失败：${failures[0].message}`, `${successfulIds.size} completed and ${failedCount} failed: ${failures[0].message}`)
+          : keptServiceDirectory
+            ? text('启动项已移除，程序目录仍然保留；可以继续选择删除关联目录', 'The startup item was removed and the program directory remains. You can still remove the related directory.')
           : keptStoppedService
             ? text('服务已停止并保留在列表中；软件和数据没有删除', 'The service is stopped and remains in the list. Its software and data were not deleted.')
             : text(`${successfulIds.size} 项操作已完成`, `${successfulIds.size} actions completed`)
@@ -418,9 +576,13 @@ function AppContent({
         />
         <main className="main-content">
           {view === 'settings' ? (
-            <SettingsView settings={settings} onUpdate={onUpdateSettings} />
+            <SettingsView
+              settings={settings}
+              onUpdate={updateSettingsFromView}
+              onOpenAiSettings={() => setView('ai-settings')}
+            />
           ) : view === 'ai-settings' ? (
-            <AiSettingsView />
+            <AiSettingsView onOpenGeneralSettings={() => setView('settings')} />
           ) : phase === 'scanning' && !result ? (
             <ScanState progress={progress} />
           ) : phase === 'error' && !result ? (
@@ -430,53 +592,49 @@ function AppContent({
               <Overview
                 result={result}
                 onNavigate={navigate}
-                onFocus={(id) => {
+                onOpenCandidate={(id) => {
                   const candidate = result.candidates.find((item) => item.id === id)
                   if (candidate) setView(candidate.section)
-                  setFocusedId(id)
                 }}
                 onToggle={toggleSelected}
                 onReviewAction={reviewDirectAction}
                 onAskAi={askAi}
+                onRevealLocation={revealLocation}
+                onWhitelist={(id) => void whitelistCandidate(id)}
                 selected={selected}
               />
             ) : view === 'terminal' ? (
               <TerminalView result={result} onOpenSettings={() => setView('ai-settings')} />
             ) : (
               <CandidateView
+                key={view}
                 section={view}
                 result={result}
                 selected={selected}
-                focusedId={focusedId}
                 onToggle={toggleSelected}
-                onFocus={setFocusedId}
+                onClearSelection={() => setSelected(new Set())}
                 onReviewAction={reviewDirectAction}
                 onAskAi={askAi}
+                onRevealLocation={revealLocation}
+                onWhitelist={(id) => void whitelistCandidate(id)}
+                settings={settings}
+                onUpdateSettings={updateSettingsFromView}
+                aiExpandedId={aiExpandedId}
+                autoPrepareAiId={aiRequestedId}
+                onAiPrepared={() => setAiRequestedId(null)}
+                onCloseAi={() => {
+                  setAiExpandedId(null)
+                  setAiRequestedId(null)
+                }}
+                onOpenSettings={() => {
+                  setAiExpandedId(null)
+                  setView('ai-settings')
+                }}
               />
             )
           ) : null}
         </main>
       </div>
-
-      {focused && (
-        <Inspector
-          candidate={focused}
-          result={result!}
-          selectedOperationId={selectedOperationId(focused, selected)}
-          autoPrepareAi={aiRequestedId === focused.id}
-          onAiPrepared={() => setAiRequestedId(null)}
-          onClose={() => {
-            setFocusedId(null)
-            setAiRequestedId(null)
-          }}
-          onToggle={toggleSelected}
-          onReviewAction={reviewDirectAction}
-          onOpenSettings={() => {
-            setFocusedId(null)
-            setView('ai-settings')
-          }}
-        />
-      )}
 
       {selectedItems.length > 0 && !confirmOpen && (
         <ActionDock
@@ -487,6 +645,15 @@ function AppContent({
             setDirectReview(false)
             setConfirmOpen(true)
           }}
+        />
+      )}
+
+      {aiActivityItems.length > 0 && (
+        <AiActivityCenter
+          items={aiActivityItems}
+          hasActionDock={selectedItems.length > 0 && !confirmOpen}
+          onOpen={openAiActivity}
+          onDismiss={dismissAiActivity}
         />
       )}
 
@@ -539,11 +706,12 @@ function Sidebar({
           const count = item.key === 'overview' || item.key === 'ai-settings' || item.key === 'settings'
             ? 0
             : sectionCount(result, item.key)
+          const active = view === item.key || (item.key === 'settings' && view === 'ai-settings')
           return (
             <button
               type="button"
               key={item.key}
-              className={`nav-item ${view === item.key ? 'is-active' : ''}`}
+              className={`nav-item ${active ? 'is-active' : ''}`}
               onClick={() => onChange(item.key)}
               title={label}
             >
@@ -646,18 +814,22 @@ function Overview({
   result,
   selected,
   onNavigate,
-  onFocus,
+  onOpenCandidate,
   onToggle,
   onReviewAction,
-  onAskAi
+  onAskAi,
+  onRevealLocation,
+  onWhitelist
 }: {
   result: ScanResult
   selected: Set<string>
   onNavigate: (view: ViewKey) => void
-  onFocus: (id: string) => void
+  onOpenCandidate: (id: string) => void
   onToggle: (id: string) => void
   onReviewAction: (id: string) => void
   onAskAi: (id: string) => void
+  onRevealLocation: (id: string) => void
+  onWhitelist: (id: string) => void
 }): React.JSX.Element {
   const { language, text } = useI18n()
   const score = computeHealth(result)
@@ -744,13 +916,15 @@ function Overview({
               {recommendations.map((candidate) => (
                 <CandidateRow
                   key={candidate.id}
+                  scanId={result.scanId}
                   candidate={candidate}
                   selectedOperationId={selectedOperationId(candidate, selected)}
-                  focused={false}
                   onToggle={onToggle}
-                  onFocus={onFocus}
+                  onOpen={onOpenCandidate}
                   onReviewAction={onReviewAction}
                   onAskAi={onAskAi}
+                  onRevealLocation={onRevealLocation}
+                  onWhitelist={onWhitelist}
                 />
               ))}
             </div>
@@ -791,31 +965,57 @@ function Overview({
 function CandidateView({
   section,
   result,
+  settings,
   selected,
-  focusedId,
+  aiExpandedId,
+  autoPrepareAiId,
   onToggle,
-  onFocus,
+  onClearSelection,
   onReviewAction,
-  onAskAi
+  onAskAi,
+  onAiPrepared,
+  onCloseAi,
+  onOpenSettings,
+  onRevealLocation,
+  onWhitelist,
+  onUpdateSettings
 }: {
   section: Exclude<ScanSection, 'terminal'>
   result: ScanResult
+  settings: AppSettings
   selected: Set<string>
-  focusedId: string | null
+  aiExpandedId: string | null
+  autoPrepareAiId: string | null
   onToggle: (id: string) => void
-  onFocus: (id: string) => void
+  onClearSelection: () => void
   onReviewAction: (id: string) => void
   onAskAi: (id: string) => void
+  onAiPrepared: () => void
+  onCloseAi: () => void
+  onOpenSettings: () => void
+  onRevealLocation: (id: string) => void
+  onWhitelist: (id: string) => void
+  onUpdateSettings: (input: UpdateAppSettingsInput) => Promise<void>
 }): React.JSX.Element {
   const { language, text } = useI18n()
-  const copy = viewCopy(section, language)
+  const [activeTab, setActiveTab] = useState<'results' | 'whitelist'>('results')
+  const title = viewTitle(section, language)
   const candidates = result.candidates.filter((item) => item.section === section)
+  const supportsWhitelist = section === 'services' || section === 'storage'
+  const whitelistValues = section === 'services'
+    ? settings.serviceWhitelist
+    : section === 'storage'
+      ? settings.storageWhitelist
+      : []
+  const showingWhitelist = supportsWhitelist && activeTab === 'whitelist'
   const actionable = candidates.filter((item) => candidateOperations(item).length > 0)
   const totalBytes = actionable.reduce((sum, item) => sum + (item.sizeBytes ?? 0), 0)
-  const safeIds = actionable
-    .filter((item) => item.risk === 'safe')
-    .map((item) => candidateOperations(item)[0]?.id)
-    .filter((id): id is string => Boolean(id))
+  const safeIds = section === 'services'
+    ? []
+    : actionable
+        .filter((item) => item.risk === 'safe')
+        .map((item) => candidateOperations(item)[0]?.id)
+        .filter((id): id is string => Boolean(id))
   const allSafeSelected = safeIds.length > 0 && safeIds.every((id) => selected.has(id))
 
   const toggleSafe = (): void => {
@@ -824,99 +1024,167 @@ function CandidateView({
     }
   }
 
+  const selectTab = (tab: 'results' | 'whitelist'): void => {
+    setActiveTab(tab)
+    onClearSelection()
+    onCloseAi()
+  }
+
   return (
     <div className="view candidate-view">
-      <div className="page-title-row">
-        <div>
-          <h1>{copy.title}</h1>
-          <p>{copy.description}</p>
-        </div>
-        <div className="page-stat">
-          <strong>{section === 'services' ? candidates.length : formatBytes(totalBytes)}</strong>
-          <span>{section === 'services' ? text('个服务项目', 'service items') : text('可处理空间', 'reclaimable')}</span>
-        </div>
-      </div>
+      <header className="module-header">
+        <h1>{title}</h1>
+        {supportsWhitelist ? (
+          <div className="module-tabs" role="tablist" aria-label={text(`${title}视图`, `${title} views`)}>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'results'}
+              className={activeTab === 'results' ? 'is-active' : ''}
+              onClick={() => selectTab('results')}
+            >
+              {text('扫描结果', 'Results')}<span>{candidates.length}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'whitelist'}
+              className={activeTab === 'whitelist' ? 'is-active' : ''}
+              onClick={() => selectTab('whitelist')}
+            >
+              {text('白名单', 'Whitelist')}<span>{whitelistValues.length}</span>
+            </button>
+          </div>
+        ) : (
+          <div className="module-stat">
+            <strong>{formatBytes(totalBytes)}</strong>
+            <span>{text('可处理空间', 'reclaimable')}</span>
+          </div>
+        )}
+      </header>
 
-      {safeIds.length > 0 && (
-        <div className="list-toolbar">
-          <label className="select-all">
-            <input type="checkbox" checked={allSafeSelected} onChange={toggleSafe} />
-            <span>{text('选择全部低风险项目', 'Select all low-risk items')}</span>
-          </label>
-          <span>{text(`${candidates.length} 个扫描结果`, `${candidates.length} scan results`)}</span>
-        </div>
-      )}
-
-      {candidates.length ? (
-        <div className="candidate-list">
-          {candidates.map((candidate) => (
-            <CandidateRow
-              key={candidate.id}
-              candidate={candidate}
-              selectedOperationId={selectedOperationId(candidate, selected)}
-              focused={focusedId === candidate.id}
-              onToggle={onToggle}
-              onFocus={onFocus}
-              onReviewAction={onReviewAction}
-              onAskAi={onAskAi}
-            />
-          ))}
-        </div>
+      {showingWhitelist ? (
+        <WhitelistPanel
+          kind={section as 'services' | 'storage'}
+          values={whitelistValues}
+          onUpdate={onUpdateSettings}
+        />
       ) : (
-        <InlineEmpty />
+        <>
+          {safeIds.length > 0 && (
+            <div className="list-toolbar">
+              <label className="select-all">
+                <input type="checkbox" checked={allSafeSelected} onChange={toggleSafe} />
+                <span>{text('选择全部低风险项目', 'Select all low-risk items')}</span>
+              </label>
+            </div>
+          )}
+
+          {candidates.length ? (
+            <div className="candidate-list">
+              {candidates.map((candidate) => (
+                <div className={`candidate-entry ${aiExpandedId === candidate.id ? 'has-ai' : ''}`} key={candidate.id}>
+                  <CandidateRow
+                    scanId={result.scanId}
+                    candidate={candidate}
+                    selectedOperationId={selectedOperationId(candidate, selected)}
+                    aiExpanded={aiExpandedId === candidate.id}
+                    onToggle={onToggle}
+                    onReviewAction={onReviewAction}
+                    onAskAi={(id) => aiExpandedId === id ? onCloseAi() : onAskAi(id)}
+                    onRevealLocation={onRevealLocation}
+                    onWhitelist={onWhitelist}
+                  />
+                  {aiExpandedId === candidate.id && (
+                    <div className="candidate-ai-inline">
+                      <AiAnalysisPanel
+                        result={result}
+                        candidate={candidate}
+                        compact
+                        autoPrepare={autoPrepareAiId === candidate.id}
+                        onAutoPrepared={onAiPrepared}
+                        onOpenSettings={onOpenSettings}
+                        onClose={onCloseAi}
+                      />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <InlineEmpty />
+          )}
+        </>
       )}
     </div>
   )
 }
 
 function CandidateRow({
+  scanId,
   candidate,
   selectedOperationId: activeOperationId,
-  focused,
+  aiExpanded = false,
   onToggle,
-  onFocus,
+  onOpen,
   onReviewAction,
-  onAskAi
+  onAskAi,
+  onRevealLocation,
+  onWhitelist
 }: {
+  scanId: string
   candidate: ScanCandidate
   selectedOperationId: string | null
-  focused: boolean
+  aiExpanded?: boolean
   onToggle: (id: string) => void
-  onFocus: (id: string) => void
+  onOpen?: (id: string) => void
   onReviewAction: (id: string) => void
   onAskAi: (id: string) => void
+  onRevealLocation: (id: string) => void
+  onWhitelist: (id: string) => void
 }): React.JSX.Element {
   const { language, text } = useI18n()
+  const { state: aiState } = useAiAnalysisTask(aiAnalysisTaskKey(scanId, candidate.id))
   const operations = candidateOperations(candidate)
   const primaryOperation = operations[0]
   const selectable = Boolean(primaryOperation)
   const selected = Boolean(activeOperationId)
+  const aiBusy = aiState.status === 'preparing' || aiState.status === 'analyzing'
+  const aiReady = aiState.status === 'succeeded'
+  const showSubtitle = candidate.subtitle.trim() !== candidate.location?.trim()
   return (
     <div
-      className={`candidate-row ${focused ? 'is-focused' : ''}`}
-      role="button"
-      tabIndex={0}
-      onClick={() => onFocus(candidate.id)}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') onFocus(candidate.id)
-      }}
+      className={`candidate-row ${onOpen ? 'is-link' : ''}`}
+      role={onOpen ? 'button' : undefined}
+      tabIndex={onOpen ? 0 : undefined}
+      onClick={onOpen ? () => onOpen(candidate.id) : undefined}
+      onKeyDown={onOpen ? (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onOpen(candidate.id)
+        }
+      } : undefined}
     >
-      <label
-        className={`row-checkbox ${!selectable ? 'is-disabled' : ''}`}
-        onClick={(event) => event.stopPropagation()}
-        title={selectable ? text('选择此项目', 'Select this item') : text('此项目仅供分析', 'This item is analysis only')}
-      >
-        <input
-          type="checkbox"
-          checked={selected}
-          disabled={!selectable}
-          onChange={() => {
-            const operationId = activeOperationId ?? primaryOperation?.id
-            if (operationId) onToggle(operationId)
-          }}
-        />
-        <span aria-hidden="true">{selected && <Check size={13} strokeWidth={2.5} />}</span>
-      </label>
+      {candidate.section === 'services' ? (
+        <span className="row-checkbox-placeholder" aria-hidden="true" />
+      ) : (
+        <label
+          className={`row-checkbox ${!selectable ? 'is-disabled' : ''}`}
+          onClick={(event) => event.stopPropagation()}
+          title={selectable ? text('选择此项目', 'Select this item') : text('此项目仅供分析', 'This item is analysis only')}
+        >
+          <input
+            type="checkbox"
+            checked={selected}
+            disabled={!selectable}
+            onChange={() => {
+              const operationId = activeOperationId ?? primaryOperation?.id
+              if (operationId) onToggle(operationId)
+            }}
+          />
+          <span aria-hidden="true">{selected && <Check size={13} strokeWidth={2.5} />}</span>
+        </label>
+      )}
       <div className={`candidate-icon icon-${candidate.section}`} aria-hidden="true">
         {candidate.section === 'services' ? (
           <Power size={17} />
@@ -931,7 +1199,26 @@ function CandidateRow({
           <strong>{candidate.name}</strong>
           <span className={`risk-label risk-${candidate.risk}`}>{riskLabel(candidate.risk, language)}</span>
         </div>
-        <span>{candidate.subtitle}</span>
+        <p className="candidate-summary">
+          {showSubtitle && <span>{candidate.subtitle}</span>}
+          {candidate.description}
+        </p>
+        {candidate.location && (
+          <button
+            type="button"
+            className="candidate-location-button"
+            onClick={(event) => {
+              event.stopPropagation()
+              onRevealLocation(candidate.id)
+            }}
+            title={candidate.section === 'storage'
+              ? text('在 Finder 中查看存储位置', 'Show storage location in Finder')
+              : text('在 Finder 中打开服务目录', 'Open service location in Finder')}
+          >
+            <FolderOpen size={12} />
+            <span>{candidate.location}</span>
+          </button>
+        )}
       </div>
       <div className="candidate-meta">
         <strong>{candidate.sizeBytes ? formatBytes(candidate.sizeBytes) : candidate.status}</strong>
@@ -941,15 +1228,46 @@ function CandidateRow({
         {(candidate.section === 'services' || candidate.section === 'storage') && (
           <button
             type="button"
+            className="candidate-whitelist-action"
+            onClick={(event) => {
+              event.stopPropagation()
+              onWhitelist(candidate.id)
+            }}
+            title={text('加入白名单，后续扫描不再显示', 'Add to whitelist and hide from future scans')}
+          >
+            <ShieldCheck size={14} />
+            {text('加入白名单', 'Whitelist')}
+          </button>
+        )}
+        {(candidate.section === 'services' || candidate.section === 'storage') && (
+          <button
+            type="button"
             className="candidate-ai-action"
+            aria-expanded={aiExpanded}
             onClick={(event) => {
               event.stopPropagation()
               onAskAi(candidate.id)
             }}
             title={text('不确定时询问 AI', 'Ask AI when you are unsure')}
           >
-            <BrainCircuit size={14} />
-            {text('问 AI', 'Ask AI')}
+            {aiExpanded
+              ? <X size={14} />
+              : aiBusy
+                ? <LoaderCircle className="spinning" size={14} />
+                : aiReady
+                  ? <Check size={14} />
+                  : <BrainCircuit size={14} />}
+            {aiExpanded
+              ? aiReady
+                ? text('收起结果', 'Hide result')
+                : aiBusy
+                  ? text('收起分析', 'Hide analysis')
+                  : text('收起 AI', 'Hide AI')
+              : aiBusy
+                ? text('AI 分析中', 'AI analyzing')
+                : aiReady
+                  ? text('查看 AI 结果', 'View AI result')
+                  : text('问 AI', 'Ask AI')}
           </button>
         )}
         {operations.map((operation) => (
@@ -963,12 +1281,16 @@ function CandidateRow({
             }}
             title={operation.consequence}
           >
-            {operation.kind.includes('stop') ? <Power size={14} /> : <Trash2 size={14} />}
+            {operation.kind.includes('stop')
+              ? <Power size={14} />
+              : operation.kind === 'trash-service-directory'
+                ? <FolderX size={14} />
+                : <Trash2 size={14} />}
             {operationLabel(operation, language)}
           </button>
         ))}
       </div>
-      <ChevronRight className="row-chevron" size={16} />
+      {onOpen && <ChevronRight className="row-chevron" size={16} />}
     </div>
   )
 }
@@ -982,7 +1304,7 @@ function TerminalView({
 }): React.JSX.Element {
   const { language, text } = useI18n()
   const { terminal } = result
-  const copy = viewCopy('terminal', language)
+  const title = viewTitle('terminal', language)
   const configCost =
     terminal.startupMs !== null && terminal.baselineMs !== null
       ? Math.max(0, terminal.startupMs - terminal.baselineMs)
@@ -1000,8 +1322,7 @@ function TerminalView({
     <div className="view terminal-view">
       <div className="page-title-row">
         <div>
-          <h1>{copy.title}</h1>
-          <p>{copy.description}</p>
+          <h1>{title}</h1>
         </div>
         <div className="page-stat">
           <strong>{terminal.startupMs === null ? text('未知', 'Unknown') : `${terminal.startupMs} ms`}</strong>
@@ -1093,134 +1414,6 @@ function InlineEmpty(): React.JSX.Element {
   )
 }
 
-function Inspector({
-  candidate,
-  result,
-  selectedOperationId: activeOperationId,
-  autoPrepareAi,
-  onAiPrepared,
-  onClose,
-  onToggle,
-  onReviewAction,
-  onOpenSettings
-}: {
-  candidate: ScanCandidate
-  result: ScanResult
-  selectedOperationId: string | null
-  autoPrepareAi: boolean
-  onAiPrepared: () => void
-  onClose: () => void
-  onToggle: (id: string) => void
-  onReviewAction: (id: string) => void
-  onOpenSettings: () => void
-}): React.JSX.Element {
-  const { language, text } = useI18n()
-  const operations = candidateOperations(candidate)
-  return (
-    <aside className="inspector" aria-label={text('项目详情', 'Item details')}>
-      <div className="inspector-head">
-        <span>{text('项目详情', 'Item details')}</span>
-        <button type="button" className="icon-button" onClick={onClose} title={text('关闭详情', 'Close details')}>
-          <X size={17} />
-        </button>
-      </div>
-      <div className="inspector-body">
-        <div className={`inspector-icon icon-${candidate.section}`}>
-          {candidate.section === 'services' ? (
-            <Power size={21} />
-          ) : candidate.section === 'storage' ? (
-            <Archive size={21} />
-          ) : (
-            <AppWindow size={21} />
-          )}
-        </div>
-        <span className={`risk-label risk-${candidate.risk}`}>{riskLabel(candidate.risk, language)}</span>
-        <h2>{candidate.name}</h2>
-        <code>{candidate.subtitle}</code>
-        <p>{candidate.description}</p>
-
-        {(candidate.section === 'services' || candidate.section === 'storage') && (
-          <AiAnalysisPanel
-            result={result}
-            candidate={candidate}
-            compact
-            autoPrepare={autoPrepareAi}
-            onAutoPrepared={onAiPrepared}
-            onOpenSettings={onOpenSettings}
-          />
-        )}
-
-        <dl className="detail-list">
-          {candidate.sizeBytes !== undefined && (
-            <div>
-              <dt>{text('空间占用', 'Space used')}</dt>
-              <dd>{formatBytes(candidate.sizeBytes)}</dd>
-            </div>
-          )}
-          <div>
-            <dt>{text('当前状态', 'Current status')}</dt>
-            <dd>{candidate.status}</dd>
-          </div>
-          <div>
-            <dt>{text('可用操作', 'Available actions')}</dt>
-            <dd>{operations.length || text('不适用', 'None')}</dd>
-          </div>
-        </dl>
-
-        <div className="evidence-block">
-          <strong>{text('判断依据', 'Evidence')}</strong>
-          {candidate.evidence.map((item) => (
-            <span key={item}>
-              <Check size={14} />
-              {item}
-            </span>
-          ))}
-        </div>
-
-      </div>
-      <div className="inspector-action">
-        {operations.length ? (
-          <>
-            <span className="inspector-action-label">{text('选择处理方式', 'Choose an action')}</span>
-            {operations.map((operation, index) => {
-              const isSelected = activeOperationId === operation.id
-              return (
-                <button
-                  key={operation.id}
-                  type="button"
-                  className={index === 0 ? 'primary-button' : 'secondary-button'}
-                  onClick={() => onReviewAction(operation.id)}
-                >
-                  {isSelected ? (
-                    <Check size={16} />
-                  ) : operation.kind.includes('stop') ? (
-                    <Power size={16} />
-                  ) : (
-                    <Trash2 size={16} />
-                  )}
-                  {isSelected
-                    ? text(`已选择：${operationLabel(operation, language)}`, `Selected: ${operationLabel(operation, language)}`)
-                    : operationLabel(operation, language)}
-                  {operation.requiresAdmin ? text('（需授权）', ' (authorization required)') : ''}
-                </button>
-              )
-            })}
-          </>
-        ) : (
-          <div className="protected-note">
-            <ShieldAlert size={16} />
-            <span>
-              {candidate.section === 'services' && (candidate.status === '已停止' || candidate.status === 'Stopped')
-                ? text('服务已停止，没有其他可用操作；软件和数据仍然保留。', 'The service is stopped with no other available actions. Its software and data remain.')
-                : text('此项目包含重要数据，只提供分析。', 'This item contains important data and is analysis only.')}
-            </span>
-          </div>
-        )}
-      </div>
-    </aside>
-  )
-}
-
 function ActionDock({
   count,
   bytes,
@@ -1250,26 +1443,91 @@ function ActionDock({
   )
 }
 
+function AiActivityCenter({
+  items,
+  hasActionDock,
+  onOpen,
+  onDismiss
+}: {
+  items: AiActivityItem[]
+  hasActionDock: boolean
+  onOpen: (item: AiActivityItem) => void
+  onDismiss: (key: string) => void
+}): React.JSX.Element {
+  const { text } = useI18n()
+  return (
+    <section
+      className={`ai-activity-center ${hasActionDock ? 'has-action-dock' : ''}`}
+      aria-label={text('AI 分析任务', 'AI analysis tasks')}
+      aria-live="polite"
+    >
+      <header>
+        <div>
+          <BrainCircuit size={15} />
+          <strong>{text('AI 分析', 'AI analyses')}</strong>
+        </div>
+        <span>{text(`${items.length} 项`, `${items.length} ${items.length === 1 ? 'item' : 'items'}`)}</span>
+      </header>
+      <div className="ai-activity-list">
+        {items.map((item) => (
+          <div className={`ai-activity-item is-${item.status}`} key={item.key}>
+            {item.status === 'running'
+              ? <LoaderCircle className="spinning" size={16} />
+              : <CheckCircle2 size={16} />}
+            <div>
+              <strong title={item.name}>{item.name}</strong>
+              <span>
+                {item.status === 'running'
+                  ? text('正在分析', 'Analyzing')
+                  : text('分析完成，可查看结果', 'Analysis complete')}
+              </span>
+            </div>
+            <button type="button" className="secondary-button" onClick={() => onOpen(item)}>
+              {text('查看', 'View')}<ChevronRight size={14} />
+            </button>
+            {item.status === 'completed' && (
+              <button
+                type="button"
+                className="icon-button ai-activity-dismiss"
+                onClick={() => onDismiss(item.key)}
+                title={text('关闭此结果提示', 'Dismiss this result')}
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 function ConfirmDialog({
   items,
   busy,
   onClose,
   onConfirm
 }: {
-  items: SelectedOperation[]
+  items: SelectedCandidateOperation[]
   busy: boolean
   onClose: () => void
   onConfirm: () => void
 }): React.JSX.Element {
   const { language, text } = useI18n()
   const irreversible = items.some((item) => !item.action.reversible)
-  const includesTrashCleanup = items.some(
+  const includesSoftwareCleanup = items.some(
     (item) =>
       item.action.kind === 'trash-service-software' ||
-      item.action.kind === 'trash-launch-agent-config'
+      item.action.kind === 'trash-service-directory'
+  )
+  const includesDirectoryCleanup = items.some(
+    (item) => item.action.kind === 'trash-service-directory'
   )
   const requiresAdmin = items.some((item) => item.action.requiresAdmin)
   const onlyStops = items.every((item) => item.action.kind.includes('stop'))
+  const onlyStartupItems = items.every(
+    (item) => item.action.kind === 'trash-launch-agent-config'
+  )
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={() => !busy && onClose()}>
       <section
@@ -1292,7 +1550,11 @@ function ConfirmDialog({
           {items.map((item) => (
             <div key={item.id}>
               <span className={`dialog-item-icon icon-${item.candidate.section}`}>
-                {item.action.kind.includes('stop') ? <Power size={16} /> : <Trash2 size={16} />}
+                {item.action.kind.includes('stop')
+                  ? <Power size={16} />
+                  : item.action.kind === 'trash-service-directory'
+                    ? <FolderX size={16} />
+                    : <Trash2 size={16} />}
               </span>
               <div>
                 <strong>{item.candidate.name} · {operationLabel(item.action, language)}</strong>
@@ -1308,16 +1570,22 @@ function ConfirmDialog({
             </div>
           ))}
         </div>
-        <div className={`dialog-notice ${irreversible ? 'is-warning' : ''}`}>
-          {irreversible ? <ShieldAlert size={17} /> : <CheckCircle2 size={17} />}
+        <div className={`dialog-notice ${irreversible || includesDirectoryCleanup ? 'is-warning' : ''}`}>
+          {irreversible || includesDirectoryCleanup ? <ShieldAlert size={17} /> : <CheckCircle2 size={17} />}
           <span>
             {irreversible
               ? text('部分 Homebrew 清理操作不能通过废纸篓撤销。', 'Some Homebrew cleanup actions cannot be restored from the Trash.')
+              : includesDirectoryCleanup
+                ? text('将删除整个关联目录，包括其中的源码、虚拟环境和数据。请先确认目录内容不再需要；项目会移到废纸篓。', 'The entire related directory, including source code, virtual environments, and data, will be removed. Confirm its contents are no longer needed; the directory will move to the Trash.')
+              : onlyStartupItems
+                ? requiresAdmin
+                  ? text('macOS 会先请求管理员授权。只移除启动配置；程序目录和用户数据都会保留。', 'macOS will request administrator authorization first. Only the startup configuration is removed; the program directory and user data remain.')
+                  : text('只移除启动配置；程序目录和用户数据都会保留。', 'Only the startup configuration is removed; the program directory and user data remain.')
               : requiresAdmin
                 ? text('执行前 macOS 会请求管理员授权；取消授权不会移动任何文件。', 'macOS will request administrator authorization first. Cancelling it will not move any files.')
               : onlyStops
                 ? text('只会停止所选服务并取消自动启动，不会删除应用、配置或用户数据；之后仍可重新启动。', 'Only the selected services will stop and automatic startup will be disabled. Apps, settings, and user data remain, and the services can be started again.')
-              : includesTrashCleanup
+              : includesSoftwareCleanup
                 ? text('会先停止服务，再将扫描时确认的应用、启动项和精确匹配数据移到废纸篓。', 'The service will stop first, then the confirmed app, login item, and exact-match data will move to the Trash.')
                 : text('文件会进入 macOS 废纸篓，停止的服务也可以重新启动。', 'Files will move to the macOS Trash, and stopped services can be started again.')}
           </span>

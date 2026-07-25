@@ -24,7 +24,11 @@ import {
 import {
   buildBundleDataCandidates,
   findContainingAppBundle,
-  isAllowedServiceCleanupTarget
+  findServiceLocation,
+  findOwnedServiceDataRoot,
+  findUserServiceDirectory,
+  isAllowedServiceCleanupTarget,
+  isAllowedUserSelectedServiceDirectory
 } from './service-cleanup'
 
 const execFileAsync = promisify(execFile)
@@ -37,7 +41,7 @@ function t(language: AppLanguage, chinese: string, english: string): string {
 
 export type RegisteredAction =
   | {
-      kind: Exclude<ActionKind, 'trash-launch-agent-config' | 'trash-service-software'>
+      kind: Exclude<ActionKind, 'trash-launch-agent-config' | 'trash-service-software' | 'trash-service-directory'>
       target: string
     }
   | {
@@ -47,8 +51,17 @@ export type RegisteredAction =
       serviceTargets: string[]
       requiresAdmin: boolean
     }
+  | {
+      kind: 'trash-service-directory'
+      target: string
+      directoryTarget: string
+      targets: string[]
+      serviceTargets: string[]
+      requiresAdmin: boolean
+    }
 
 interface RegisteredOperation {
+  id?: string
   action: Omit<CandidateOperation, 'id'>
   registeredAction: RegisteredAction
 }
@@ -56,6 +69,7 @@ interface RegisteredOperation {
 export interface ScanBundle {
   result: ScanResult
   actions: Map<string, RegisteredAction>
+  revealTargets: Map<string, string>
 }
 
 interface CommandResult {
@@ -80,6 +94,22 @@ async function pathExists(target: string): Promise<boolean> {
   try {
     await fs.access(target)
     return true
+  } catch {
+    return false
+  }
+}
+
+async function pathIsDirectory(target: string): Promise<boolean> {
+  try {
+    return (await fs.stat(target)).isDirectory()
+  } catch {
+    return false
+  }
+}
+
+async function pathIsRealDirectory(target: string): Promise<boolean> {
+  try {
+    return (await fs.lstat(target)).isDirectory()
   } catch {
     return false
   }
@@ -128,12 +158,15 @@ function registerCandidate(
   actions: Map<string, RegisteredAction>,
   candidate: Omit<ScanCandidate, 'id'>,
   registeredAction?: RegisteredAction,
-  registeredOperations: RegisteredOperation[] = []
+  registeredOperations: RegisteredOperation[] = [],
+  revealTargets?: Map<string, string>,
+  revealTarget?: string
 ): ScanCandidate {
   const id = randomUUID()
   if (registeredAction) actions.set(id, registeredAction)
-  const operations = registeredOperations.map(({ action, registeredAction: operation }) => {
-    const operationId = randomUUID()
+  if (revealTargets && revealTarget) revealTargets.set(id, revealTarget)
+  const operations = registeredOperations.map(({ id, action, registeredAction: operation }) => {
+    const operationId = id ?? randomUUID()
     actions.set(operationId, operation)
     return { ...action, id: operationId }
   })
@@ -229,6 +262,17 @@ async function scanBrewServices(
 interface LaunchAgentExecutable {
   program: string | null
   appPath: string | null
+  workingDirectory: string | null
+  dataRoot: string | null
+  serviceDirectory: string | null
+  serviceLocation: string | null
+  relatedPaths: string[]
+}
+
+function launchAgentPath(value: unknown): string | null {
+  if (typeof value !== 'string' || !value) return null
+  const expanded = value.startsWith('~/') ? path.join(HOME, value.slice(2)) : value
+  return path.isAbsolute(expanded) ? path.resolve(expanded) : null
 }
 
 async function inspectLaunchAgentExecutable(target: string): Promise<LaunchAgentExecutable> {
@@ -238,22 +282,47 @@ async function inspectLaunchAgentExecutable(target: string): Promise<LaunchAgent
     const argumentValues = Array.isArray(plist.ProgramArguments)
       ? plist.ProgramArguments.filter((item): item is string => typeof item === 'string')
       : []
-    const values = [typeof plist.Program === 'string' ? plist.Program : null, ...argumentValues]
-      .filter((item): item is string => Boolean(item))
-      .map((item) => (item.startsWith('~/') ? path.join(HOME, item.slice(2)) : item))
-    const program = values.find((item) => path.isAbsolute(item)) ?? null
+    const values = [plist.Program, ...argumentValues]
+      .map(launchAgentPath)
+      .filter((item): item is string => item !== null)
+    const program = values[0] ?? null
     const appPath =
       values
         .map((item) => findContainingAppBundle(item))
         .find((item): item is string => item !== null) ?? null
-    return { program, appPath }
+    const workingDirectory = launchAgentPath(plist.WorkingDirectory)
+    const dataRoot = findOwnedServiceDataRoot(HOME, program, workingDirectory)
+    const serviceDirectory = findUserServiceDirectory(HOME, program, workingDirectory)
+    const serviceLocation = findServiceLocation(HOME, program, workingDirectory, appPath)
+    const relatedPaths = [plist.StandardOutPath, plist.StandardErrorPath]
+      .map(launchAgentPath)
+      .filter((item): item is string => item !== null)
+      .filter((item) => isAllowedServiceCleanupTarget(item, HOME))
+    return {
+      program,
+      appPath,
+      workingDirectory,
+      dataRoot,
+      serviceDirectory,
+      serviceLocation,
+      relatedPaths: [...new Set(relatedPaths)]
+    }
   } catch {
-    return { program: null, appPath: null }
+    return {
+      program: null,
+      appPath: null,
+      workingDirectory: null,
+      dataRoot: null,
+      serviceDirectory: null,
+      serviceLocation: null,
+      relatedPaths: []
+    }
   }
 }
 
 async function scanLaunchAgents(
   actions: Map<string, RegisteredAction>,
+  revealTargets: Map<string, string>,
   language: AppLanguage
 ): Promise<ScanCandidate[]> {
   const roots = [path.join(HOME, 'Library/LaunchAgents'), '/Library/LaunchAgents']
@@ -299,9 +368,27 @@ async function scanLaunchAgents(
     5,
     async (entry) => ({ ...entry, ...(await inspectLaunchAgentExecutable(entry.target)) })
   )
-  const loadedEntries = inspectedEntries.filter(({ label }) => loadedLabels.has(label))
+  const sharedCleanupOperationIds = new Map<string, string>()
+  const sharedCleanupOperationId = (key: string): string => {
+    const existing = sharedCleanupOperationIds.get(key)
+    if (existing) return existing
+    const id = randomUUID()
+    sharedCleanupOperationIds.set(key, id)
+    return id
+  }
 
-  return mapLimit(loadedEntries, 5, async ({ target, label, stats, program, appPath: foundApp }) => {
+  return mapLimit(inspectedEntries, 5, async ({
+    target,
+    label,
+    stats,
+    program,
+    appPath: foundApp,
+    workingDirectory,
+    dataRoot,
+    serviceDirectory,
+    serviceLocation: inspectedServiceLocation
+  }) => {
+    const isLoaded = loadedLabels.has(label)
     const ageDays = ageInDays(stats.mtime)
     const evidence = [
       t(language, `配置：${displayPath(target)}`, `Configuration: ${displayPath(target)}`),
@@ -310,9 +397,29 @@ async function scanLaunchAgents(
     let appPath = foundApp
     let appName: string | null = null
     let bundleId: string | null = null
+    let serviceLocation = inspectedServiceLocation
 
-    if (program) evidence.push(t(language, `程序：${displayPath(program)}`, `Program: ${displayPath(program)}`))
+    if (serviceLocation && !(await pathIsDirectory(serviceLocation))) serviceLocation = null
+
+    if (program) {
+      evidence.push(t(language, `程序：${displayPath(program)}`, `Program: ${displayPath(program)}`))
+      if (!(await pathExists(program))) {
+        evidence.push(
+          t(
+            language,
+            `配置指向的程序位置已不存在：${displayPath(program)}`,
+            `The program location in the configuration no longer exists: ${displayPath(program)}`
+          )
+        )
+      }
+    }
+    if (dataRoot) evidence.push(t(language, `关联数据：${displayPath(dataRoot)}`, `Associated data: ${displayPath(dataRoot)}`))
     if (appPath && !(await pathExists(appPath))) appPath = null
+    if (!serviceLocation) {
+      serviceLocation = findServiceLocation(HOME, program, workingDirectory, appPath)
+      if (serviceLocation && !(await pathIsDirectory(serviceLocation))) serviceLocation = null
+    }
+    if (serviceLocation) evidence.push(t(language, `服务目录：${serviceLocation}`, `Service directory: ${serviceLocation}`))
     if (foundApp && !appPath) evidence.push(t(language, `目标应用不存在：${displayPath(foundApp)}`, `Target application is missing: ${displayPath(foundApp)}`))
 
     if (appPath) {
@@ -351,8 +458,9 @@ async function scanLaunchAgents(
       }
     }
 
-    const registeredOperations: RegisteredOperation[] = [
-      {
+    const registeredOperations: RegisteredOperation[] = []
+    if (isLoaded) {
+      registeredOperations.push({
         action: {
           kind: 'stop-launch-agent',
           label: t(language, '仅停止服务', 'Stop service only'),
@@ -360,8 +468,28 @@ async function scanLaunchAgents(
           reversible: true
         },
         registeredAction: { kind: 'stop-launch-agent', target }
+      })
+    }
+
+    const configRemovalRequiresAdmin = target.startsWith('/Library/LaunchAgents/')
+    registeredOperations.push({
+      action: {
+        kind: 'trash-launch-agent-config',
+        label: t(language, '移除启动项', 'Remove startup item'),
+        consequence: isLoaded
+          ? t(language, '停止这个服务，并将它的启动配置移到废纸篓。程序目录和用户数据都会保留。', 'Stop this service and move its launch configuration to the Trash. Its program directory and user data remain.')
+          : t(language, '将这个已停止服务的启动配置移到废纸篓。程序目录和用户数据都会保留。', 'Move this stopped service\'s launch configuration to the Trash. Its program directory and user data remain.'),
+        reversible: true,
+        requiresAdmin: configRemovalRequiresAdmin
+      },
+      registeredAction: {
+        kind: 'trash-launch-agent-config',
+        target,
+        targets: [target],
+        serviceTargets: isLoaded ? [target] : [],
+        requiresAdmin: configRemovalRequiresAdmin
       }
-    ]
+    })
 
     if (appPath && isAllowedServiceCleanupTarget(appPath, HOME)) {
       const associatedConfigTargets = inspectedEntries
@@ -374,9 +502,7 @@ async function scanLaunchAgents(
         .map((entry) => entry.target)
         .filter((candidate) => isAllowedServiceCleanupTarget(candidate, HOME))
         .sort()
-      const isCleanupOwner = serviceTargets[0] === target
-
-      if (isCleanupOwner) {
+      if (associatedConfigTargets.length > 0) {
         const dataCandidates = bundleId ? buildBundleDataCandidates(HOME, bundleId) : []
         const existingData = (
           await Promise.all(
@@ -390,8 +516,7 @@ async function scanLaunchAgents(
         ].filter((candidate) => isAllowedServiceCleanupTarget(candidate, HOME))
 
         if (
-          serviceTargets.length > 0 &&
-          serviceTargets.every((serviceTarget) => cleanupTargets.includes(serviceTarget)) &&
+          associatedConfigTargets.every((configTarget) => cleanupTargets.includes(configTarget)) &&
           cleanupTargets.includes(appPath)
         ) {
           if (existingData.length) {
@@ -399,10 +524,11 @@ async function scanLaunchAgents(
           }
           const requiresAdmin =
             appPath.startsWith('/Applications/') ||
-            serviceTargets.some((serviceTarget) =>
-              serviceTarget.startsWith('/Library/LaunchAgents/')
+            associatedConfigTargets.some((configTarget) =>
+              configTarget.startsWith('/Library/LaunchAgents/')
             )
           registeredOperations.push({
+            id: sharedCleanupOperationId(`app:${appPath}`),
             action: {
               kind: 'trash-service-software',
               label: t(language, '卸载并清理检测到的数据', 'Uninstall and clean detected data'),
@@ -412,7 +538,7 @@ async function scanLaunchAgents(
             },
             registeredAction: {
               kind: 'trash-service-software',
-              target,
+              target: associatedConfigTargets[0],
               targets: cleanupTargets,
               serviceTargets,
               requiresAdmin
@@ -422,36 +548,105 @@ async function scanLaunchAgents(
       }
     }
 
-    if (foundApp && !appPath) {
-      const staleConfigTargets = inspectedEntries
-        .filter((entry) => entry.appPath === foundApp)
+    if (!foundApp && dataRoot) {
+      const dataEntries = inspectedEntries.filter((entry) => entry.dataRoot === dataRoot)
+      const configTargets = dataEntries
         .map((entry) => entry.target)
         .filter((candidate) => isAllowedServiceCleanupTarget(candidate, HOME))
         .sort()
-      const staleServiceTargets = inspectedEntries
-        .filter((entry) => entry.appPath === foundApp && loadedLabels.has(entry.label))
+      const serviceTargets = dataEntries
+        .filter((entry) => loadedLabels.has(entry.label))
         .map((entry) => entry.target)
         .filter((candidate) => isAllowedServiceCleanupTarget(candidate, HOME))
         .sort()
-      const isCleanupOwner = staleServiceTargets[0] === target
+      const relatedCandidates = [
+        ...new Set(dataEntries.flatMap((entry) => entry.relatedPaths))
+      ].filter((candidate) => isAllowedServiceCleanupTarget(candidate, HOME))
+      const existingRelatedPaths = (
+        await Promise.all(
+          relatedCandidates.map(async (candidate) => (await pathExists(candidate) ? candidate : null))
+        )
+      ).filter((candidate): candidate is string => candidate !== null)
+      const cleanupTargets = [
+        ...new Set([...configTargets, dataRoot, ...existingRelatedPaths])
+      ].filter((candidate) => isAllowedServiceCleanupTarget(candidate, HOME))
 
-      if (isCleanupOwner && staleConfigTargets.length > 0 && staleServiceTargets.length > 0) {
-        const requiresAdmin = staleConfigTargets.some((configTarget) =>
+      if (
+        configTargets.length > 0 &&
+        configTargets.every((configTarget) => cleanupTargets.includes(configTarget)) &&
+        cleanupTargets.includes(dataRoot) &&
+        await pathExists(dataRoot)
+      ) {
+        const requiresAdmin = configTargets.some((configTarget) =>
           configTarget.startsWith('/Library/LaunchAgents/')
         )
         registeredOperations.push({
+          id: sharedCleanupOperationId(`data:${dataRoot}`),
           action: {
-            kind: 'trash-launch-agent-config',
-            label: t(language, '停止并移除失效启动项', 'Stop and remove stale launch items'),
-            consequence: t(language, `目标应用已经不存在。停止 ${staleServiceTargets.length} 个已加载服务，并将 ${staleConfigTargets.length} 个失效启动配置移到废纸篓；不会按名称猜测或删除其他数据。`, `The target application is missing. Stop ${staleServiceTargets.length} loaded services and move ${staleConfigTargets.length} stale launch configurations to the Trash. No other data is guessed or removed by name.`),
+            kind: 'trash-service-software',
+            label: t(language, '卸载并清理服务数据', 'Uninstall and clean service data'),
+            consequence: t(
+              language,
+              `停止同组仍在运行的 ${serviceTargets.length} 个服务，再把 ${configTargets.length} 个启动配置、${displayPath(dataRoot)} 和 ${existingRelatedPaths.length} 个明确关联的日志移到废纸篓。不会按名称猜测其他文件。`,
+              `Stop ${serviceTargets.length} running services in the same group, then move ${configTargets.length} launch configurations, ${displayPath(dataRoot)}, and ${existingRelatedPaths.length} explicitly associated logs to the Trash. No other files are guessed by name.`
+            ),
             reversible: true,
             requiresAdmin
           },
           registeredAction: {
-            kind: 'trash-launch-agent-config',
-            target,
-            targets: staleConfigTargets,
-            serviceTargets: staleServiceTargets,
+            kind: 'trash-service-software',
+            target: configTargets[0],
+            targets: cleanupTargets,
+            serviceTargets,
+            requiresAdmin
+          }
+        })
+      }
+    }
+
+    const userSelectedDirectoryAvailable =
+      !foundApp &&
+      Boolean(serviceDirectory) &&
+      isAllowedUserSelectedServiceDirectory(serviceDirectory ?? '', HOME) &&
+      await pathIsRealDirectory(serviceDirectory ?? '')
+
+    if (userSelectedDirectoryAvailable && serviceDirectory) {
+      const directoryEntries = inspectedEntries.filter(
+        (entry) => entry.serviceDirectory === serviceDirectory
+      )
+      const configTargets = directoryEntries
+        .map((entry) => entry.target)
+        .filter((candidate) => isAllowedServiceCleanupTarget(candidate, HOME))
+        .sort()
+      const serviceTargets = directoryEntries
+        .filter((entry) => loadedLabels.has(entry.label))
+        .map((entry) => entry.target)
+        .filter((candidate) => isAllowedServiceCleanupTarget(candidate, HOME))
+        .sort()
+      const cleanupTargets = [...configTargets, serviceDirectory]
+      if (configTargets.length > 0) {
+        const requiresAdmin = configTargets.some((configTarget) =>
+          configTarget.startsWith('/Library/LaunchAgents/')
+        )
+        registeredOperations.push({
+          id: sharedCleanupOperationId(`directory:${serviceDirectory}`),
+          action: {
+            kind: 'trash-service-directory',
+            label: t(language, '移除相关服务并删除目录', 'Remove services and directory'),
+            consequence: t(
+              language,
+              `停止引用同一目录的 ${serviceTargets.length} 个已加载服务，将 ${configTargets.length} 个启动配置和整个目录 ${serviceDirectory} 移到废纸篓。目录中的源码、虚拟环境和数据都会一起移动。`,
+              `Stop ${serviceTargets.length} loaded services that reference the same directory, then move ${configTargets.length} launch configurations and the entire directory ${serviceDirectory} to the Trash. Source code, virtual environments, and data inside it will all be moved.`
+            ),
+            reversible: true,
+            requiresAdmin
+          },
+          registeredAction: {
+            kind: 'trash-service-directory',
+            target: configTargets[0],
+            directoryTarget: serviceDirectory,
+            targets: cleanupTargets,
+            serviceTargets,
             requiresAdmin
           }
         })
@@ -461,8 +656,9 @@ async function scanLaunchAgents(
     const softwareCleanupAvailable = registeredOperations.some(
       ({ action }) => action.kind === 'trash-service-software'
     )
-    const staleCleanupAvailable = registeredOperations.some(
-      ({ action }) => action.kind === 'trash-launch-agent-config'
+    const dataCleanupAvailable = softwareCleanupAvailable && !appPath
+    const directoryCleanupAvailable = registeredOperations.some(
+      ({ action }) => action.kind === 'trash-service-directory'
     )
     const displayAppName = appName ?? (foundApp ? path.basename(foundApp, '.app') : null)
     return registerCandidate(
@@ -475,28 +671,41 @@ async function scanLaunchAgents(
           : target.startsWith(HOME)
             ? t(language, '用户登录启动项', 'User login item')
             : t(language, '全局登录启动项', 'System login item'),
-        description: softwareCleanupAvailable
+        description: directoryCleanupAvailable
+          ? t(language, '已从启动配置确认服务使用的工作目录。可以只移除当前启动项；确认不再需要同目录中的源码和数据后，也可以移除相关服务并将整个目录移到废纸篓。', 'The service working directory was confirmed from its launch configuration. You can remove only this startup item, or, after confirming the source code and data are no longer needed, remove related services and move the entire directory to the Trash.')
+          : dataCleanupAvailable
+          ? t(language, '已从启动配置中的精确路径定位到服务程序和专用数据目录，可选择停止，或审阅后将同组启动项与关联数据移到废纸篓。', 'Exact paths in the launch configuration identify the service program and its dedicated data directory. You can stop it, or review and move the grouped launch items and associated data to the Trash.')
+          : softwareCleanupAvailable
           ? t(language, '已从启动配置中的可执行路径定位到关联应用，可选择仅停止，或审阅后移除应用与精确匹配的数据。', 'The associated application was identified from the launch configuration. You can stop only, or review and remove the application and exactly matched data.')
-          : staleCleanupAvailable
+          : foundApp && !appPath
             ? t(language, '启动配置指向的应用已经不存在，可停止仍在反复尝试启动的服务并移除失效配置。', 'The application referenced by this launch configuration is missing. The service can be stopped and its stale configuration removed.')
             : appPath
             ? t(language, '已定位关联应用，但它位于自动清理白名单之外；请使用软件自带卸载器，本工具只提供停止操作。', 'The associated application was identified but is outside the automatic cleanup allowlist. Use its own uninstaller; Memento only offers a stop action.')
-            : t(language, '当前已加载，但无法从启动配置可靠定位所属应用，因此只提供停止操作。', 'This service is loaded, but its owning application could not be identified reliably. Only a stop action is available.'),
+            : isLoaded
+              ? t(language, '当前服务已加载。可以只停止，也可以移除启动项；移除启动项不会删除程序目录或用户数据。', 'The service is loaded. You can stop it only or remove its startup item. Removing the startup item does not delete its program directory or user data.')
+              : t(language, '服务已经停止，但启动配置仍然存在。可以移除启动项，程序目录和用户数据会继续保留。', 'The service is stopped, but its launch configuration remains. You can remove the startup item while keeping its program directory and user data.'),
         ageDays,
         risk: 'review',
-        status: t(language, '已加载', 'Loaded'),
+        status: isLoaded ? t(language, '已加载', 'Loaded') : t(language, '已停止', 'Stopped'),
+        location: serviceLocation ?? undefined,
         evidence
       },
       undefined,
-      registeredOperations
+      registeredOperations,
+      revealTargets,
+      serviceLocation ?? undefined
     )
   })
 }
 
-async function scanServices(actions: Map<string, RegisteredAction>, language: AppLanguage): Promise<ScanCandidate[]> {
+async function scanServices(
+  actions: Map<string, RegisteredAction>,
+  revealTargets: Map<string, string>,
+  language: AppLanguage
+): Promise<ScanCandidate[]> {
   const [brewServices, launchAgents] = await Promise.all([
     scanBrewServices(actions, language),
-    scanLaunchAgents(actions, language)
+    scanLaunchAgents(actions, revealTargets, language)
   ])
   return [...brewServices, ...launchAgents]
 }
@@ -585,6 +794,7 @@ const storageDefinitions: StorageDefinition[] = [
 
 async function scanDefinedStorage(
   actions: Map<string, RegisteredAction>,
+  revealTargets: Map<string, string>,
   language: AppLanguage
 ): Promise<ScanCandidate[]> {
   const inspected = await mapLimit(storageDefinitions, 4, async (definition) => {
@@ -615,13 +825,17 @@ async function scanDefinedStorage(
         ageDays: ageInDays(stats.mtime),
         risk: definition.risk,
         status: definition.risk === 'protected' ? t(language, '仅分析', 'Analysis only') : t(language, '可清理', 'Reclaimable'),
+        location: displayPath(definition.target),
         evidence: [
           t(language, `占用 ${formatBytesForEvidence(sizeBytes)}`, `Size: ${formatBytesForEvidence(sizeBytes)}`),
           t(language, `最近修改于 ${ageInDays(stats.mtime)} 天前`, `Last modified ${ageInDays(stats.mtime)} days ago`)
         ],
         action
       },
-      action ? { kind: 'trash', target: definition.target } : undefined
+      action ? { kind: 'trash', target: definition.target } : undefined,
+      [],
+      revealTargets,
+      definition.target
     )
   })
   return inspected.filter((item): item is ScanCandidate => item !== null)
@@ -634,6 +848,7 @@ function formatBytesForEvidence(bytes: number): string {
 
 async function scanApplicationCaches(
   actions: Map<string, RegisteredAction>,
+  revealTargets: Map<string, string>,
   excludedTargets: Set<string>,
   language: AppLanguage
 ): Promise<ScanCandidate[]> {
@@ -666,6 +881,7 @@ async function scanApplicationCaches(
           ageDays: ageInDays(stats.mtime),
           risk: 'safe',
           status: t(language, '可清理', 'Reclaimable'),
+          location: displayPath(target),
           evidence: [
             t(language, `位置：${displayPath(target)}`, `Location: ${displayPath(target)}`),
             t(language, `最近修改于 ${ageInDays(stats.mtime)} 天前`, `Last modified ${ageInDays(stats.mtime)} days ago`)
@@ -677,7 +893,10 @@ async function scanApplicationCaches(
             reversible: true
           }
         },
-        { kind: 'trash', target }
+        { kind: 'trash', target },
+        [],
+        revealTargets,
+        target
       )
     } catch {
       return null
@@ -692,6 +911,7 @@ async function scanApplicationCaches(
 
 async function scanBrewVersions(
   actions: Map<string, RegisteredAction>,
+  revealTargets: Map<string, string>,
   language: AppLanguage
 ): Promise<ScanCandidate[]> {
   const brew = ['/opt/homebrew/bin/brew', '/usr/local/bin/brew'].find((item) =>
@@ -739,6 +959,7 @@ async function scanBrewVersions(
           sizeBytes,
           risk: 'safe',
           status: t(language, '旧版本', 'Old versions'),
+          location: displayPath(formulaRoot),
           evidence: [
             t(language, `保留当前版本 ${versions.at(-1)}`, `Current version kept: ${versions.at(-1)}`),
             t(language, `待清理版本：${oldVersions.join(', ')}`, `Versions to clean: ${oldVersions.join(', ')}`)
@@ -750,7 +971,10 @@ async function scanBrewVersions(
             reversible: false
           }
         },
-        { kind: 'brew-cleanup', target: formula }
+        { kind: 'brew-cleanup', target: formula },
+        [],
+        revealTargets,
+        formulaRoot
       )
     } catch {
       return null
@@ -760,12 +984,16 @@ async function scanBrewVersions(
   return candidates.filter((item): item is ScanCandidate => item !== null)
 }
 
-async function scanStorage(actions: Map<string, RegisteredAction>, language: AppLanguage): Promise<ScanCandidate[]> {
+async function scanStorage(
+  actions: Map<string, RegisteredAction>,
+  revealTargets: Map<string, string>,
+  language: AppLanguage
+): Promise<ScanCandidate[]> {
   const definedTargets = new Set(storageDefinitions.map((item) => item.target))
   const [defined, caches, brewVersions] = await Promise.all([
-    scanDefinedStorage(actions, language),
-    scanApplicationCaches(actions, definedTargets, language),
-    scanBrewVersions(actions, language)
+    scanDefinedStorage(actions, revealTargets, language),
+    scanApplicationCaches(actions, revealTargets, definedTargets, language),
+    scanBrewVersions(actions, revealTargets, language)
   ])
   return [...defined, ...caches, ...brewVersions].sort(
     (a, b) => (b.sizeBytes ?? 0) - (a.sizeBytes ?? 0)
@@ -1172,6 +1400,7 @@ export async function runFullScan(
 ): Promise<ScanBundle> {
   const startedAt = new Date().toISOString()
   const actions = new Map<string, RegisteredAction>()
+  const revealTargets = new Map<string, string>()
   const warnings: string[] = []
 
   onProgress({ section: 'system', progress: 4, message: t(language, '读取系统状态', 'Reading system status') })
@@ -1186,6 +1415,7 @@ export async function runFullScan(
     onProgress({ section: 'system', progress: 100, message: warning })
     return {
       actions,
+      revealTargets,
       result: {
         scanId: randomUUID(),
         startedAt,
@@ -1206,13 +1436,13 @@ export async function runFullScan(
   }
 
   onProgress({ section: 'services', progress: 12, message: t(language, '检查后台服务与登录启动项', 'Checking background services and login items') })
-  const servicesPromise = scanServices(actions, language).catch((error: Error) => {
+  const servicesPromise = scanServices(actions, revealTargets, language).catch((error: Error) => {
     warnings.push(t(language, `服务扫描未完成：${error.message}`, `Service scan did not complete: ${error.message}`))
     return []
   })
 
   onProgress({ section: 'storage', progress: 26, message: t(language, '统计开发工具与应用缓存', 'Measuring developer tool and application caches') })
-  const storagePromise = scanStorage(actions, language).catch((error: Error) => {
+  const storagePromise = scanStorage(actions, revealTargets, language).catch((error: Error) => {
     warnings.push(t(language, `存储扫描未完成：${error.message}`, `Storage scan did not complete: ${error.message}`))
     return []
   })
@@ -1254,5 +1484,5 @@ export async function runFullScan(
     warnings
   }
   onProgress({ section: 'system', progress: 100, message: t(language, '扫描完成', 'Scan complete') })
-  return { result, actions }
+  return { result, actions, revealTargets }
 }

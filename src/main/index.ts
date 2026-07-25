@@ -9,8 +9,8 @@ import {
   type MenuItemConstructorOptions
 } from 'electron'
 import { execFile } from 'node:child_process'
-import { randomUUID } from 'node:crypto'
-import { existsSync } from 'node:fs'
+import { existsSync, lstatSync } from 'node:fs'
+import { mkdir, mkdtemp, rmdir } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
@@ -27,10 +27,16 @@ import { AiService } from './ai/ai-service'
 import { toPublicAiError } from './ai/errors'
 import { AppSettingsStore } from './app-settings-store'
 import { runFullScan, type RegisteredAction } from './scanner'
-import { isAllowedServiceCleanupTarget } from './service-cleanup'
+import { applyScanWhitelist } from './scan-whitelist'
+import { buildPrivilegedMoves, privilegedMoveArguments } from './privileged-cleanup'
+import {
+  isAllowedServiceCleanupTarget,
+  isAllowedUserSelectedServiceDirectory
+} from './service-cleanup'
 
 const execFileAsync = promisify(execFile)
 let registeredActions = new Map<string, RegisteredAction>()
+let registeredRevealTargets = new Map<string, string>()
 let scanInProgress = false
 let currentScanResult: ScanResult | null = null
 let aiService: AiService | null = null
@@ -75,7 +81,7 @@ function registerAiHandler<T extends unknown[], R>(
   })
 }
 
-const PRIVILEGED_TRASH_SCRIPT = `
+const PRIVILEGED_STAGE_SCRIPT = `
 on appendCommand(currentCommand, nextCommand)
   if currentCommand is "" then return nextCommand
   return currentCommand & " && " & nextCommand
@@ -87,17 +93,19 @@ on run argv
   set argumentIndex to 3
   set shellCommand to ""
 
-  repeat with serviceIndex from 1 to serviceCount
-    set serviceTarget to item argumentIndex of argv
-    set launchCommand to "/bin/launchctl bootout " & quoted form of guiDomain & " " & quoted form of serviceTarget
-    set shellCommand to my appendCommand(shellCommand, launchCommand)
-    set argumentIndex to argumentIndex + 1
-  end repeat
+  if serviceCount > 0 then
+    repeat with serviceIndex from 1 to serviceCount
+      set serviceTarget to item argumentIndex of argv
+      set launchCommand to "(/bin/launchctl bootout " & quoted form of guiDomain & " " & quoted form of serviceTarget & " >/dev/null 2>&1 || true)"
+      set shellCommand to my appendCommand(shellCommand, launchCommand)
+      set argumentIndex to argumentIndex + 1
+    end repeat
+  end if
 
   repeat while argumentIndex <= count argv
     set sourcePath to item argumentIndex of argv
     set destinationPath to item (argumentIndex + 1) of argv
-    set moveCommand to "/usr/bin/test -e " & quoted form of sourcePath & " && /usr/bin/test ! -e " & quoted form of destinationPath & " && /bin/mv " & quoted form of sourcePath & " " & quoted form of destinationPath
+    set moveCommand to "/bin/test -e " & quoted form of sourcePath & " && /bin/test ! -e " & quoted form of destinationPath & " && /bin/mv " & quoted form of sourcePath & " " & quoted form of destinationPath & " && /bin/test ! -e " & quoted form of sourcePath
     set shellCommand to my appendCommand(shellCommand, moveCommand)
     set argumentIndex to argumentIndex + 2
   end repeat
@@ -106,14 +114,13 @@ on run argv
 end run
 `
 
-function uniqueTrashDestination(target: string): string {
-  const extension = path.extname(target)
-  const name = path.basename(target, extension)
-  return path.join(
-    os.homedir(),
-    '.Trash',
-    `${name} (Memento ${randomUUID().slice(0, 8)})${extension}`
-  )
+function commandErrorDetail(error: unknown): string | null {
+  if (!error || typeof error !== 'object') return null
+  const stderr = 'stderr' in error && typeof error.stderr === 'string' ? error.stderr.trim() : ''
+  const message = error instanceof Error ? error.message.trim() : ''
+  const detail = stderr || message
+  if (!detail) return null
+  return detail.split(/\r?\n/).find((line) => line.trim())?.trim().slice(0, 300) ?? null
 }
 
 async function trashServiceSoftwareWithAdmin(
@@ -121,16 +128,58 @@ async function trashServiceSoftwareWithAdmin(
   serviceTargets: string[],
   targets: string[]
 ): Promise<void> {
-  const argumentsList = [
-    `gui/${uid}`,
-    String(serviceTargets.length),
-    ...serviceTargets,
-    ...targets.flatMap((target) => [target, uniqueTrashDestination(target)])
-  ]
-  await execFileAsync('/usr/bin/osascript', ['-e', PRIVILEGED_TRASH_SCRIPT, '--', ...argumentsList], {
-    timeout: 120_000,
-    maxBuffer: 1024 * 1024
-  })
+  const cleanupRoot = path.join(app.getPath('userData'), 'Privileged Cleanup')
+  await mkdir(cleanupRoot, { recursive: true, mode: 0o700 })
+  const stagingDirectory = await mkdtemp(path.join(cleanupRoot, 'pending-'))
+  const moves = buildPrivilegedMoves(stagingDirectory, targets)
+  const argumentsList = privilegedMoveArguments(uid, serviceTargets, moves)
+  let adminError: unknown = null
+
+  try {
+    await execFileAsync(
+      '/usr/bin/osascript',
+      ['-e', PRIVILEGED_STAGE_SCRIPT, '--', ...argumentsList],
+      { timeout: 120_000, maxBuffer: 1024 * 1024 }
+    )
+  } catch (error) {
+    adminError = error
+  }
+
+  const remainingTargets = moves.filter(({ source }) => existsSync(source))
+  if (remainingTargets.length > 0) {
+    await rmdir(stagingDirectory).catch(() => undefined)
+    const detail = commandErrorDetail(adminError)
+    throw new Error(
+      mainText(
+        `macOS 未能移动 ${remainingTargets.length} 个清理目标${detail ? `：${detail}` : '，请重试'}`,
+        `macOS could not move ${remainingTargets.length} cleanup target(s)${detail ? `: ${detail}` : '. Try again.'}`
+      )
+    )
+  }
+
+  const missingStagedTargets = moves.filter(({ destination }) => !existsSync(destination))
+  if (missingStagedTargets.length > 0) {
+    throw new Error(
+      mainText(
+        `启动项已从原位置移除，但有 ${missingStagedTargets.length} 个暂存项目无法确认，请重新扫描`,
+        `The startup item left its original location, but ${missingStagedTargets.length} staged item(s) could not be verified. Scan again.`
+      )
+    )
+  }
+
+  for (const { destination } of moves) {
+    try {
+      await shell.trashItem(destination)
+    } catch {
+      throw new Error(
+        mainText(
+          `启动项已移除，但无法移到废纸篓；项目暂存在 ${stagingDirectory}`,
+          `The startup item was removed but could not be moved to Trash. It remains staged at ${stagingDirectory}.`
+        )
+      )
+    }
+  }
+  await rmdir(stagingDirectory).catch(() => undefined)
 }
 
 function trayCopy(language: AppLanguage): { open: string; quit: string; tooltip: string } {
@@ -149,23 +198,26 @@ function showMainWindow(): void {
   mainWindow.focus()
 }
 
-function refreshTray(): void {
+function refreshTray(): boolean {
   if (!appSettings.closeToTray) {
     tray?.destroy()
     tray = null
     void app.dock?.show()
-    return
+    return false
   }
 
   const copy = trayCopy(appSettings.language)
   if (!tray) {
-    const iconFilename = process.platform === 'darwin' ? 'icon.icns' : 'icon.png'
+    const iconFilename = 'icon.png'
     const iconPath = app.isPackaged
       ? path.join(process.resourcesPath, iconFilename)
       : path.join(process.cwd(), 'build', iconFilename)
-    const image = nativeImage.createFromPath(iconPath).resize({ width: 18, height: 18 })
-    image.setTemplateImage(true)
-    tray = new Tray(image)
+    const sourceImage = nativeImage.createFromPath(iconPath)
+    if (sourceImage.isEmpty()) {
+      console.error(`Memento tray icon is missing: ${iconPath}`)
+      return false
+    }
+    tray = new Tray(sourceImage.resize({ width: 18, height: 18 }))
     tray.on('click', showMainWindow)
   }
   const template: MenuItemConstructorOptions[] = [
@@ -181,6 +233,7 @@ function refreshTray(): void {
   ]
   tray.setToolTip(copy.tooltip)
   tray.setContextMenu(Menu.buildFromTemplate(template))
+  return true
 }
 
 function applyWindowSettings(): void {
@@ -213,7 +266,7 @@ function createWindow(): void {
 
   window.once('ready-to-show', () => window.show())
   window.on('close', (event) => {
-    if (!isQuitting && appSettings.closeToTray) {
+    if (!isQuitting && appSettings.closeToTray && refreshTray()) {
       event.preventDefault()
       window.hide()
       void app.dock?.hide()
@@ -256,16 +309,28 @@ async function executeRegisteredAction(action: RegisteredAction): Promise<void> 
 
   if (
     action.kind === 'trash-launch-agent-config' ||
-    action.kind === 'trash-service-software'
+    action.kind === 'trash-service-software' ||
+    action.kind === 'trash-service-directory'
   ) {
     const uid = process.getuid?.()
     if (uid === undefined) throw new Error(mainText('无法确定当前用户', 'The current user could not be determined.'))
+    const validTargets = action.kind === 'trash-service-directory'
+      ? action.targets.includes(action.directoryTarget) &&
+        isAllowedUserSelectedServiceDirectory(action.directoryTarget, os.homedir()) &&
+        existsSync(action.directoryTarget) &&
+        lstatSync(action.directoryTarget).isDirectory() &&
+        action.targets.every((target) =>
+          target === action.directoryTarget ||
+          isAllowedServiceCleanupTarget(target, os.homedir())
+        )
+      : action.targets.every((target) =>
+          isAllowedServiceCleanupTarget(target, os.homedir())
+        )
     if (
       !action.targets.length ||
-      !action.serviceTargets.length ||
       !action.targets.includes(action.target) ||
       action.serviceTargets.some((target) => !action.targets.includes(target)) ||
-      action.targets.some((target) => !isAllowedServiceCleanupTarget(target, os.homedir()))
+      !validTargets
     ) {
       throw new Error(mainText('清理目标未通过本地安全校验，请重新扫描', 'The cleanup target did not pass local safety checks. Scan again.'))
     }
@@ -299,6 +364,31 @@ async function executeRegisteredAction(action: RegisteredAction): Promise<void> 
   }
 }
 
+function updateRegisteredActionsAfterExecution(action: RegisteredAction): void {
+  if (action.kind === 'stop-launch-agent') {
+    for (const registered of registeredActions.values()) {
+      if ('serviceTargets' in registered) {
+        registered.serviceTargets = registered.serviceTargets.filter(
+          (target) => target !== action.target
+        )
+      }
+    }
+    return
+  }
+
+  if (action.kind !== 'trash-launch-agent-config') return
+  const removedTargets = new Set(action.targets)
+  for (const [id, registered] of registeredActions) {
+    if (!('targets' in registered)) continue
+    registered.targets = registered.targets.filter((target) => !removedTargets.has(target))
+    registered.serviceTargets = registered.serviceTargets.filter(
+      (target) => !removedTargets.has(target)
+    )
+    if (!registered.targets.length) registeredActions.delete(id)
+    else if (removedTargets.has(registered.target)) registered.target = registered.targets[0]
+  }
+}
+
 app.whenReady().then(async () => {
   const gatewayUrl = (
     process.env['MEMENTO_GATEWAY_URL'] ||
@@ -322,6 +412,21 @@ app.whenReady().then(async () => {
   ipcMain.handle('memento:settings:update', async (_event, input: UpdateAppSettingsInput) => {
     appSettings = await appSettingsStore!.update(input)
     applyWindowSettings()
+    if (currentScanResult && ('serviceWhitelist' in input || 'storageWhitelist' in input)) {
+      const filtered = applyScanWhitelist(
+        {
+          result: currentScanResult,
+          actions: registeredActions,
+          revealTargets: registeredRevealTargets
+        },
+        appSettings.serviceWhitelist,
+        appSettings.storageWhitelist
+      )
+      currentScanResult = filtered.result
+      registeredActions = filtered.actions
+      registeredRevealTargets = filtered.revealTargets
+      aiService?.invalidatePreviews()
+    }
     return appSettings
   })
 
@@ -329,10 +434,16 @@ app.whenReady().then(async () => {
     if (scanInProgress) throw new Error(mainText('扫描正在进行中', 'A scan is already in progress.'))
     scanInProgress = true
     try {
-      const bundle = await runFullScan((progress: ScanProgress) => {
+      const scannedBundle = await runFullScan((progress: ScanProgress) => {
         if (!event.sender.isDestroyed()) event.sender.send('memento:scan-progress', progress)
       }, language ?? appSettings.language)
+      const bundle = applyScanWhitelist(
+        scannedBundle,
+        appSettings.serviceWhitelist,
+        appSettings.storageWhitelist
+      )
       registeredActions = bundle.actions
+      registeredRevealTargets = bundle.revealTargets
       currentScanResult = bundle.result
       aiService?.invalidatePreviews()
       return bundle.result
@@ -370,6 +481,22 @@ app.whenReady().then(async () => {
   registerAiHandler('memento:ai:start-hosted-login', () => aiService!.startHostedLogin())
   registerAiHandler('memento:ai:logout-hosted', () => aiService!.logoutHosted())
 
+  ipcMain.handle('memento:reveal-candidate-location', async (_event, id: string) => {
+    if (typeof id !== 'string' || id.length > 100) {
+      throw new Error(mainText('目录入口无效，请重新扫描', 'The location is invalid. Scan again.'))
+    }
+    const target = registeredRevealTargets.get(id)
+    if (!target || !existsSync(target)) {
+      throw new Error(mainText('目录已经不存在，请重新扫描', 'The location no longer exists. Scan again.'))
+    }
+    if (target.toLowerCase().endsWith('.app') || !lstatSync(target).isDirectory()) {
+      shell.showItemInFolder(target)
+      return
+    }
+    const error = await shell.openPath(target)
+    if (error) throw new Error(error)
+  })
+
   ipcMain.handle('memento:run-actions', async (_event, ids: string[]) => {
     const uniqueIds = [...new Set(ids)].slice(0, 100)
     const results: ActionResult[] = []
@@ -382,6 +509,7 @@ app.whenReady().then(async () => {
       }
       try {
         await executeRegisteredAction(action)
+        updateRegisteredActionsAfterExecution(action)
         registeredActions.delete(id)
         results.push({ id, ok: true, message: mainText('操作完成', 'Action completed') })
       } catch (error) {

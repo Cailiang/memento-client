@@ -7,7 +7,7 @@ import type {
   UpdateAiSettingsInput
 } from '../../shared/ai-types'
 import { AiError } from './errors'
-import { SecureCredentialStore } from './credentials/secure-store'
+import { LocalCredentialStore } from './credentials/local-store'
 
 interface StoredSettings {
   schemaVersion: 1
@@ -51,7 +51,7 @@ export class AiSettingsStore {
 
   constructor(
     userDataPath: string,
-    private readonly credentials: SecureCredentialStore,
+    private readonly credentials: LocalCredentialStore,
     private readonly gatewayUrl: string
   ) {
     this.settingsPath = path.join(userDataPath, 'ai-settings.json')
