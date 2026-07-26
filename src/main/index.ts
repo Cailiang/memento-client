@@ -42,6 +42,7 @@ import {
   deleteStorageTarget,
   isAllowedStorageCleanupTarget
 } from './storage-cleanup'
+import { brewCleanupVersionTargets, isSafeBrewVersion } from './brew-cleanup'
 import {
   applyTerminalFixGroup,
   restoreTerminalBackup,
@@ -399,7 +400,54 @@ async function executeRegisteredAction(action: RegisteredAction): Promise<void> 
     const brew = existsSync('/opt/homebrew/bin/brew')
       ? '/opt/homebrew/bin/brew'
       : '/usr/local/bin/brew'
-    await execFileAsync(brew, ['cleanup', action.target], { timeout: 60_000 })
+    if (
+      !action.removableVersions.length ||
+      action.removableVersions.some((version) => !isSafeBrewVersion(version))
+    ) {
+      throw new Error(mainText('Homebrew 清理目标无效，请重新扫描', 'The Homebrew cleanup target is invalid. Scan again.'))
+    }
+
+    const commandOptions = {
+      timeout: 60_000,
+      env: { ...process.env, LC_ALL: 'C', HOMEBREW_NO_AUTO_UPDATE: '1' }
+    }
+    const { stdout: cellarOutput } = await execFileAsync(
+      brew,
+      ['--cellar', action.target],
+      commandOptions
+    )
+    const currentFormulaRoot = String(cellarOutput).trim()
+    if (path.resolve(currentFormulaRoot) !== path.resolve(action.formulaRoot)) {
+      throw new Error(mainText('Homebrew 目录在扫描后发生变化，请重新扫描', 'The Homebrew directory changed after the scan. Scan again.'))
+    }
+
+    const { stdout, stderr } = await execFileAsync(
+      brew,
+      ['cleanup', '--dry-run', action.target],
+      commandOptions
+    )
+    const stillRemovable = new Set(
+      brewCleanupVersionTargets(
+        `${String(stdout)}\n${String(stderr)}`,
+        action.formulaRoot,
+        action.removableVersions
+      )
+    )
+    if (action.removableVersions.some((version) => !stillRemovable.has(version))) {
+      throw new Error(mainText('Homebrew 的可清理版本已经变化，请重新扫描', 'Homebrew cleanup candidates changed after the scan. Scan again.'))
+    }
+
+    await execFileAsync(brew, ['cleanup', action.target], commandOptions)
+    const remaining = action.removableVersions.filter((version) =>
+      existsSync(path.join(action.formulaRoot, version))
+    )
+    if (remaining.length) {
+      throw new Error(mainText(
+        `Homebrew 未移除版本 ${remaining.join(', ')}，未将本次操作标记为完成`,
+        `Homebrew did not remove ${remaining.join(', ')}. This action was not marked complete.`
+      ))
+    }
+    return
   }
 }
 

@@ -1,5 +1,11 @@
 import type { AppLanguage } from '../../shared/app-settings'
-import type { ScanCandidate, ScanProgress, ScanResult, TerminalFinding } from '../../shared/types'
+import type {
+  ScanCandidate,
+  ScanProgress,
+  ScanResult,
+  ScanSection,
+  TerminalFinding
+} from '../../shared/types'
 
 const GB = 1024 ** 3
 const MB = 1024 ** 2
@@ -258,22 +264,25 @@ export async function runDemoScan(
   language: AppLanguage
 ): Promise<ScanResult> {
   const english = language === 'en-US'
+  const sections: ScanSection[] = ['services', 'storage', 'applications', 'terminal']
   const steps: ScanProgress[] = english
     ? [
-        { section: 'system', progress: 8, message: 'Reading system status' },
-        { section: 'services', progress: 24, message: 'Checking background services and login items' },
-        { section: 'storage', progress: 48, message: 'Measuring development tool and application caches' },
-        { section: 'applications', progress: 68, message: 'Checking application versions and last-used dates' },
-        { section: 'terminal', progress: 86, message: 'Measuring terminal startup and inspecting shell configuration' },
-        { section: 'system', progress: 100, message: 'Scan complete' }
+        { section: 'system', progress: 4, message: 'Reading system status', activeSections: [], completedSections: [] },
+        { section: 'system', progress: 10, message: 'System status loaded. Checking four modules in parallel', activeSections: sections, completedSections: [] },
+        { section: 'services', progress: 30, message: 'Background services complete. Continuing the remaining checks', activeSections: ['storage', 'applications', 'terminal'], completedSections: ['services'] },
+        { section: 'applications', progress: 50, message: 'App cleanup complete. Continuing the remaining checks', activeSections: ['storage', 'terminal'], completedSections: ['services', 'applications'] },
+        { section: 'storage', progress: 70, message: 'Storage complete. Continuing the remaining checks', activeSections: ['terminal'], completedSections: ['services', 'applications', 'storage'] },
+        { section: 'terminal', progress: 90, message: 'All four modules checked. Preparing the results', activeSections: [], completedSections: ['services', 'storage', 'applications', 'terminal'] },
+        { section: 'system', progress: 100, message: 'Scan complete', activeSections: [], completedSections: ['services', 'storage', 'applications', 'terminal'] }
       ]
     : [
-        { section: 'system', progress: 8, message: '读取系统状态' },
-        { section: 'services', progress: 24, message: '检查后台服务与登录启动项' },
-        { section: 'storage', progress: 48, message: '统计开发工具与应用缓存' },
-        { section: 'applications', progress: 68, message: '检查应用副本与最近使用时间' },
-        { section: 'terminal', progress: 86, message: '测量终端启动并分析 shell 配置' },
-        { section: 'system', progress: 100, message: '扫描完成' }
+        { section: 'system', progress: 4, message: '读取系统状态', activeSections: [], completedSections: [] },
+        { section: 'system', progress: 10, message: '系统状态已读取，正在并行检查四个模块', activeSections: sections, completedSections: [] },
+        { section: 'services', progress: 30, message: '后台服务检查完成，继续检查其余项目', activeSections: ['storage', 'applications', 'terminal'], completedSections: ['services'] },
+        { section: 'applications', progress: 50, message: '应用清理检查完成，继续检查其余项目', activeSections: ['storage', 'terminal'], completedSections: ['services', 'applications'] },
+        { section: 'storage', progress: 70, message: '存储空间检查完成，继续检查其余项目', activeSections: ['terminal'], completedSections: ['services', 'applications', 'storage'] },
+        { section: 'terminal', progress: 90, message: '四个模块均已检查，正在整理结果', activeSections: [], completedSections: ['services', 'storage', 'applications', 'terminal'] },
+        { section: 'system', progress: 100, message: '扫描完成', activeSections: [], completedSections: ['services', 'storage', 'applications', 'terminal'] }
       ]
   for (const step of steps) {
     onProgress(step)

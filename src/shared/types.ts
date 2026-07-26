@@ -117,6 +117,8 @@ export interface ScanProgress {
   section: ScanSection | 'system'
   progress: number
   message: string
+  activeSections?: ScanSection[]
+  completedSections?: ScanSection[]
 }
 
 export interface ActionResult {

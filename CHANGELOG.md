@@ -4,6 +4,24 @@ All notable changes to Memento Client are documented here in English and Simplif
 
 Memento Client 的重要变更会在这里使用英文和简体中文同步记录。
 
+## 0.6.15 - 2026-07-26
+
+### English
+
+- Redesigned the startup scan with a restrained radar animation, visible states for all four modules, and an accessible overall progress indicator.
+- Startup progress now begins at 4%, stays at 10% while parallel checks start, and advances only when a real scan module finishes instead of jumping immediately to 62%.
+- Homebrew old-version findings now come from `brew cleanup --dry-run` rather than raw Cellar directory counts, so formulas that Homebrew refuses to clean are no longer shown as actionable.
+- Homebrew cleanup revalidates the dry-run immediately before execution and reports failure unless every listed old keg directory is actually removed.
+- Added a repository release workflow requiring a patch-version bump, release notes, verification, a local x64 DMG, checksum, and source commit for every completed change.
+
+### 简体中文
+
+- 重做启动扫描界面，新增克制的雷达扫描动画、四个模块的实时状态，以及具备无障碍语义的总体进度。
+- 启动进度从 4% 开始，并行检查启动时保持在 10%；之后只在真实模块完成时推进，不再一启动就跳到 62%。
+- Homebrew 旧版本候选改为依据 `brew cleanup --dry-run`，不再只看 Cellar 目录数量；Homebrew 当前拒绝清理的配方不会再误显示为可操作项。
+- Homebrew 清理执行前会重新校验 dry-run，执行后逐个检查旧 keg 目录；未实际移除时不会误报完成。
+- 新增仓库发布流程，要求每次完成改动都升级补丁版本、更新发布说明、完成验证、构建本地 x64 DMG、生成校验值并提交源码。
+
 ## 0.6.14 - 2026-07-26
 
 ### English

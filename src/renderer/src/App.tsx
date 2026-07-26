@@ -19,7 +19,7 @@ import {
   RadioTower,
   RefreshCw,
   RotateCcw,
-  Search,
+  ScanSearch,
   Settings2,
   ShieldAlert,
   ShieldCheck,
@@ -881,18 +881,64 @@ function Topbar({
 
 function ScanState({ progress }: { progress: ScanProgress }): React.JSX.Element {
   const { text } = useI18n()
+  const stages: Array<{ section: ScanSection; label: string; icon: typeof RadioTower }> = [
+    { section: 'services', label: text('后台服务', 'Services'), icon: RadioTower },
+    { section: 'storage', label: text('存储空间', 'Storage'), icon: HardDrive },
+    { section: 'applications', label: text('应用清理', 'App cleanup'), icon: AppWindow },
+    { section: 'terminal', label: text('终端诊断', 'Terminal'), icon: SquareTerminal }
+  ]
+  const completed = new Set(progress.completedSections ?? [])
+  const active = new Set(
+    progress.activeSections ?? (progress.section === 'system' ? [] : [progress.section])
+  )
+
   return (
     <section className="scan-state" aria-live="polite">
       <div className="scan-visual" aria-hidden="true">
-        <Search size={28} />
+        <span className="scan-core">
+          <ScanSearch size={27} />
+        </span>
         <span className="scan-orbit" />
+        <span className="scan-pulse" />
       </div>
-      <h1>{text('正在了解这台 Mac', 'Learning about this Mac')}</h1>
-      <p>{progress.message}</p>
-      <div className="scan-progress" aria-label={text(`扫描进度 ${progress.progress}%`, `Scan progress ${progress.progress}%`)}>
+      <h1>{text('正在检查这台 Mac', 'Checking this Mac')}</h1>
+      <p className="scan-message">{progress.message}</p>
+      <ol className="scan-stages" aria-label={text('扫描模块', 'Scan modules')}>
+        {stages.map(({ section, label, icon: Icon }) => {
+          const state = completed.has(section) ? 'complete' : active.has(section) ? 'active' : 'pending'
+          return (
+            <li key={section} className={`is-${state}`}>
+              <span className="scan-stage-icon" aria-hidden="true">
+                {state === 'complete' ? <Check size={16} /> : <Icon size={16} />}
+              </span>
+              <span className="scan-stage-copy">
+                <strong>{label}</strong>
+                <small>
+                  {state === 'complete'
+                    ? text('已完成', 'Complete')
+                    : state === 'active'
+                      ? text('检查中', 'Checking')
+                      : text('等待中', 'Waiting')}
+                </small>
+              </span>
+            </li>
+          )
+        })}
+      </ol>
+      <div className="scan-progress-meta">
+        <span>{text('总体进度', 'Overall progress')}</span>
+        <strong>{progress.progress}%</strong>
+      </div>
+      <div
+        className="scan-progress"
+        role="progressbar"
+        aria-label={text('扫描进度', 'Scan progress')}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={progress.progress}
+      >
         <span style={{ transform: `scaleX(${progress.progress / 100})` }} />
       </div>
-      <small>{progress.progress}%</small>
     </section>
   )
 }

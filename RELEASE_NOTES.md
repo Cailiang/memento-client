@@ -1,16 +1,15 @@
-# Memento 0.6.14
+# Memento 0.6.15
 
 ## English
 
-This release makes application cleanup easier to understand and catches apps that have not been used for three months.
+This release makes startup scanning easier to follow and fixes false Homebrew cleanup results.
 
 ### Highlights
 
-- The former **Applications** module is now named **App cleanup** to reflect that it shows only actionable findings.
-- Apps with confirmed Spotlight usage dates older than 90 days are suggested for review, replacing the previous 180-day threshold.
-- Applications with unknown usage dates remain excluded to avoid unsafe cleanup suggestions.
-- The empty state now states exactly which duplicate and unused-app checks completed without findings.
-- Application bundle sizes now use Spotlight logical size, fixing incorrect `1 B` values in cleanup estimates.
+- A new startup animation shows the live state of background services, storage, app cleanup, and terminal diagnostics.
+- Progress starts low and advances only as actual scan modules finish, rather than jumping above 60% before work completes.
+- Homebrew findings now reflect what `brew cleanup --dry-run` can really remove. On machines where Homebrew skips `openexr` because the newest formula is not installed, it is no longer mislabeled as reclaimable.
+- Cleanup is checked again before execution and only succeeds after every listed old keg directory is confirmed gone.
 
 ### Platform note
 
@@ -18,15 +17,14 @@ Full maintenance scanning and cleanup currently support macOS. Windows and Linux
 
 ## 简体中文
 
-这个版本让应用清理更容易理解，并能发现已经 3 个月没有使用的应用。
+这个版本让启动扫描更容易理解，并修复 Homebrew 清理结果与实际目录不一致的问题。
 
 ### 主要变化
 
-- 原“应用版本”模块更名为“应用清理”，明确这里只展示可处理的建议。
-- Spotlight 使用记录超过 90 天的应用会进入复核建议，替代原来的 180 天阈值。
-- 使用时间未知的应用继续排除，避免产生不安全的清理建议。
-- 空状态现在会明确说明重复应用与长期未使用应用检查均未发现结果。
-- 应用大小改用 Spotlight 逻辑大小，修复清理空间可能错误显示为 `1 B` 的问题。
+- 新启动动画会实时展示后台服务、存储空间、应用清理和终端诊断四个模块的状态。
+- 进度从低位开始，只在真实扫描模块完成时推进，不会在工作尚未完成时直接跳过 60%。
+- Homebrew 候选以 `brew cleanup --dry-run` 的实际可移除结果为准。如果 Homebrew 因最新配方尚未安装而跳过 `openexr`，它不会再被误标为可清理。
+- 清理执行前会再次校验，只有列出的旧 keg 目录全部确认消失后才会报告成功。
 
 ### 平台说明
 

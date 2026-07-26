@@ -10,6 +10,7 @@ import type {
   ScanCandidate,
   ScanProgress,
   ScanResult,
+  ScanSection,
   SystemSnapshot,
   TerminalConfigFile,
   TerminalFinding
@@ -34,6 +35,7 @@ import {
   terminalContentHash,
   type RegisteredTerminalFix
 } from './terminal-fixes'
+import { brewCleanupVersionTargets } from './brew-cleanup'
 
 const execFileAsync = promisify(execFile)
 const HOME = os.homedir()
@@ -46,8 +48,14 @@ function t(language: AppLanguage, chinese: string, english: string): string {
 
 export type RegisteredAction =
   | {
-      kind: Exclude<ActionKind, 'trash-launch-agent-config' | 'trash-service-software' | 'trash-service-directory'>
+      kind: Exclude<ActionKind, 'trash-launch-agent-config' | 'trash-service-software' | 'trash-service-directory' | 'brew-cleanup'>
       target: string
+    }
+  | {
+      kind: 'brew-cleanup'
+      target: string
+      formulaRoot: string
+      removableVersions: string[]
     }
   | {
       kind: 'trash-launch-agent-config' | 'trash-service-software'
@@ -91,7 +99,7 @@ async function run(
   const result = await execFileAsync(command, args, {
     timeout,
     maxBuffer: 4 * 1024 * 1024,
-    env: { ...process.env, LC_ALL: 'C' }
+    env: { ...process.env, LC_ALL: 'C', HOMEBREW_NO_AUTO_UPDATE: '1' }
   })
   return { stdout: result.stdout, stderr: result.stderr }
 }
@@ -945,17 +953,46 @@ async function scanBrewVersions(
     return []
   }
 
-  const candidates = await mapLimit(formulas, 5, async (formula) => {
-    const formulaRoot = path.join(cellar, formula)
-    try {
-      const versions = (await fs.readdir(formulaRoot, { withFileTypes: true }))
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => entry.name)
-        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
-      if (versions.length < 2) return null
+  const installedFormulae = (
+    await mapLimit(formulas, 10, async (formula) => {
+      const formulaRoot = path.join(cellar, formula)
+      try {
+        const versions = (await fs.readdir(formulaRoot, { withFileTypes: true }))
+          .filter((entry) => entry.isDirectory())
+          .map((entry) => entry.name)
+          .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+        return versions.length > 1 ? { formula, formulaRoot, versions } : null
+      } catch {
+        return null
+      }
+    })
+  ).filter((item): item is { formula: string; formulaRoot: string; versions: string[] } => item !== null)
+  if (!installedFormulae.length) return []
 
-      const oldVersions = versions.slice(0, -1)
-      const sizeParts = await mapLimit(oldVersions, 2, (version) =>
+  let cleanupPreview: CommandResult
+  try {
+    cleanupPreview = await run(
+      brew,
+      ['cleanup', '--dry-run', ...installedFormulae.map((item) => item.formula)],
+      60_000
+    )
+  } catch {
+    return []
+  }
+  const cleanupOutput = `${cleanupPreview.stdout}\n${cleanupPreview.stderr}`
+  if (!cleanupOutput.includes(`Would remove: ${cellar}${path.sep}`)) return []
+
+  const candidates = await mapLimit(installedFormulae, 5, async ({ formula, formulaRoot, versions }) => {
+    try {
+      const removableVersions = brewCleanupVersionTargets(
+        cleanupOutput,
+        formulaRoot,
+        versions
+      )
+      if (!removableVersions.length) return null
+
+      const retainedVersions = versions.filter((version) => !removableVersions.includes(version))
+      const sizeParts = await mapLimit(removableVersions, 2, (version) =>
         getPathSize(path.join(formulaRoot, version))
       )
       const sizeBytes = sizeParts.reduce((sum, value) => sum + value, 0)
@@ -966,15 +1003,15 @@ async function scanBrewVersions(
         {
           section: 'storage',
           name: formula,
-          subtitle: t(language, `Homebrew 保留了 ${versions.length} 个版本`, `Homebrew keeps ${versions.length} versions`),
-          description: t(language, '旧 keg 通常可以由 Homebrew 安全清理，当前版本会保留。', 'Homebrew can usually clean old kegs safely while keeping the current version.'),
+          subtitle: t(language, `Homebrew 可清理 ${removableVersions.length} 个旧版本`, `Homebrew can clean ${removableVersions.length} old versions`),
+          description: t(language, '仅展示 Homebrew 已确认可安全移除的旧 keg，正在使用的版本会保留。', 'Only old kegs that Homebrew confirms are safe to remove are shown. Versions in use are kept.'),
           sizeBytes,
           risk: 'safe',
           status: t(language, '旧版本', 'Old versions'),
           location: displayPath(formulaRoot),
           evidence: [
-            t(language, `保留当前版本 ${versions.at(-1)}`, `Current version kept: ${versions.at(-1)}`),
-            t(language, `待清理版本：${oldVersions.join(', ')}`, `Versions to clean: ${oldVersions.join(', ')}`)
+            t(language, `保留版本：${retainedVersions.join(', ')}`, `Versions kept: ${retainedVersions.join(', ')}`),
+            t(language, `待清理版本：${removableVersions.join(', ')}`, `Versions to clean: ${removableVersions.join(', ')}`)
           ],
           action: {
             kind: 'brew-cleanup',
@@ -983,7 +1020,7 @@ async function scanBrewVersions(
             reversible: false
           }
         },
-        { kind: 'brew-cleanup', target: formula },
+        { kind: 'brew-cleanup', target: formula, formulaRoot, removableVersions },
         [],
         revealTargets,
         formulaRoot
@@ -1575,36 +1612,70 @@ export async function runFullScan(
     }
   }
 
-  onProgress({ section: 'services', progress: 12, message: t(language, '检查后台服务与登录启动项', 'Checking background services and login items') })
-  const servicesPromise = scanServices(actions, revealTargets, language).catch((error: Error) => {
-    warnings.push(t(language, `服务扫描未完成：${error.message}`, `Service scan did not complete: ${error.message}`))
-    return []
+  const scanSections: ScanSection[] = ['services', 'storage', 'applications', 'terminal']
+  const completedSections: ScanSection[] = []
+  onProgress({
+    section: 'system',
+    progress: 10,
+    message: t(language, '系统状态已读取，正在并行检查四个模块', 'System status loaded. Checking four modules in parallel'),
+    activeSections: scanSections,
+    completedSections
   })
 
-  onProgress({ section: 'storage', progress: 26, message: t(language, '统计开发工具与应用缓存', 'Measuring developer tool and application caches') })
-  const storagePromise = scanStorage(actions, revealTargets, language).catch((error: Error) => {
-    warnings.push(t(language, `存储扫描未完成：${error.message}`, `Storage scan did not complete: ${error.message}`))
-    return []
-  })
-
-  onProgress({ section: 'applications', progress: 44, message: t(language, '检查应用副本与最近使用时间', 'Checking application copies and recent usage') })
-  const applicationsPromise = scanApplications(actions, language).catch((error: Error) => {
-    warnings.push(t(language, `应用扫描未完成：${error.message}`, `Application scan did not complete: ${error.message}`))
-    return []
-  })
-
-  onProgress({ section: 'terminal', progress: 62, message: t(language, '测量终端启动并分析 shell 配置', 'Measuring terminal startup and analyzing shell configuration') })
-  const terminalPromise = scanTerminal(language, terminalFixes).catch((error: Error) => {
-    warnings.push(t(language, `终端诊断未完成：${error.message}`, `Terminal diagnostics did not complete: ${error.message}`))
-    return {
-      shell: process.env.SHELL || '/bin/zsh',
-      baselineMs: null,
-      startupMs: null,
-      sampleCount: 0,
-      findings: [],
-      configFiles: []
+  const reportSectionComplete = (section: ScanSection): void => {
+    completedSections.push(section)
+    const remaining = scanSections.filter((item) => !completedSections.includes(item))
+    const labels: Record<ScanSection, [string, string]> = {
+      services: ['后台服务', 'Background services'],
+      storage: ['存储空间', 'Storage'],
+      applications: ['应用清理', 'App cleanup'],
+      terminal: ['终端诊断', 'Terminal diagnostics']
     }
-  })
+    onProgress({
+      section,
+      progress: 10 + completedSections.length * 20,
+      message: remaining.length
+        ? t(language, `${labels[section][0]}检查完成，继续检查其余项目`, `${labels[section][1]} complete. Continuing the remaining checks`)
+        : t(language, '四个模块均已检查，正在整理结果', 'All four modules checked. Preparing the results'),
+      activeSections: remaining,
+      completedSections: [...completedSections]
+    })
+  }
+
+  const servicesPromise = scanServices(actions, revealTargets, language)
+    .catch((error: Error) => {
+      warnings.push(t(language, `服务扫描未完成：${error.message}`, `Service scan did not complete: ${error.message}`))
+      return []
+    })
+    .finally(() => reportSectionComplete('services'))
+
+  const storagePromise = scanStorage(actions, revealTargets, language)
+    .catch((error: Error) => {
+      warnings.push(t(language, `存储扫描未完成：${error.message}`, `Storage scan did not complete: ${error.message}`))
+      return []
+    })
+    .finally(() => reportSectionComplete('storage'))
+
+  const applicationsPromise = scanApplications(actions, language)
+    .catch((error: Error) => {
+      warnings.push(t(language, `应用扫描未完成：${error.message}`, `Application scan did not complete: ${error.message}`))
+      return []
+    })
+    .finally(() => reportSectionComplete('applications'))
+
+  const terminalPromise = scanTerminal(language, terminalFixes)
+    .catch((error: Error) => {
+      warnings.push(t(language, `终端诊断未完成：${error.message}`, `Terminal diagnostics did not complete: ${error.message}`))
+      return {
+        shell: process.env.SHELL || '/bin/zsh',
+        baselineMs: null,
+        startupMs: null,
+        sampleCount: 0,
+        findings: [],
+        configFiles: []
+      }
+    })
+    .finally(() => reportSectionComplete('terminal'))
 
   const [services, storage, applications, terminal] = await Promise.all([
     servicesPromise,
@@ -1612,7 +1683,13 @@ export async function runFullScan(
     applicationsPromise,
     terminalPromise
   ])
-  onProgress({ section: 'system', progress: 96, message: t(language, '整理建议并建立操作白名单', 'Preparing recommendations and the action allowlist') })
+  onProgress({
+    section: 'system',
+    progress: 96,
+    message: t(language, '整理建议并建立操作白名单', 'Preparing recommendations and the action allowlist'),
+    activeSections: [],
+    completedSections: scanSections
+  })
 
   const result: ScanResult = {
     scanId: randomUUID(),
@@ -1623,6 +1700,12 @@ export async function runFullScan(
     terminal,
     warnings
   }
-  onProgress({ section: 'system', progress: 100, message: t(language, '扫描完成', 'Scan complete') })
+  onProgress({
+    section: 'system',
+    progress: 100,
+    message: t(language, '扫描完成', 'Scan complete'),
+    activeSections: [],
+    completedSections: scanSections
+  })
   return { result, actions, revealTargets, terminalFixes }
 }
