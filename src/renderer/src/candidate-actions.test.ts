@@ -49,6 +49,26 @@ describe('applyCompletedCandidateActions', () => {
     expect(applyCompletedCandidateActions([service], new Set(['remove']), 'zh-CN')).toEqual([])
   })
 
+  it('removes a storage candidate after permanent cleanup completes', () => {
+    const storage: ScanCandidate = {
+      id: 'cache',
+      section: 'storage',
+      name: 'Cache',
+      subtitle: '~/Library/Caches/example',
+      description: 'Rebuildable cache',
+      risk: 'safe',
+      status: 'Reclaimable',
+      evidence: [],
+      action: {
+        kind: 'delete-storage',
+        label: 'Clean permanently',
+        consequence: 'Deletes the cache.',
+        reversible: false
+      }
+    }
+    expect(applyCompletedCandidateActions([storage], new Set(['cache']), 'en-US')).toEqual([])
+  })
+
   it('runs a shared cleanup operation once and removes every service in its group', () => {
     const sibling = { ...service, id: 'service-2', name: 'Example helper' }
     const selected = selectedCandidateOperations([service, sibling], new Set(['remove']))

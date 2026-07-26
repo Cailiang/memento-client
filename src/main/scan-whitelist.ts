@@ -22,6 +22,7 @@ export function applyScanWhitelist(
   return {
     actions,
     revealTargets,
+    terminalFixes: bundle.terminalFixes,
     result: {
       ...bundle.result,
       candidates: bundle.result.candidates.filter(

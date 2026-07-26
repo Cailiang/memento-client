@@ -36,16 +36,17 @@ describe('applyScanWhitelist', () => {
       description: 'storage', risk: 'safe', status: 'Reclaimable', evidence: [],
       location: '~/Library/Caches/com.example.worker',
       action: {
-        kind: 'trash', label: 'Move to Trash', consequence: 'Moves it', reversible: true
+        kind: 'delete-storage', label: 'Clean permanently', consequence: 'Deletes it', reversible: false
       }
     }
     const actions = new Map<string, RegisteredAction>([
       ['operation-id', { kind: 'stop-launch-agent', target: '/tmp/worker.plist' }],
-      ['storage-id', { kind: 'trash', target: '/tmp/com.example.worker' }]
+      ['storage-id', { kind: 'delete-storage', target: '/tmp/com.example.worker' }]
     ])
     const bundle: ScanBundle = {
       result: resultWith([service, storage]),
       actions,
+      terminalFixes: new Map(),
       revealTargets: new Map([
         ['service-id', '/tmp/worker'],
         ['storage-id', '/tmp/com.example.worker']

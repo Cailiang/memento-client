@@ -1408,7 +1408,8 @@ button:active:not(:disabled) {
 
 .finding-copy > div {
   display: flex;
-  align-items: baseline;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
@@ -1422,6 +1423,28 @@ button:active:not(:disabled) {
   color: var(--text-tertiary);
   font-family: "SF Mono", ui-monospace, monospace;
   font-size: 9px;
+}
+
+.finding-fix-badge {
+  display: inline-flex;
+  min-height: 22px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 7px;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+  border-radius: 999px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-size: 9px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.terminal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .finding-copy p {
@@ -1868,6 +1891,17 @@ button:active:not(:disabled) {
   font-family: "SF Mono", ui-monospace, monospace;
   font-size: 10px;
   white-space: nowrap;
+}
+
+.terminal-fix-dialog .dialog-items > div {
+  grid-template-columns: 30px minmax(0, 1fr) minmax(90px, auto);
+}
+
+.terminal-fix-dialog .dialog-items > div > span:last-child {
+  max-width: 150px;
+  overflow-wrap: anywhere;
+  text-align: right;
+  white-space: normal;
 }
 
 .dialog-notice {
@@ -3659,6 +3693,19 @@ button:active:not(:disabled) {
     gap: 4px;
   }
 
+  .finding-section .section-heading-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .terminal-actions {
+    justify-content: stretch;
+  }
+
+  .terminal-actions > button {
+    flex: 1 1 150px;
+  }
+
   .finding-duration {
     display: none;
   }
@@ -3822,6 +3869,16 @@ button:active:not(:disabled) {
     border-right: 0;
     border-bottom: 0;
     border-left: 0;
+  }
+
+  .terminal-fix-dialog .dialog-items > div {
+    grid-template-columns: 30px minmax(0, 1fr);
+  }
+
+  .terminal-fix-dialog .dialog-items > div > span:last-child {
+    grid-column: 2;
+    max-width: none;
+    text-align: left;
   }
 }
 

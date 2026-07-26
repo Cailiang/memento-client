@@ -14,7 +14,12 @@ import { mkdir, mkdtemp, rmdir } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
-import type { ActionResult, ScanProgress, ScanResult } from '../shared/types'
+import type {
+  ActionResult,
+  ScanProgress,
+  ScanResult,
+  TerminalFixRunResult
+} from '../shared/types'
 import type { UpdateAiSettingsInput } from '../shared/ai-types'
 import {
   DEFAULT_APP_SETTINGS,
@@ -33,10 +38,22 @@ import {
   isAllowedServiceCleanupTarget,
   isAllowedUserSelectedServiceDirectory
 } from './service-cleanup'
+import {
+  deleteStorageTarget,
+  isAllowedStorageCleanupTarget
+} from './storage-cleanup'
+import {
+  applyTerminalFixGroup,
+  restoreTerminalBackup,
+  type RegisteredTerminalFix,
+  type TerminalFixBackup
+} from './terminal-fixes'
 
 const execFileAsync = promisify(execFile)
 let registeredActions = new Map<string, RegisteredAction>()
 let registeredRevealTargets = new Map<string, string>()
+let registeredTerminalFixes = new Map<string, RegisteredTerminalFix>()
+let lastTerminalFixBackups = new Map<string, TerminalFixBackup>()
 let scanInProgress = false
 let currentScanResult: ScanResult | null = null
 let aiService: AiService | null = null
@@ -48,6 +65,11 @@ let isQuitting = false
 
 function mainText(chinese: string, english: string): string {
   return appSettings.language === 'en-US' ? english : chinese
+}
+
+function mainDisplayPath(target: string): string {
+  const home = os.homedir()
+  return target.startsWith(home) ? `~${target.slice(home.length)}` : target
 }
 
 function themeBackground(theme: AppTheme): string {
@@ -284,9 +306,23 @@ function createWindow(): void {
 }
 
 async function executeRegisteredAction(action: RegisteredAction): Promise<void> {
+  if (action.kind === 'delete-storage') {
+    if (!isAllowedStorageCleanupTarget(action.target, os.homedir())) {
+      throw new Error(mainText('存储目标未通过本地安全校验，请重新扫描', 'The storage target did not pass local validation. Scan again.'))
+    }
+    if (!existsSync(action.target)) {
+      throw new Error(mainText('缓存已经不存在，请重新扫描', 'The cache no longer exists. Scan again.'))
+    }
+    await deleteStorageTarget(action.target)
+    return
+  }
+
   if (action.kind === 'trash') {
     if (!existsSync(action.target)) throw new Error(mainText('项目已不存在，可能已经被移动或删除', 'The item no longer exists. It may have been moved or deleted.'))
     await shell.trashItem(action.target)
+    if (existsSync(action.target)) {
+      throw new Error(mainText('项目仍在原位置，操作未完成', 'The item is still in its original location. The action did not complete.'))
+    }
     return
   }
 
@@ -352,6 +388,9 @@ async function executeRegisteredAction(action: RegisteredAction): Promise<void> 
 
     for (const target of action.targets) {
       await shell.trashItem(target)
+      if (existsSync(target)) {
+        throw new Error(mainText('清理目标仍在原位置，请重新扫描', 'A cleanup target is still in its original location. Scan again.'))
+      }
     }
     return
   }
@@ -389,6 +428,83 @@ function updateRegisteredActionsAfterExecution(action: RegisteredAction): void {
   }
 }
 
+async function executeTerminalFixBatch(ids: string[]): Promise<TerminalFixRunResult> {
+  const uniqueIds = [...new Set(ids)].slice(0, 100)
+  const results: ActionResult[] = []
+  const groups = new Map<string, Array<{ id: string; fix: RegisteredTerminalFix }>>()
+
+  for (const id of uniqueIds) {
+    const fix = registeredTerminalFixes.get(id)
+    if (!fix) {
+      results.push({
+        id,
+        ok: false,
+        message: mainText('优化操作已过期，请重新扫描', 'This optimization has expired. Scan again.')
+      })
+      continue
+    }
+    const group = groups.get(fix.target) ?? []
+    group.push({ id, fix })
+    groups.set(fix.target, group)
+  }
+
+  const completedBackups = new Map<string, TerminalFixBackup>()
+  for (const [target, group] of groups) {
+    try {
+      const backup = await applyTerminalFixGroup(group.map((item) => item.fix))
+      completedBackups.set(target, backup)
+      for (const item of group) {
+        results.push({
+          id: item.id,
+          ok: true,
+          message: mainText(
+            `已自动优化，原配置备份在 ${mainDisplayPath(backup.backup)}`,
+            `Optimized automatically. The original configuration is backed up at ${mainDisplayPath(backup.backup)}.`
+          )
+        })
+      }
+      for (const [id, registered] of registeredTerminalFixes) {
+        if (registered.target === target) registeredTerminalFixes.delete(id)
+      }
+    } catch (error) {
+      const message = error instanceof Error
+        ? error.message
+        : mainText('自动优化失败', 'Automatic optimization failed.')
+      for (const item of group) results.push({ id: item.id, ok: false, message })
+    }
+  }
+
+  if (completedBackups.size) lastTerminalFixBackups = completedBackups
+  return { results, canUndo: lastTerminalFixBackups.size > 0 }
+}
+
+async function undoLastTerminalFixes(): Promise<ActionResult[]> {
+  const results: ActionResult[] = []
+  for (const [target, backup] of [...lastTerminalFixBackups]) {
+    try {
+      await restoreTerminalBackup(backup)
+      lastTerminalFixBackups.delete(target)
+      results.push({
+        id: target,
+        ok: true,
+        message: mainText(
+          `已恢复 ${mainDisplayPath(target)}`,
+          `Restored ${mainDisplayPath(target)}.`
+        )
+      })
+    } catch (error) {
+      results.push({
+        id: target,
+        ok: false,
+        message: error instanceof Error
+          ? error.message
+          : mainText('无法恢复终端配置', 'The terminal configuration could not be restored.')
+      })
+    }
+  }
+  return results
+}
+
 app.whenReady().then(async () => {
   const gatewayUrl = (
     process.env['MEMENTO_GATEWAY_URL'] ||
@@ -417,7 +533,8 @@ app.whenReady().then(async () => {
         {
           result: currentScanResult,
           actions: registeredActions,
-          revealTargets: registeredRevealTargets
+          revealTargets: registeredRevealTargets,
+          terminalFixes: registeredTerminalFixes
         },
         appSettings.serviceWhitelist,
         appSettings.storageWhitelist
@@ -425,6 +542,7 @@ app.whenReady().then(async () => {
       currentScanResult = filtered.result
       registeredActions = filtered.actions
       registeredRevealTargets = filtered.revealTargets
+      registeredTerminalFixes = filtered.terminalFixes
       aiService?.invalidatePreviews()
     }
     return appSettings
@@ -444,6 +562,7 @@ app.whenReady().then(async () => {
       )
       registeredActions = bundle.actions
       registeredRevealTargets = bundle.revealTargets
+      registeredTerminalFixes = bundle.terminalFixes
       currentScanResult = bundle.result
       aiService?.invalidatePreviews()
       return bundle.result
@@ -497,7 +616,19 @@ app.whenReady().then(async () => {
     if (error) throw new Error(error)
   })
 
+  ipcMain.handle('memento:run-terminal-fixes', async (_event, ids: string[]) => {
+    if (!Array.isArray(ids) || ids.some((id) => typeof id !== 'string' || id.length > 100)) {
+      throw new Error(mainText('终端优化请求无效', 'The terminal optimization request is invalid.'))
+    }
+    return executeTerminalFixBatch(ids)
+  })
+
+  ipcMain.handle('memento:undo-terminal-fixes', () => undoLastTerminalFixes())
+
   ipcMain.handle('memento:run-actions', async (_event, ids: string[]) => {
+    if (!Array.isArray(ids) || ids.some((id) => typeof id !== 'string' || id.length > 100)) {
+      throw new Error(mainText('操作请求无效', 'The action request is invalid.'))
+    }
     const uniqueIds = [...new Set(ids)].slice(0, 100)
     const results: ActionResult[] = []
 

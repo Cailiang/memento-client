@@ -7,6 +7,7 @@ export type RiskLevel = 'safe' | 'review' | 'protected'
 
 export type ActionKind =
   | 'trash'
+  | 'delete-storage'
   | 'stop-brew-service'
   | 'stop-launch-agent'
   | 'trash-launch-agent-config'
@@ -69,6 +70,13 @@ export interface TerminalFinding {
   source?: string
   recommendation?: string
   attributes?: Record<string, string | number | boolean>
+  fix?: TerminalFixAction
+}
+
+export interface TerminalFixAction {
+  id: string
+  label: string
+  consequence: string
 }
 
 export interface TerminalConfigFile {
@@ -117,10 +125,17 @@ export interface ActionResult {
   message: string
 }
 
+export interface TerminalFixRunResult {
+  results: ActionResult[]
+  canUndo: boolean
+}
+
 export interface MementoApi extends MementoAiApi, MementoSettingsApi {
   getVersion: () => Promise<string>
   scan: (language?: import('./app-settings').AppLanguage) => Promise<ScanResult>
   runActions: (ids: string[]) => Promise<ActionResult[]>
+  runTerminalFixes: (ids: string[]) => Promise<TerminalFixRunResult>
+  undoTerminalFixes: () => Promise<ActionResult[]>
   revealCandidateLocation: (id: string) => Promise<void>
   onScanProgress: (callback: (progress: ScanProgress) => void) => () => void
   platform: NodeJS.Platform

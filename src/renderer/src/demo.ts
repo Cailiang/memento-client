@@ -31,10 +31,10 @@ export const demoResult: ScanResult = {
       status: '可清理',
       evidence: ['占用 12.8 GB', '最近修改于 18 天前'],
       action: {
-        kind: 'trash',
-        label: '移到废纸篓',
-        consequence: '项目会被移到废纸篓。下次完整构建会重新生成这些内容。',
-        reversible: true
+        kind: 'delete-storage',
+        label: '永久清理',
+        consequence: '缓存会被永久删除并立即释放空间。下次完整构建会重新生成这些内容。',
+        reversible: false
       }
     },
     {
@@ -63,10 +63,10 @@ export const demoResult: ScanResult = {
       status: '可清理',
       evidence: ['占用 4.6 GB', '最近修改于 37 天前'],
       action: {
-        kind: 'trash',
-        label: '移到废纸篓',
-        consequence: '缓存会移到废纸篓，后续安装依赖时可能重新下载。',
-        reversible: true
+        kind: 'delete-storage',
+        label: '永久清理',
+        consequence: '缓存会被永久删除并立即释放空间，后续安装依赖时可能重新下载。',
+        reversible: false
       }
     },
     {
@@ -227,16 +227,26 @@ export const demoResult: ScanResult = {
         detail: 'NVM 的 shell 脚本会同步读取文件系统，常见于启动延迟。',
         severity: 'notice',
         source: '~/.zshrc:86',
-        recommendation: '改为首次调用 node、npm 或 nvm 时再延迟加载。'
+        recommendation: '改为首次调用 node、npm 或 nvm 时再延迟加载。',
+        fix: {
+          id: 'demo-terminal-nvm',
+          label: '暂停自动初始化',
+          consequence: '注释 NVM 自动初始化配置；修改前会自动备份 .zshrc。'
+        }
       },
       {
         id: 'demo-terminal-compinit',
         code: 'compinit_detected',
         title: 'Zsh 补全系统初始化',
-        detail: '未缓存或重复执行的 compinit 会明显拖慢终端启动。',
+        detail: '配置中重复调用了 compinit，会明显拖慢终端启动。',
         severity: 'notice',
         source: '~/.zshrc:42',
-        recommendation: '复用 .zcompdump，并确保配置中只调用一次 compinit。'
+        recommendation: '保留第一次 compinit，移除后续重复调用。',
+        fix: {
+          id: 'demo-terminal-compinit',
+          label: '移除重复初始化',
+          consequence: '保留第一次 compinit，注释其余重复调用；修改前会自动备份 .zshrc。'
+        }
       }
     ]
   },
@@ -336,19 +346,19 @@ function localizedDemoResult(language: AppLanguage): ScanResult {
     }
   }
   const actionCopy: Record<string, { label: string; consequence: string }> = {
-    'demo-derived-data': { label: 'Move to Trash', consequence: 'The build products will move to the Trash. Xcode recreates them during the next full build.' },
-    'demo-npm': { label: 'Move to Trash', consequence: 'The cache will move to the Trash. npm may download dependencies again later.' },
+    'demo-derived-data': { label: 'Clean permanently', consequence: 'The cache will be permanently deleted to release space immediately. Xcode recreates it during the next full build.' },
+    'demo-npm': { label: 'Clean permanently', consequence: 'The cache will be permanently deleted to release space immediately. npm may download dependencies again later.' },
     'demo-postgres': { label: 'Stop service', consequence: 'The service will stop immediately and no longer start automatically at login.' },
     'demo-sunlogin-stop': { label: 'Stop service only', consequence: 'The process will stop, while the app, configuration, and user data remain.' },
     'demo-sunlogin-cleanup': { label: 'Uninstall and clean detected data', consequence: 'Stops the service, then moves Sunlogin, its login item, and 4 exact-match data items to the Trash. Documents and non-exact matches remain.' },
     'demo-app-android-studio': { label: 'Move to Trash', consequence: 'The app copy will move to the Trash. Application data and preferences remain.' },
     'demo-app-postman': { label: 'Move to Trash', consequence: 'The app will move to the Trash. Its documents, data, and preferences remain.' }
   }
-  const findingCopy: Record<string, Pick<TerminalFinding, 'title' | 'detail'> & { recommendation?: string; source?: string }> = {
+  const findingCopy: Record<string, Pick<TerminalFinding, 'title' | 'detail'> & { recommendation?: string; source?: string; fix?: TerminalFinding['fix'] }> = {
     'demo-terminal-total': { title: 'Interactive shell startup is slow', detail: 'The median of three measurements is 1240 ms with the full configuration.', recommendation: 'Address the synchronous initialization findings below, then scan again.', source: '/bin/zsh' },
     'demo-terminal-config': { title: 'Configuration adds significant startup time', detail: 'The clean baseline is 34 ms. User configuration adds about 1206 ms.', source: 'Startup baseline comparison' },
-    'demo-terminal-nvm': { title: 'NVM loads during startup', detail: 'NVM shell scripts synchronously read the file system and commonly delay startup.', recommendation: 'Load it lazily the first time node, npm, or nvm is called.', source: '~/.zshrc:86' },
-    'demo-terminal-compinit': { title: 'Zsh completion system initialization', detail: 'Uncached or repeated compinit calls can noticeably delay terminal startup.', recommendation: 'Reuse .zcompdump and make sure compinit runs only once.', source: '~/.zshrc:42' }
+    'demo-terminal-nvm': { title: 'NVM loads during startup', detail: 'NVM shell scripts synchronously read the file system and commonly delay startup.', recommendation: 'Load it lazily the first time node, npm, or nvm is called.', source: '~/.zshrc:86', fix: { id: 'demo-terminal-nvm', label: 'Disable automatic initialization', consequence: 'Comment out NVM automatic initialization after backing up .zshrc.' } },
+    'demo-terminal-compinit': { title: 'Zsh completion initializes more than once', detail: 'The configuration calls compinit repeatedly, which can noticeably delay terminal startup.', recommendation: 'Keep the first compinit call and remove later duplicates.', source: '~/.zshrc:42', fix: { id: 'demo-terminal-compinit', label: 'Remove duplicate initialization', consequence: 'Keep the first compinit call and comment out later duplicates after backing up .zshrc.' } }
   }
 
   return {

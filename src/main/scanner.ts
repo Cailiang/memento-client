@@ -30,6 +30,10 @@ import {
   isAllowedServiceCleanupTarget,
   isAllowedUserSelectedServiceDirectory
 } from './service-cleanup'
+import {
+  terminalContentHash,
+  type RegisteredTerminalFix
+} from './terminal-fixes'
 
 const execFileAsync = promisify(execFile)
 const HOME = os.homedir()
@@ -70,6 +74,7 @@ export interface ScanBundle {
   result: ScanResult
   actions: Map<string, RegisteredAction>
   revealTargets: Map<string, string>
+  terminalFixes: Map<string, RegisteredTerminalFix>
 }
 
 interface CommandResult {
@@ -731,8 +736,7 @@ const storageDefinitions: StorageDefinition[] = [
     name: { zh: 'Xcode Archives', en: 'Xcode Archives' },
     target: path.join(HOME, 'Library/Developer/Xcode/Archives'),
     description: { zh: '已归档的构建产物，可能仍用于崩溃符号化或重新分发。', en: 'Archived builds that may still be needed for crash symbolication or redistribution.' },
-    risk: 'review',
-    action: true
+    risk: 'protected'
   },
   {
     name: { zh: 'iOS DeviceSupport', en: 'iOS DeviceSupport' },
@@ -800,17 +804,18 @@ async function scanDefinedStorage(
   const inspected = await mapLimit(storageDefinitions, 4, async (definition) => {
     if (!(await pathExists(definition.target))) return null
     const [stats, sizeBytes] = await Promise.all([
-      fs.stat(definition.target),
+      fs.lstat(definition.target),
       getPathSize(definition.target)
     ])
+    if (definition.action && stats.isSymbolicLink()) return null
     if (sizeBytes < (definition.minimumBytes ?? 10 * 1024 * 1024)) return null
 
     const action = definition.action
       ? {
-          kind: 'trash' as const,
-          label: t(language, '移到废纸篓', 'Move to Trash'),
-          consequence: t(language, '项目会被移到废纸篓。相关工具可能需要重新下载或生成这些内容。', 'The item will be moved to the Trash. Related tools may need to download or regenerate it.'),
-          reversible: true
+          kind: 'delete-storage' as const,
+          label: t(language, '永久清理', 'Clean permanently'),
+          consequence: t(language, '缓存会被永久删除并立即释放空间。相关工具之后可能需要重新下载或生成这些内容。', 'The cache will be permanently deleted to release space immediately. Related tools may need to download or regenerate it later.'),
+          reversible: false
         }
       : undefined
 
@@ -832,7 +837,7 @@ async function scanDefinedStorage(
         ],
         action
       },
-      action ? { kind: 'trash', target: definition.target } : undefined,
+      action ? { kind: 'delete-storage', target: definition.target } : undefined,
       [],
       revealTargets,
       definition.target
@@ -867,7 +872,8 @@ async function scanApplicationCaches(
 
   const inspected = await mapLimit(targets.slice(0, 80), 6, async (target) => {
     try {
-      const [stats, sizeBytes] = await Promise.all([fs.stat(target), getPathSize(target)])
+      const [stats, sizeBytes] = await Promise.all([fs.lstat(target), getPathSize(target)])
+      if (stats.isSymbolicLink()) return null
       if (sizeBytes < 50 * 1024 * 1024) return null
       const name = path.basename(target)
       return registerCandidate(
@@ -887,13 +893,13 @@ async function scanApplicationCaches(
             t(language, `最近修改于 ${ageInDays(stats.mtime)} 天前`, `Last modified ${ageInDays(stats.mtime)} days ago`)
           ],
           action: {
-            kind: 'trash',
-            label: t(language, '移到废纸篓', 'Move to Trash'),
-            consequence: t(language, '缓存目录会移到废纸篓，应用下次启动时可能稍慢。', 'The cache will be moved to the Trash. The application may start more slowly next time.'),
-            reversible: true
+            kind: 'delete-storage',
+            label: t(language, '永久清理', 'Clean permanently'),
+            consequence: t(language, '缓存目录会被永久删除并立即释放空间，应用下次启动时可能稍慢。', 'The cache directory will be permanently deleted to release space immediately. The application may start more slowly next time.'),
+            reversible: false
           }
         },
-        { kind: 'trash', target },
+        { kind: 'delete-storage', target },
         [],
         revealTargets,
         target
@@ -1183,6 +1189,21 @@ async function measureShell(shell: string, clean: boolean): Promise<number | nul
   return Math.round(samples[Math.floor(samples.length / 2)])
 }
 
+async function readInteractivePath(shell: string): Promise<string[]> {
+  try {
+    const args = ['-i', '-c', 'printf "__MEMENTO_PATH__%s\\n" "$PATH"']
+    const { stdout } = await run(shell, args, 10_000)
+    const value = stdout
+      .split('\n')
+      .find((line) => line.startsWith('__MEMENTO_PATH__'))
+      ?.slice('__MEMENTO_PATH__'.length)
+    if (value !== undefined) return value.split(':').filter(Boolean)
+  } catch {
+    // Fall back to the environment inherited by the app.
+  }
+  return (process.env.PATH ?? '').split(':').filter(Boolean)
+}
+
 interface ShellRule {
   code: TerminalFinding['code']
   pattern: RegExp
@@ -1236,13 +1257,54 @@ const shellRules: ShellRule[] = [
   }
 ]
 
-async function inspectShellFiles(language: AppLanguage): Promise<{
+function shellFixCopy(
+  code: TerminalFinding['code'],
+  lineCount: number,
+  language: AppLanguage
+): { label: string; consequence: string } {
+  if (code === 'compinit_detected') {
+    return {
+      label: t(language, '移除重复初始化', 'Remove duplicate initialization'),
+      consequence: t(
+        language,
+        `保留第一次 compinit，注释其余 ${lineCount} 处重复调用。修改前会自动备份配置。`,
+        `Keep the first compinit call and comment out ${lineCount} duplicate call(s). The configuration is backed up first.`
+      )
+    }
+  }
+  if (code === 'network_call_during_startup') {
+    return {
+      label: t(language, '停用启动网络请求', 'Disable startup network requests'),
+      consequence: t(
+        language,
+        `注释 ${lineCount} 处启动阶段的同步网络请求，避免网络波动阻塞终端。修改前会自动备份配置。`,
+        `Comment out ${lineCount} synchronous network request(s) during startup so network delays cannot block the terminal. The configuration is backed up first.`
+      )
+    }
+  }
+  return {
+    label: t(language, '暂停自动初始化', 'Disable automatic initialization'),
+    consequence: t(
+      language,
+      `注释 ${lineCount} 处自动初始化配置；相关版本管理器仍可按需手动启用。修改前会自动备份配置。`,
+      `Comment out ${lineCount} automatic initialization line(s). The related version manager can still be enabled manually when needed. The configuration is backed up first.`
+    )
+  }
+}
+
+async function inspectShellFiles(
+  language: AppLanguage,
+  terminalFixes: Map<string, RegisteredTerminalFix>,
+  shell: string
+): Promise<{
   findings: TerminalFinding[]
   configFiles: TerminalConfigFile[]
 }> {
   const files = ['.zshenv', '.zprofile', '.zshrc', '.zlogin']
   const findings: TerminalFinding[] = []
   const configFiles: TerminalConfigFile[] = []
+  const fileHashes = new Map<string, string>()
+  const fileContents = new Map<string, string>()
 
   for (const filename of files) {
     const target = path.join(HOME, filename)
@@ -1259,6 +1321,9 @@ async function inspectShellFiles(language: AppLanguage): Promise<{
 
     const lines = content.split('\n')
     const sizeBytes = Buffer.byteLength(content)
+    const contentHash = terminalContentHash(content)
+    fileHashes.set(target, contentHash)
+    fileContents.set(target, content)
     configFiles.push({
       logicalPath: `~/${filename}` as TerminalConfigFile['logicalPath'],
       exists: true,
@@ -1279,25 +1344,42 @@ async function inspectShellFiles(language: AppLanguage): Promise<{
     }
 
     for (const rule of shellRules) {
-      const lineIndex = lines.findIndex((line) => {
+      const lineIndexes = lines.flatMap((line, index) => {
         const trimmed = line.trim()
-        return trimmed && !trimmed.startsWith('#') && rule.pattern.test(trimmed)
+        return trimmed && !trimmed.startsWith('#') && rule.pattern.test(trimmed) ? [index] : []
       })
-      if (lineIndex === -1) continue
+      if (!lineIndexes.length) continue
+      if (rule.code === 'compinit_detected' && lineIndexes.length < 2) continue
+      const lineIndexesToFix = rule.code === 'compinit_detected'
+        ? lineIndexes.slice(1)
+        : lineIndexes
+      const id = randomUUID()
+      const fixCopy = lineIndexesToFix.length
+        ? shellFixCopy(rule.code, lineIndexesToFix.length, language)
+        : null
+      if (fixCopy) {
+        terminalFixes.set(id, {
+          kind: 'comment-lines',
+          target,
+          expectedHash: contentHash,
+          lineNumbers: lineIndexesToFix
+        })
+      }
       findings.push({
-        id: randomUUID(),
+        id,
         code: rule.code,
         title: language === 'en-US' ? rule.title.en : rule.title.zh,
         detail: language === 'en-US' ? rule.detail.en : rule.detail.zh,
         severity: 'notice',
-        source: `${displayPath(target)}:${lineIndex + 1}`,
+        source: `${displayPath(target)}:${lineIndexes[0] + 1}`,
         recommendation: language === 'en-US' ? rule.recommendation.en : rule.recommendation.zh,
-        attributes: { line: lineIndex + 1 }
+        attributes: { line: lineIndexes[0] + 1, matchCount: lineIndexes.length },
+        fix: fixCopy ? { id, ...fixCopy } : undefined
       })
     }
   }
 
-  const pathEntries = (process.env.PATH ?? '').split(':').filter(Boolean)
+  const pathEntries = await readInteractivePath(shell)
   const missing = (
     await Promise.all(
       pathEntries.map(async (entry) => ({ entry, exists: await pathExists(entry) }))
@@ -1305,39 +1387,86 @@ async function inspectShellFiles(language: AppLanguage): Promise<{
   ).filter(({ exists }) => !exists)
   const duplicateCount = pathEntries.length - new Set(pathEntries).size
   if (missing.length) {
+    const id = randomUUID()
+    const zshrcTarget = path.join(HOME, '.zshrc')
+    const zshrcHash = fileHashes.get(zshrcTarget)
+    const zshrcContent = fileContents.get(zshrcTarget)
+    const fix = shell.endsWith('zsh') && zshrcHash && zshrcContent &&
+      !zshrcContent.includes('# Memento removes PATH entries that no longer exist.')
+      ? {
+          id,
+          label: t(language, '移除无效 PATH', 'Remove missing PATH entries'),
+          consequence: t(
+            language,
+            `在 .zshrc 末尾加入本地校验，自动忽略 ${missing.length} 个已不存在的目录。修改前会自动备份配置。`,
+            `Add a local check to .zshrc that ignores ${missing.length} missing directories automatically. The configuration is backed up first.`
+          )
+        }
+      : undefined
+    if (fix && zshrcHash) {
+      terminalFixes.set(id, {
+        kind: 'prune-path',
+        target: zshrcTarget,
+        expectedHash: zshrcHash
+      })
+    }
     findings.push({
-      id: randomUUID(),
+      id,
       code: 'path_missing_entries',
       title: t(language, 'PATH 中有无效目录', 'PATH contains missing directories'),
       detail: t(language, `${missing.length} 个目录不存在。`, `${missing.length} directories do not exist.`),
       severity: 'notice',
       source: t(language, '当前 shell 环境', 'Current shell environment'),
       recommendation: t(language, '清理 PATH 拼接逻辑，移除已经不存在的目录。', 'Clean up PATH construction and remove directories that no longer exist.'),
-      attributes: { missingCount: missing.length }
+      attributes: { missingCount: missing.length },
+      fix
     })
   }
   if (duplicateCount) {
+    const id = randomUUID()
+    const zshrcTarget = path.join(HOME, '.zshrc')
+    const zshrcHash = fileHashes.get(zshrcTarget)
+    const zshrcContent = fileContents.get(zshrcTarget)
+    const fix = shell.endsWith('zsh') && zshrcHash && zshrcContent &&
+      !zshrcContent.split('\n').some((line) => line.trim() === 'typeset -U path PATH')
+      ? {
+          id,
+          label: t(language, '自动去重 PATH', 'Deduplicate PATH automatically'),
+          consequence: t(language, '在 .zshrc 末尾加入 zsh 原生 PATH 去重设置。修改前会自动备份配置。', 'Add zsh\'s native PATH deduplication setting to .zshrc. The configuration is backed up first.')
+        }
+      : undefined
+    if (fix && zshrcHash) {
+      terminalFixes.set(id, {
+        kind: 'dedupe-path',
+        target: zshrcTarget,
+        expectedHash: zshrcHash
+      })
+    }
     findings.push({
-      id: randomUUID(),
+      id,
       code: 'path_duplicate_entries',
       title: t(language, 'PATH 中有重复目录', 'PATH contains duplicate directories'),
       detail: t(language, `${duplicateCount} 个目录被重复添加。`, `${duplicateCount} directories were added more than once.`),
       severity: 'notice',
       source: t(language, '当前 shell 环境', 'Current shell environment'),
       recommendation: t(language, '检查 PATH 拼接逻辑，避免多个插件反复追加同一目录。', 'Review PATH construction so multiple plug-ins do not append the same directory.'),
-      attributes: { duplicateCount }
+      attributes: { duplicateCount },
+      fix
     })
   }
 
   return { findings, configFiles }
 }
 
-async function scanTerminal(language: AppLanguage): Promise<ScanResult['terminal']> {
+async function scanTerminal(
+  language: AppLanguage,
+  terminalFixes: Map<string, RegisteredTerminalFix>
+): Promise<ScanResult['terminal']> {
   const shell = process.env.SHELL || '/bin/zsh'
   const [baselineMs, startupMs, fileInspection] = await Promise.all([
     measureShell(shell, true),
     measureShell(shell, false),
-    inspectShellFiles(language)
+    inspectShellFiles(language, terminalFixes, shell)
   ])
   const findings: TerminalFinding[] = []
 
@@ -1401,6 +1530,7 @@ export async function runFullScan(
   const startedAt = new Date().toISOString()
   const actions = new Map<string, RegisteredAction>()
   const revealTargets = new Map<string, string>()
+  const terminalFixes = new Map<string, RegisteredTerminalFix>()
   const warnings: string[] = []
 
   onProgress({ section: 'system', progress: 4, message: t(language, '读取系统状态', 'Reading system status') })
@@ -1416,6 +1546,7 @@ export async function runFullScan(
     return {
       actions,
       revealTargets,
+      terminalFixes,
       result: {
         scanId: randomUUID(),
         startedAt,
@@ -1454,7 +1585,7 @@ export async function runFullScan(
   })
 
   onProgress({ section: 'terminal', progress: 62, message: t(language, '测量终端启动并分析 shell 配置', 'Measuring terminal startup and analyzing shell configuration') })
-  const terminalPromise = scanTerminal(language).catch((error: Error) => {
+  const terminalPromise = scanTerminal(language, terminalFixes).catch((error: Error) => {
     warnings.push(t(language, `终端诊断未完成：${error.message}`, `Terminal diagnostics did not complete: ${error.message}`))
     return {
       shell: process.env.SHELL || '/bin/zsh',
@@ -1484,5 +1615,5 @@ export async function runFullScan(
     warnings
   }
   onProgress({ section: 'system', progress: 100, message: t(language, '扫描完成', 'Scan complete') })
-  return { result, actions, revealTargets }
+  return { result, actions, revealTargets, terminalFixes }
 }

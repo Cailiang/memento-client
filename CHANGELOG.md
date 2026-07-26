@@ -4,6 +4,24 @@ All notable changes to Memento Client are documented here in English and Simplif
 
 Memento Client 的重要变更会在这里使用英文和简体中文同步记录。
 
+## 0.6.13 - 2026-07-26
+
+### English
+
+- Storage cleanup now permanently removes strictly allowlisted rebuildable targets, verifies that the source disappeared, and rescans so released space is reflected immediately; Xcode Archives and other protected data remain analysis-only.
+- Permanent storage actions show an explicit irreversible confirmation with the affected size and no longer imply that moving data to Trash releases disk space.
+- Terminal diagnostics can automatically apply deterministic local fixes for repeated initialization, synchronous startup requests, version-manager startup loading, and invalid or duplicate PATH entries.
+- Shell configuration changes are hash-checked, syntax-validated, backed up, written atomically, and reversible unless the user edits the file afterward.
+- Automatic terminal optimization never runs AI-generated commands; the confirmation dialog lists every built-in change before execution.
+
+### 简体中文
+
+- 存储清理现在会永久删除严格限制在白名单内的可重建目标，检查原路径已经消失，并重新扫描以立即反映释放的空间；Xcode Archives 等受保护数据仍然只分析、不自动清理。
+- 永久存储操作会明确提示不可撤销和影响大小，不再把“移到废纸篓”误当成已经释放磁盘空间。
+- 终端诊断可自动处理重复初始化、启动阶段同步网络请求、版本管理器启动加载，以及无效或重复 PATH 等确定性本地问题。
+- shell 配置修改会校验扫描时哈希与 zsh 语法，自动备份并原子写入；如果用户之后没有再次编辑，可一键撤销。
+- 终端自动优化绝不运行 AI 生成的命令，执行前会逐项列出所有内置变更。
+
 ## 0.6.12 - 2026-07-25
 
 ### English

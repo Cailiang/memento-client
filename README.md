@@ -35,9 +35,9 @@ macOS builds may not yet be notarized. If macOS blocks the first launch, right-c
 ## What Memento checks
 
 - **Background services:** running and stopped LaunchAgents plus running Homebrew services, with separate choices to stop a service, remove only its startup item, or move an explicitly identified related directory to Trash.
-- **Storage:** large temporary files created by Xcode, Homebrew, npm, pnpm, Yarn, Gradle, CocoaPods, and applications.
+- **Storage:** large temporary files created by Xcode, Homebrew, npm, pnpm, Yarn, Gradle, CocoaPods, and applications, with permanent cleanup for strictly allowlisted rebuildable data.
 - **Applications:** old Homebrew versions, duplicate application copies, and applications that have not been used recently.
-- **Terminal startup:** clean-shell baseline, interactive startup time, synchronous initialization, and PATH problems.
+- **Terminal startup:** clean-shell baseline, interactive startup time, synchronous initialization, and PATH problems, with confirmed automatic fixes, backups, and one-step undo for deterministic findings.
 - **Optional AI analysis:** a short, plain-language explanation of the software's actual purpose and whether stopping, removing its startup item, deleting it, or cleaning its data will cause problems. Analysis continues in the background while other items are reviewed.
 
 ![AI service analysis](.artifacts/memento-service-ai-result.png)
@@ -47,7 +47,9 @@ macOS builds may not yet be notarized. If macOS blocks the first launch, right-c
 - Scanning is read-only and does not require administrator access.
 - The renderer cannot submit arbitrary paths. Actions use temporary IDs created by the current scan.
 - Reversible cleanup moves files to the operating system Trash instead of deleting them permanently.
+- Storage cleanup permanently deletes only locally allowlisted rebuildable targets after explicit confirmation, then verifies removal and rescans available space.
 - Protected or high-risk data is analysis-only.
+- Terminal automation runs built-in local rules only, validates zsh syntax, and never executes AI-generated commands.
 - AI cannot create or execute cleanup targets. It only explains an item already identified by the local scanner.
 - Reports sent for AI analysis use an allowlist and exclude raw file content, credentials, and unrestricted paths.
 

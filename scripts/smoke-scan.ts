@@ -85,10 +85,20 @@ process.stdout.write(
       storageLocations: bundle.result.candidates.filter(
         (candidate) => candidate.section === 'storage' && candidate.location
       ).length,
+      permanentStorageActions: bundle.result.candidates.filter(
+        (candidate) => candidate.section === 'storage' && candidate.action?.kind === 'delete-storage'
+      ).length,
       terminal: {
         baselineMs: bundle.result.terminal.baselineMs,
         startupMs: bundle.result.terminal.startupMs,
-        findings: bundle.result.terminal.findings.length
+        findings: bundle.result.terminal.findings.length,
+        automaticFixes: bundle.terminalFixes.size,
+        findingDetails: bundle.result.terminal.findings.map((finding) => ({
+          code: finding.code,
+          title: finding.title,
+          source: finding.source,
+          automatic: Boolean(finding.fix)
+        }))
       },
       warnings: bundle.result.warnings
     },

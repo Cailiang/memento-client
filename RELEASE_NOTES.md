@@ -1,16 +1,16 @@
-# Memento 0.6.12
+# Memento 0.6.13
 
 ## English
 
-This release simplifies navigation and keeps every maintenance decision close to the item being reviewed.
+This release makes storage cleanup release disk space immediately and turns deterministic terminal findings into safe, automatic actions.
 
 ### Highlights
 
-- Service, storage, and application rows no longer open redundant detail drawers. Useful context, Finder locations, AI analysis, and actions stay in the list.
-- General and AI preferences now share one **Settings** destination with a compact tab switcher.
-- All eight themes remain available through concise palette swatches that use much less space.
-- **Ask AI** clearly distinguishes starting, running, viewing, and collapsing an analysis while keeping results directly below the selected item.
-- Primary navigation now contains six destinations and remains readable on narrow mobile layouts.
+- Rebuildable storage targets are permanently deleted from a strict local allowlist after an explicit irreversible confirmation, then rescanned so released space is visible immediately. Xcode Archives and other protected data remain analysis-only.
+- Terminal findings that match built-in rules now offer one-click automatic optimization instead of instructions a user must execute manually.
+- Supported fixes include invalid or duplicate PATH entries, repeated completion initialization, synchronous startup network requests, and eager version-manager initialization.
+- Every shell edit verifies the scanned file hash, validates zsh syntax, creates an adjacent backup, writes atomically, and supports one-step undo when the file has not changed afterward.
+- AI-generated commands are never executed. The confirmation dialog lists only deterministic local changes registered by the current scan.
 
 ### Platform note
 
@@ -18,15 +18,15 @@ Full maintenance scanning and cleanup currently support macOS. Windows and Linux
 
 ## 简体中文
 
-这个版本进一步简化导航，让维护判断和有效操作始终靠近正在查看的项目。
+这个版本让存储清理真正立即释放磁盘空间，并把可确定处理的终端问题变成安全的自动操作。
 
 ### 主要变化
 
-- 后台服务、存储空间和应用列表不再打开信息重复的详情侧栏；说明、Finder 位置、AI 分析与操作直接保留在列表中。
-- 通用设置和 AI 设置合并到同一个“设置”入口，并通过紧凑标签切换。
-- 八套主题全部保留，以占用空间更小的色板方式呈现。
-- “问 AI”明确区分开始、分析中、查看结果和收起状态，结果继续在当前项目下方展示。
-- 主导航精简为六个入口，在窄屏手机布局中也保持清晰。
+- 可重建的存储目标只会从严格的本地白名单中永久删除；执行前明确提示不可撤销，完成后重新扫描并立即显示释放空间。Xcode Archives 等受保护数据仍然只分析、不自动清理。
+- 匹配内置规则的终端问题现在可以一键自动优化，不再只给出需要用户手动执行的建议。
+- 支持自动处理无效或重复 PATH、重复补全初始化、启动阶段同步网络请求，以及版本管理器提前加载。
+- 每次 shell 修改都会检查扫描时哈希、验证 zsh 语法、在原目录创建备份并原子写入；文件未被再次编辑时可一键撤销。
+- 绝不执行 AI 生成的命令；确认框只列出本次扫描注册的确定性本地变更。
 
 ### 平台说明
 

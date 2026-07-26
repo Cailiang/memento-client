@@ -18,12 +18,14 @@ import {
   Power,
   RadioTower,
   RefreshCw,
+  RotateCcw,
   Search,
   Settings2,
   ShieldAlert,
   ShieldCheck,
   SquareTerminal,
   Trash2,
+  WandSparkles,
   X
 } from 'lucide-react'
 import {
@@ -146,6 +148,8 @@ function operationLabel(operation: CandidateAction, language: AppLanguage): stri
       return english ? 'Delete related directory' : '删除关联目录'
     case 'brew-cleanup':
       return english ? 'Clean up' : '清理'
+    case 'delete-storage':
+      return english ? 'Clean permanently' : '永久清理'
     case 'trash':
       return english ? 'Move to Trash' : '移到废纸篓'
     default:
@@ -244,6 +248,9 @@ function AppContent({
   const [toast, setToast] = useState<string | null>(null)
   const [appVersion, setAppVersion] = useState<string | null>(null)
   const [dismissedAiTaskKeys, setDismissedAiTaskKeys] = useState<Set<string>>(() => new Set())
+  const [terminalUndoAvailable, setTerminalUndoAvailable] = useState(false)
+  const [terminalFixReviewOpen, setTerminalFixReviewOpen] = useState(false)
+  const [terminalFixBusy, setTerminalFixBusy] = useState(false)
   const aiTasks = useAiAnalysisTasks()
   const previousAiTaskStatuses = useRef<Map<string, string>>(new Map())
   const startedRef = useRef(false)
@@ -255,6 +262,7 @@ function AppContent({
     setPhase('scanning')
     setError(null)
     setSelected(new Set())
+    setTerminalFixReviewOpen(false)
     try {
       const nextResult = window.memento
         ? await window.memento.scan(language)
@@ -340,17 +348,20 @@ function AppContent({
   }, [aiTasks, result, text])
 
   useEffect(() => {
-    if (!confirmOpen) return
+    if (!confirmOpen && !terminalFixReviewOpen) return
     const closeOnEscape = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape' && !actionBusy) {
+      if (event.key !== 'Escape') return
+      if (confirmOpen && !actionBusy) {
         setConfirmOpen(false)
         if (directReview) setSelected(new Set())
         setDirectReview(false)
+      } else if (terminalFixReviewOpen && !terminalFixBusy) {
+        setTerminalFixReviewOpen(false)
       }
     }
     window.addEventListener('keydown', closeOnEscape)
     return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [actionBusy, confirmOpen, directReview])
+  }, [actionBusy, confirmOpen, directReview, terminalFixBusy, terminalFixReviewOpen])
 
   const aiActivityItems = useMemo<AiActivityItem[]>(() => {
     if (!result) return []
@@ -546,8 +557,7 @@ function AppContent({
                 operation.kind === 'trash-service-software')
           )
       )
-      setToast(
-        failedCount
+      const completionMessage = failedCount
           ? failedCount === 1
             ? failures[0].message
             : text(`${successfulIds.size} 项已完成，${failedCount} 项失败：${failures[0].message}`, `${successfulIds.size} completed and ${failedCount} failed: ${failures[0].message}`)
@@ -556,11 +566,87 @@ function AppContent({
           : keptStoppedService
             ? text('服务已停止并保留在列表中；软件和数据没有删除', 'The service is stopped and remains in the list. Its software and data were not deleted.')
             : text(`${successfulIds.size} 项操作已完成`, `${successfulIds.size} actions completed`)
-      )
+      if (successfulIds.size > 0 && window.memento) await scanNow()
+      setToast(completionMessage)
     } catch (actionError) {
       setToast(actionError instanceof Error ? actionError.message : text('操作失败', 'Action failed'))
     } finally {
       setActionBusy(false)
+    }
+  }
+
+  const runTerminalFixes = async (ids: string[]): Promise<boolean> => {
+    try {
+      const outcome = window.memento
+        ? await window.memento.runTerminalFixes(ids)
+        : await new Promise<{ results: ActionResult[]; canUndo: boolean }>((resolve) =>
+            window.setTimeout(() => resolve({
+              results: ids.map((id) => ({ id, ok: true, message: text('终端配置已自动优化', 'Terminal configuration optimized automatically') })),
+              canUndo: true
+            }), 700)
+          )
+      const successes = outcome.results.filter((item) => item.ok)
+      const failures = outcome.results.filter((item) => !item.ok)
+      setTerminalUndoAvailable(outcome.canUndo)
+      if (successes.length) {
+        if (window.memento) await scanNow()
+        else {
+          const completed = new Set(successes.map((item) => item.id))
+          setResult((current) => current ? {
+            ...current,
+            terminal: {
+              ...current.terminal,
+              findings: current.terminal.findings.filter((finding) => !completed.has(finding.id))
+            }
+          } : current)
+        }
+      }
+      setToast(failures.length
+        ? failures[0].message
+        : text(`已自动优化 ${successes.length} 项终端配置`, `${successes.length} terminal optimizations completed`))
+      return failures.length === 0
+    } catch (reason) {
+      setToast(reason instanceof Error ? reason.message : text('终端自动优化失败', 'Terminal optimization failed'))
+      return false
+    }
+  }
+
+  const undoTerminalFixes = async (): Promise<boolean> => {
+    try {
+      const results = window.memento
+        ? await window.memento.undoTerminalFixes()
+        : [{ id: 'demo', ok: true, message: text('已恢复终端配置', 'Terminal configuration restored') }]
+      const failure = results.find((item) => !item.ok)
+      if (failure) {
+        setToast(failure.message)
+        return false
+      }
+      setTerminalUndoAvailable(false)
+      await scanNow()
+      setToast(text('已撤销上次终端优化', 'The last terminal optimization was undone'))
+      return true
+    } catch (reason) {
+      setToast(reason instanceof Error ? reason.message : text('无法撤销终端优化', 'Terminal optimization could not be undone'))
+      return false
+    }
+  }
+
+  const confirmTerminalFixes = async (ids: string[]): Promise<void> => {
+    setTerminalFixBusy(true)
+    try {
+      await runTerminalFixes(ids)
+      setTerminalFixReviewOpen(false)
+    } finally {
+      setTerminalFixBusy(false)
+    }
+  }
+
+  const triggerTerminalUndo = async (): Promise<void> => {
+    setTerminalFixBusy(true)
+    try {
+      await undoTerminalFixes()
+    } finally {
+      setTerminalFixBusy(false)
     }
   }
 
@@ -604,7 +690,14 @@ function AppContent({
                 selected={selected}
               />
             ) : view === 'terminal' ? (
-              <TerminalView result={result} onOpenSettings={() => setView('ai-settings')} />
+              <TerminalView
+                result={result}
+                canUndo={terminalUndoAvailable}
+                busy={terminalFixBusy}
+                onReviewFixes={() => setTerminalFixReviewOpen(true)}
+                onUndo={() => void triggerTerminalUndo()}
+                onOpenSettings={() => setView('ai-settings')}
+              />
             ) : (
               <CandidateView
                 key={view}
@@ -666,6 +759,15 @@ function AppContent({
         />
       )}
 
+      {terminalFixReviewOpen && result && (
+        <TerminalFixDialog
+          findings={result.terminal.findings.filter((finding) => finding.fix)}
+          busy={terminalFixBusy}
+          onClose={() => setTerminalFixReviewOpen(false)}
+          onConfirm={(ids) => void confirmTerminalFixes(ids)}
+        />
+      )}
+
       {toast && (
         <div className="toast" role="status">
           <CheckCircle2 size={17} />
@@ -724,7 +826,7 @@ function Sidebar({
       </nav>
       <div className="sidebar-foot">
         <ShieldAlert size={16} />
-        <p>{text('不会直接永久删除文件。高风险数据仅提供分析。', 'Files are never deleted permanently. High-risk data is analysis only.')}</p>
+        <p>{text('所有操作都先确认。缓存永久清理，其他文件优先移到废纸篓。', 'Every action is confirmed first. Caches are deleted permanently; other files prefer the Trash.')}</p>
       </div>
     </aside>
   )
@@ -1297,13 +1399,22 @@ function CandidateRow({
 
 function TerminalView({
   result,
+  canUndo,
+  busy,
+  onReviewFixes,
+  onUndo,
   onOpenSettings
 }: {
   result: ScanResult
+  canUndo: boolean
+  busy: boolean
+  onReviewFixes: () => void
+  onUndo: () => void
   onOpenSettings: () => void
 }): React.JSX.Element {
   const { language, text } = useI18n()
   const { terminal } = result
+  const fixableFindings = terminal.findings.filter((finding) => finding.fix)
   const title = viewTitle('terminal', language)
   const configCost =
     terminal.startupMs !== null && terminal.baselineMs !== null
@@ -1362,9 +1473,26 @@ function TerminalView({
         <div className="section-heading-row">
           <div>
             <h2>{text('诊断结果', 'Diagnostic findings')}</h2>
-            <p>{text('只报告配置特征与位置，不读取或显示其中的密钥内容。', 'Only configuration patterns and locations are reported. Secret values are never read or shown.')}</p>
+            <p>
+              {fixableFindings.length
+                ? text(`${fixableFindings.length} 项可自动优化，配置文件会先备份。`, `${fixableFindings.length} items can be optimized automatically. Configuration files are backed up first.`)
+                : text('没有可自动优化的配置项。', 'No configuration items can be optimized automatically.')}
+            </p>
           </div>
-          <span>{text(`${terminal.findings.length} 条`, `${terminal.findings.length} findings`)}</span>
+          <div className="terminal-actions">
+            {canUndo && (
+              <button type="button" className="secondary-button" onClick={onUndo} disabled={busy}>
+                <RotateCcw size={15} />
+                {text('撤销上次优化', 'Undo last optimization')}
+              </button>
+            )}
+            {fixableFindings.length > 0 && (
+              <button type="button" className="primary-button" onClick={onReviewFixes} disabled={busy}>
+                <WandSparkles size={15} />
+                {text(`一键优化 ${fixableFindings.length} 项`, `Optimize ${fixableFindings.length} items`)}
+              </button>
+            )}
+          </div>
         </div>
         <div className="finding-list">
           {terminal.findings.map((finding) => (
@@ -1377,6 +1505,7 @@ function TerminalView({
 }
 
 function TerminalFindingRow({ finding }: { finding: TerminalFinding }): React.JSX.Element {
+  const { text } = useI18n()
   return (
     <div className="finding-row">
       <div className={`finding-status severity-${finding.severity}`} aria-hidden="true">
@@ -1391,6 +1520,12 @@ function TerminalFindingRow({ finding }: { finding: TerminalFinding }): React.JS
       <div className="finding-copy">
         <div>
           <strong>{finding.title}</strong>
+          {finding.fix && (
+            <span className="finding-fix-badge">
+              <WandSparkles size={11} />
+              {text('可自动优化', 'Auto fix')}
+            </span>
+          )}
           {finding.source && <code>{finding.source}</code>}
         </div>
         <p>{finding.detail}</p>
@@ -1515,6 +1650,8 @@ function ConfirmDialog({
 }): React.JSX.Element {
   const { language, text } = useI18n()
   const irreversible = items.some((item) => !item.action.reversible)
+  const includesPermanentStorage = items.some((item) => item.action.kind === 'delete-storage')
+  const onlyPermanentStorage = items.every((item) => item.action.kind === 'delete-storage')
   const includesSoftwareCleanup = items.some(
     (item) =>
       item.action.kind === 'trash-service-software' ||
@@ -1527,6 +1664,12 @@ function ConfirmDialog({
   const onlyStops = items.every((item) => item.action.kind.includes('stop'))
   const onlyStartupItems = items.every(
     (item) => item.action.kind === 'trash-launch-agent-config'
+  )
+  const permanentStorageBytes = items.reduce(
+    (total, item) => item.action.kind === 'delete-storage'
+      ? total + (item.action.estimatedBytes ?? item.candidate.sizeBytes ?? 0)
+      : total,
+    0
   )
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={() => !busy && onClose()}>
@@ -1561,8 +1704,12 @@ function ConfirmDialog({
                 <p>{item.action.consequence}</p>
               </div>
               <span>
-                {item.action.estimatedBytes || item.candidate.sizeBytes
-                  ? formatBytes(item.action.estimatedBytes ?? item.candidate.sizeBytes)
+                {item.action.kind === 'delete-storage'
+                  ? item.action.estimatedBytes || item.candidate.sizeBytes
+                    ? text(`${formatBytes(item.action.estimatedBytes ?? item.candidate.sizeBytes)} · 永久删除`, `${formatBytes(item.action.estimatedBytes ?? item.candidate.sizeBytes)} · Permanent`)
+                    : text('永久删除', 'Permanent')
+                  : item.action.estimatedBytes || item.candidate.sizeBytes
+                    ? formatBytes(item.action.estimatedBytes ?? item.candidate.sizeBytes)
                   : item.action.kind.includes('stop')
                     ? text('停止', 'Stop')
                     : text('废纸篓', 'Trash')}
@@ -1573,8 +1720,13 @@ function ConfirmDialog({
         <div className={`dialog-notice ${irreversible || includesDirectoryCleanup ? 'is-warning' : ''}`}>
           {irreversible || includesDirectoryCleanup ? <ShieldAlert size={17} /> : <CheckCircle2 size={17} />}
           <span>
-            {irreversible
-              ? text('部分 Homebrew 清理操作不能通过废纸篓撤销。', 'Some Homebrew cleanup actions cannot be restored from the Trash.')
+            {includesPermanentStorage
+              ? text(
+                  `${onlyPermanentStorage ? '这些缓存' : '其中的缓存'}会绕过废纸篓永久删除${permanentStorageBytes > 0 ? `，预计立即释放 ${formatBytes(permanentStorageBytes)}` : ''}。删除后无法撤销。`,
+                  `${onlyPermanentStorage ? 'These caches' : 'The included caches'} will bypass the Trash and be deleted permanently${permanentStorageBytes > 0 ? `, releasing about ${formatBytes(permanentStorageBytes)} immediately` : ''}. This cannot be undone.`
+                )
+              : irreversible
+                ? text('部分 Homebrew 清理操作不能通过废纸篓撤销。', 'Some Homebrew cleanup actions cannot be restored from the Trash.')
               : includesDirectoryCleanup
                 ? text('将删除整个关联目录，包括其中的源码、虚拟环境和数据。请先确认目录内容不再需要；项目会移到废纸篓。', 'The entire related directory, including source code, virtual environments, and data, will be removed. Confirm its contents are no longer needed; the directory will move to the Trash.')
               : onlyStartupItems
@@ -1596,7 +1748,81 @@ function ConfirmDialog({
           </button>
           <button type="button" className="danger-button" onClick={onConfirm} disabled={busy}>
             {busy ? <LoaderCircle className="spinning" size={16} /> : <Check size={16} />}
-            {busy ? text('正在处理', 'Processing') : text('确认执行', 'Confirm')}
+            {busy
+              ? text('正在处理', 'Processing')
+              : onlyPermanentStorage
+                ? text('永久删除并释放空间', 'Delete permanently')
+                : text('确认执行', 'Confirm')}
+          </button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function TerminalFixDialog({
+  findings,
+  busy,
+  onClose,
+  onConfirm
+}: {
+  findings: TerminalFinding[]
+  busy: boolean
+  onClose: () => void
+  onConfirm: (ids: string[]) => void
+}): React.JSX.Element {
+  const { text } = useI18n()
+  const fixIds = findings.flatMap((finding) => finding.fix ? [finding.fix.id] : [])
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={() => !busy && onClose()}>
+      <section
+        className="confirm-dialog terminal-fix-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="terminal-fix-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="dialog-head">
+          <div>
+            <span>{text('自动优化终端', 'Automatic terminal optimization')}</span>
+            <h2 id="terminal-fix-title">{text(`将优化 ${findings.length} 个配置项`, `${findings.length} configuration items will be optimized`)}</h2>
+          </div>
+          <button type="button" className="icon-button" onClick={onClose} disabled={busy} title={text('关闭', 'Close')}>
+            <X size={18} />
+          </button>
+        </div>
+        <div className="dialog-items">
+          {findings.map((finding) => (
+            <div key={finding.id}>
+              <span className="dialog-item-icon icon-terminal">
+                <WandSparkles size={16} />
+              </span>
+              <div>
+                <strong>{finding.fix?.label ?? finding.title}</strong>
+                <p>{finding.fix?.consequence}</p>
+              </div>
+              <span>{finding.source ?? text('终端配置', 'Shell config')}</span>
+            </div>
+          ))}
+        </div>
+        <div className="dialog-notice">
+          <ShieldCheck size={17} />
+          <span>{text('只执行 Memento 内置的本地优化规则，不运行 AI 生成的命令。每个配置文件会先在原目录备份，完成后可撤销。', 'Only Memento\'s built-in local optimization rules run. AI-generated commands are never executed. Each configuration file is backed up in place and can be restored afterward.')}</span>
+        </div>
+        <div className="dialog-actions">
+          <button type="button" className="secondary-button" onClick={onClose} disabled={busy}>
+            {text('取消', 'Cancel')}
+          </button>
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => onConfirm(fixIds)}
+            disabled={busy || fixIds.length === 0}
+            autoFocus
+          >
+            {busy ? <LoaderCircle className="spinning" size={16} /> : <WandSparkles size={16} />}
+            {busy ? text('正在优化', 'Optimizing') : text('确认并自动优化', 'Confirm and optimize')}
           </button>
         </div>
       </section>
