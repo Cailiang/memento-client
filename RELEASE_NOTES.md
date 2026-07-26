@@ -1,21 +1,20 @@
-# Memento 0.6.17
+# Memento 0.6.18
 
 ## English
 
-This release turns App cleanup into a complete installed-application manager.
+This release redesigns App cleanup as a visual application grid with real macOS app icons.
 
 ### Highlights
 
-- Lists apps installed in shared, user, and macOS system application directories.
-- Shows every app's version, size, Finder location, and exact Spotlight last-used date.
-- Provides search, practical filters, and sorting by last use, size, or name.
-- Supports individual and batch uninstall confirmation for removable apps by moving their bundles to the Trash.
-- Keeps system apps and the running Memento app visible but protected from uninstall.
-- Treats missing Spotlight usage metadata as unknown, never as evidence that an app is unused.
+- Responsive four-column desktop and two-column narrow-window application grids.
+- Real app icons are read securely by the Electron main process and lazy-loaded as cards approach the viewport.
+- Cards keep version, exact last-used date, relative age, size, application scope, and Finder location visible.
+- Search, unused/shared/user filters, sorting, individual uninstall, and batch selection remain available.
+- Protected macOS system apps and the running Memento app are excluded instead of appearing as non-actionable cards.
 
 ### Uninstall scope
 
-App cleanup moves only the selected `.app` bundle to the Trash. Documents, preferences, caches, and other application data are kept.
+Uninstall still requires confirmation and moves only the selected `.app` bundle to the Trash. Documents, preferences, caches, and other application data are kept.
 
 ### Platform note
 
@@ -23,20 +22,19 @@ Full maintenance scanning and cleanup currently support macOS. This local Intel 
 
 ## 简体中文
 
-这个版本将“应用清理”升级为完整的已安装应用管理器。
+这个版本将“应用清理”重做为带真实 macOS 应用图标的可视化网格。
 
 ### 主要变化
 
-- 罗列共享目录、用户目录和 macOS 系统目录中的已安装 APP。
-- 展示每个应用的版本、大小、Finder 位置和 Spotlight 最后使用日期。
-- 支持搜索，以及按类型筛选和按最后使用时间、大小或名称排序。
-- 可单项或批量选择可卸载应用，确认后将应用本体移到废纸篓。
-- 系统应用和当前运行的 Memento 会正常展示，但禁止卸载。
-- Spotlight 没有使用记录时显示为未知，不会据此误判应用长期未使用。
+- 桌面窗口采用四列网格，窄窗口采用两列网格。
+- 真实 APP 图标由 Electron 主进程安全读取，并在卡片接近可视区域时懒加载。
+- 卡片保留版本、最后使用日期、相对天数、大小、应用范围和 Finder 位置。
+- 继续支持搜索、闲置/共享/个人应用筛选、排序、单项卸载和批量选择。
+- macOS 系统受保护应用和当前运行的 Memento 会直接排除，不再显示不可操作卡片。
 
 ### 卸载范围
 
-应用清理只会把所选 `.app` 应用本体移到废纸篓，文稿、偏好设置、缓存和其他应用数据都会保留。
+卸载仍需二次确认，并且只会把所选 `.app` 应用本体移到废纸篓；文稿、偏好设置、缓存和其他应用数据都会保留。
 
 ### 平台说明
 

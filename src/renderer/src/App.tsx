@@ -16,7 +16,6 @@ import {
   Info,
   LayoutDashboard,
   LoaderCircle,
-  LockKeyhole,
   Power,
   RadioTower,
   RefreshCw,
@@ -170,7 +169,7 @@ function sectionCount(result: ScanResult | null, section: ScanSection): number {
   if (section === 'terminal') {
     return result.terminal.findings.filter((item) => item.severity !== 'good').length
   }
-  if (section === 'applications') return result.applications.length
+  if (section === 'applications') return result.applications.filter(isManageableApplication).length
   return result.candidates.filter((item) => item.section === section).length
 }
 
@@ -838,20 +837,29 @@ function AppContent({
   )
 }
 
-type ApplicationFilter = 'all' | 'removable' | 'unused' | 'system'
+type ManageableApplication = InstalledApplication & {
+  action: NonNullable<InstalledApplication['action']>
+}
+type ApplicationFilter = 'all' | 'unused' | 'user' | 'shared'
 type ApplicationSort = 'last-used-oldest' | 'last-used-newest' | 'size' | 'name'
+
+function isManageableApplication(
+  application: InstalledApplication
+): application is ManageableApplication {
+  return application.scope !== 'system' && !application.protectedReason && Boolean(application.action)
+}
 
 export function filterAndSortApplications(
   applications: InstalledApplication[],
   query: string,
   filter: ApplicationFilter,
   sort: ApplicationSort
-): InstalledApplication[] {
+): ManageableApplication[] {
   const normalizedQuery = query.trim().toLocaleLowerCase()
-  const filtered = applications.filter((application) => {
-    if (filter === 'removable' && !application.action) return false
+  const filtered = applications.filter(isManageableApplication).filter((application) => {
     if (filter === 'unused' && !application.unused) return false
-    if (filter === 'system' && application.scope !== 'system') return false
+    if (filter === 'user' && application.scope !== 'user') return false
+    if (filter === 'shared' && application.scope !== 'shared') return false
     if (!normalizedQuery) return true
     return [application.name, application.version, application.bundleId ?? '', application.location]
       .some((value) => value.toLocaleLowerCase().includes(normalizedQuery))
@@ -867,6 +875,50 @@ export function filterAndSortApplications(
     if (bTime === null) return -1
     return sort === 'last-used-newest' ? bTime - aTime : aTime - bTime
   })
+}
+
+const applicationIconCache = new Map<string, string | null>()
+
+function ApplicationIcon({ application }: { application: InstalledApplication }): React.JSX.Element {
+  const containerRef = useRef<HTMLSpanElement>(null)
+  const cached = applicationIconCache.get(application.id)
+  const [iconUrl, setIconUrl] = useState<string | null | undefined>(cached)
+
+  useEffect(() => {
+    if (iconUrl !== undefined || !window.memento) return
+    let active = true
+    let observer: IntersectionObserver | null = null
+    const loadIcon = (): void => {
+      void window.memento?.getApplicationIcon(application.id).then((value) => {
+        applicationIconCache.set(application.id, value)
+        if (active) setIconUrl(value)
+      })
+    }
+
+    if ('IntersectionObserver' in window && containerRef.current) {
+      observer = new IntersectionObserver((entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return
+        observer?.disconnect()
+        loadIcon()
+      }, { rootMargin: '160px' })
+      observer.observe(containerRef.current)
+    } else {
+      loadIcon()
+    }
+
+    return () => {
+      active = false
+      observer?.disconnect()
+    }
+  }, [application.id, iconUrl])
+
+  return (
+    <span ref={containerRef} className={`application-logo ${iconUrl ? 'has-icon' : ''}`} aria-hidden="true">
+      {iconUrl
+        ? <img src={iconUrl} alt="" loading="lazy" />
+        : <AppWindow size={29} strokeWidth={1.45} />}
+    </span>
+  )
 }
 
 function formatApplicationLastUsed(value: string | null, language: AppLanguage): {
@@ -911,15 +963,19 @@ function ApplicationCleanupView({
   const deferredQuery = useDeferredValue(query)
   const [filter, setFilter] = useState<ApplicationFilter>('all')
   const [sort, setSort] = useState<ApplicationSort>('last-used-oldest')
+  const availableApplications = useMemo(
+    () => result.applications.filter(isManageableApplication),
+    [result.applications]
+  )
   const applications = useMemo(
-    () => filterAndSortApplications(result.applications, deferredQuery, filter, sort),
-    [deferredQuery, filter, result.applications, sort]
+    () => filterAndSortApplications(availableApplications, deferredQuery, filter, sort),
+    [availableApplications, deferredQuery, filter, sort]
   )
   const visibleActions = applications
     .map((application) => application.action?.id)
     .filter((id): id is string => Boolean(id))
   const allVisibleSelected = visibleActions.length > 0 && visibleActions.every((id) => selected.has(id))
-  const totalBytes = result.applications.reduce((sum, application) => sum + application.sizeBytes, 0)
+  const totalBytes = availableApplications.reduce((sum, application) => sum + application.sizeBytes, 0)
 
   const toggleVisible = (): void => {
     for (const id of visibleActions) {
@@ -933,12 +989,12 @@ function ApplicationCleanupView({
         <div>
           <h1>{text('应用清理', 'App cleanup')}</h1>
           <p>{text(
-            `共 ${result.applications.length} 个应用，占用 ${formatBytes(totalBytes)}`,
-            `${result.applications.length} apps using ${formatBytes(totalBytes)}`
+            `共 ${availableApplications.length} 个应用，占用 ${formatBytes(totalBytes)}`,
+            `${availableApplications.length} apps using ${formatBytes(totalBytes)}`
           )}</p>
         </div>
         <div className="module-stat">
-          <strong>{result.applications.filter((application) => application.unused).length}</strong>
+          <strong>{availableApplications.filter((application) => application.unused).length}</strong>
           <span>{text('近 3 个月未使用', 'unused for 3+ months')}</span>
         </div>
       </header>
@@ -963,9 +1019,9 @@ function ApplicationCleanupView({
           <span>{text('筛选', 'Filter')}</span>
           <select value={filter} onChange={(event) => setFilter(event.target.value as ApplicationFilter)}>
             <option value="all">{text('全部应用', 'All apps')}</option>
-            <option value="removable">{text('可卸载', 'Removable')}</option>
             <option value="unused">{text('3 个月未使用', 'Unused for 3+ months')}</option>
-            <option value="system">{text('系统应用', 'System apps')}</option>
+            <option value="shared">{text('共享应用', 'Shared apps')}</option>
+            <option value="user">{text('个人应用', 'User apps')}</option>
           </select>
         </label>
         <label className="application-select-control">
@@ -980,80 +1036,75 @@ function ApplicationCleanupView({
       </div>
 
       {applications.length ? (
-        <div className="application-table">
-          <div className="application-table-head">
-            <label className="row-checkbox" title={text('选择当前列表中的可卸载应用', 'Select removable apps in this list')}>
-              <input type="checkbox" checked={allVisibleSelected} onChange={toggleVisible} />
-              <span>{allVisibleSelected && <Check size={13} strokeWidth={2.5} />}</span>
-              <span className="sr-only">{text('选择当前列表中的可卸载应用', 'Select removable apps in this list')}</span>
+        <>
+          <div className="application-grid-toolbar">
+            <label className="application-batch-select" title={text('选择当前列表中的可卸载应用', 'Select removable apps in this list')}>
+              <span className="row-checkbox">
+                <input type="checkbox" checked={allVisibleSelected} onChange={toggleVisible} />
+                <span>{allVisibleSelected && <Check size={13} strokeWidth={2.5} />}</span>
+              </span>
+              <span>{text('选择当前结果', 'Select current results')}</span>
             </label>
-            <span>{text('应用', 'Application')}</span>
-            <span>{text('最后使用', 'Last used')}</span>
-            <span>{text('大小', 'Size')}</span>
-            <span>{text('操作', 'Action')}</span>
+            <span>{text(`显示 ${applications.length} 个应用`, `${applications.length} apps shown`)}</span>
           </div>
-          {applications.map((application) => {
-            const lastUsed = formatApplicationLastUsed(application.lastUsedAt, language)
-            const selectedApplication = application.action ? selected.has(application.action.id) : false
-            return (
-              <div className="application-row" key={application.id}>
-                {application.action ? (
+          <div className="application-grid">
+            {applications.map((application) => {
+              const lastUsed = formatApplicationLastUsed(application.lastUsedAt, language)
+              const selectedApplication = application.action ? selected.has(application.action.id) : false
+              return (
+                <article className={`application-card ${selectedApplication ? 'is-selected' : ''}`} key={application.id}>
                   <label className="row-checkbox" title={text('选择此应用', 'Select this app')}>
                     <input
                       type="checkbox"
                       checked={selectedApplication}
-                      onChange={() => onToggle(application.action!.id)}
+                      onChange={() => onToggle(application.action.id)}
                     />
                     <span>{selectedApplication && <Check size={13} strokeWidth={2.5} />}</span>
                   </label>
-                ) : (
-                  <span className="application-protected-check" title={application.protectedReason}>
-                    <LockKeyhole size={13} />
-                  </span>
-                )}
-                <div className="application-identity">
-                  <span className="candidate-icon icon-applications" aria-hidden="true"><AppWindow size={17} /></span>
-                  <div>
-                    <div className="application-name-line">
-                      <strong>{application.name}</strong>
-                      {application.unused && <span>{text('3 个月未使用', 'Unused 3+ months')}</span>}
-                      {application.scope === 'system' && <span className="is-system">{text('系统', 'System')}</span>}
-                    </div>
-                    <p>{text('版本', 'Version')} {application.version}</p>
-                    <button
-                      type="button"
-                      onClick={() => onRevealLocation(application.id)}
-                      title={text('在 Finder 中显示', 'Show in Finder')}
-                    >
-                      <FolderOpen size={12} />
-                      <span>{application.location}</span>
-                    </button>
+                  {application.unused && (
+                    <span className="application-unused-badge">{text('3 个月未使用', 'Unused 3+ months')}</span>
+                  )}
+                  <ApplicationIcon application={application} />
+                  <div className="application-card-title">
+                    <strong title={application.name}>{application.name}</strong>
+                    <span>{text('版本', 'Version')} {application.version}</span>
                   </div>
-                </div>
-                <div className={`application-last-used ${application.lastUsedAt ? '' : 'is-unknown'}`}>
-                  <strong>{lastUsed.date}</strong>
-                  <span>{lastUsed.relative}</span>
-                </div>
-                <strong className="application-size">{formatBytes(application.sizeBytes)}</strong>
-                <div className="application-row-action">
-                  {application.action ? (
+                  <div className="application-card-meta">
+                    <div className={application.lastUsedAt ? '' : 'is-unknown'}>
+                      <span>{text('最后使用', 'Last used')}</span>
+                      <strong>{lastUsed.date}</strong>
+                      <small>{lastUsed.relative}</small>
+                    </div>
+                    <div>
+                      <span>{text('大小', 'Size')}</span>
+                      <strong>{formatBytes(application.sizeBytes)}</strong>
+                      <small>{application.scope === 'user' ? text('个人应用', 'User app') : text('共享应用', 'Shared app')}</small>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="application-location"
+                    onClick={() => onRevealLocation(application.id)}
+                    title={text('在 Finder 中显示', 'Show in Finder')}
+                  >
+                    <FolderOpen size={12} />
+                    <span>{application.location}</span>
+                  </button>
+                  <div className="application-card-action">
                     <button
                       type="button"
-                      className="candidate-direct-action is-destructive"
-                      onClick={() => onReviewAction(application.action!.id)}
+                      onClick={() => onReviewAction(application.action.id)}
                       title={application.action.consequence}
                     >
                       <Trash2 size={14} />
                       {text('卸载', 'Uninstall')}
                     </button>
-                  ) : (
-                    <span title={application.protectedReason}><LockKeyhole size={13} />{text('受保护', 'Protected')}</span>
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+        </>
       ) : (
         <div className="inline-empty">
           <Search size={23} />

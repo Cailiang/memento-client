@@ -152,6 +152,7 @@ export interface TerminalFixRunResult {
 export interface MementoApi extends MementoAiApi, MementoSettingsApi {
   getVersion: () => Promise<string>
   scan: (language?: import('./app-settings').AppLanguage) => Promise<ScanResult>
+  getApplicationIcon: (id: string) => Promise<string | null>
   runActions: (ids: string[]) => Promise<ActionResult[]>
   runTerminalFixes: (ids: string[]) => Promise<TerminalFixRunResult>
   undoTerminalFixes: () => Promise<ActionResult[]>

@@ -4,6 +4,24 @@ All notable changes to Memento Client are documented here in English and Simplif
 
 Memento Client 的重要变更会在这里使用英文和简体中文同步记录。
 
+## 0.6.18 - 2026-07-26
+
+### English
+
+- Replaced the App cleanup table with a responsive application grid that keeps app identity and cleanup controls easy to scan.
+- Added real macOS application icons loaded on demand through a path-validated main-process API; offscreen icons are deferred and unavailable icons use a consistent fallback.
+- Each application card now shows the app icon, name, version, last-used date, relative age, size, install scope, Finder location, selection control, and confirmed uninstall action.
+- Removed protected macOS system applications and the currently running Memento app from the inventory, counts, and filters.
+- Replaced the redundant removable filter with useful shared-app and user-app filters while preserving search, unused-app filtering, sorting, and batch selection.
+
+### 简体中文
+
+- 将应用清理表格改为响应式应用网格，让应用识别信息和清理操作更便于浏览。
+- 新增真实 macOS 应用图标，通过主进程校验路径后按需加载；屏幕外图标延迟读取，无法获取图标时使用统一占位图标。
+- 每张应用卡现在会展示图标、名称、版本、最后使用日期、相对天数、大小、安装范围、Finder 位置、选择框和需确认的卸载操作。
+- macOS 系统受保护应用和当前运行的 Memento 不再进入应用清单、数量统计和筛选结果。
+- 使用共享应用与个人应用筛选替代重复的“可卸载”筛选，同时保留搜索、闲置筛选、排序和批量选择。
+
 ## 0.6.17 - 2026-07-26
 
 ### English

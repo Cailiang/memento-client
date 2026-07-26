@@ -1338,104 +1338,187 @@ button:active:not(:disabled) {
   font-size: 10.5px;
 }
 
-.application-table {
+.application-grid-toolbar {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   border-top: 1px solid var(--border-strong);
-}
-
-.application-table-head,
-.application-row {
-  display: grid;
-  grid-template-columns: 24px minmax(250px, 1fr) minmax(120px, 150px) 78px 92px;
-  align-items: center;
-  gap: 12px;
-}
-
-.application-table-head {
-  min-height: 34px;
-  padding: 0 8px;
-  border-bottom: 1px solid var(--border);
   color: var(--text-tertiary);
-  font-size: 9px;
-  font-weight: 620;
+  font-size: 9.5px;
 }
 
-.application-row {
-  min-height: 72px;
-  padding: 9px 8px;
-  border-bottom: 1px solid var(--border);
-  transition: background-color 160ms var(--motion);
-}
-
-.application-row:hover {
-  background: color-mix(in srgb, var(--surface-raised) 72%, transparent);
-}
-
-.application-protected-check {
-  display: inline-grid;
-  width: 17px;
-  height: 17px;
-  place-items: center;
-  color: var(--text-tertiary);
-}
-
-.application-identity {
-  display: grid;
-  min-width: 0;
-  grid-template-columns: 34px minmax(0, 1fr);
+.application-batch-select {
+  display: flex;
   align-items: center;
+  gap: 7px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.application-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(205px, 1fr));
   gap: 10px;
 }
 
-.application-identity > div {
-  min-width: 0;
-}
-
-.application-name-line {
+.application-card {
+  position: relative;
   display: flex;
   min-width: 0;
+  min-height: 276px;
+  flex-direction: column;
   align-items: center;
-  gap: 7px;
+  padding: 17px 14px 13px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-raised);
+  transition: border-color 180ms var(--motion), background-color 180ms var(--motion), box-shadow 180ms var(--motion);
 }
 
-.application-name-line strong {
-  min-width: 0;
+.application-card:hover {
+  border-color: var(--border-strong);
+  background: color-mix(in srgb, var(--surface-raised) 88%, var(--surface-muted));
+  box-shadow: 0 5px 18px color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+.application-card.is-selected {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+.application-card > .row-checkbox {
+  position: absolute;
+  top: 10px;
+  left: 9px;
+}
+
+.application-unused-badge {
+  position: absolute;
+  top: 12px;
+  right: 10px;
+  max-width: calc(100% - 48px);
   overflow: hidden;
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 650;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.application-name-line > span {
-  flex: 0 0 auto;
-  padding: 2px 5px;
+  padding: 3px 6px;
   border-radius: 3px;
   color: var(--notice);
   background: var(--notice-soft);
   font-size: 8px;
   font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.application-name-line > span.is-system {
-  color: var(--text-secondary);
-  background: var(--surface-muted);
+.application-logo {
+  display: grid;
+  width: 72px;
+  height: 72px;
+  flex: 0 0 72px;
+  place-items: center;
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--application-color);
+  background: color-mix(in srgb, var(--application-color) 10%, var(--surface-muted));
+  overflow: hidden;
 }
 
-.application-identity p {
-  margin: 3px 0 0;
+.application-logo.has-icon {
+  border-color: transparent;
+  background: transparent;
+}
+
+.application-logo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.application-card-title {
+  width: 100%;
+  min-width: 0;
+  margin-top: 10px;
+  text-align: center;
+}
+
+.application-card-title strong {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 670;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.application-card-title span {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.application-card-meta {
+  display: grid;
+  width: 100%;
+  grid-template-columns: minmax(0, 1.25fr) minmax(64px, 0.75fr);
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.application-card-meta > div {
+  display: flex;
+  min-width: 0;
+  min-height: 59px;
+  flex-direction: column;
+  justify-content: center;
+  padding: 7px 8px;
+}
+
+.application-card-meta > div + div {
+  border-left: 1px solid var(--border);
+}
+
+.application-card-meta span,
+.application-card-meta small {
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-size: 8px;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.application-card-meta strong {
+  margin: 3px 0 2px;
+  overflow: hidden;
   color: var(--text-secondary);
+  font-family: "SF Mono", ui-monospace, monospace;
   font-size: 9.5px;
+  font-weight: 620;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.application-identity button {
+.application-card-meta .is-unknown strong {
+  font-family: inherit;
+}
+
+.application-location {
   display: flex;
   width: 100%;
   min-width: 0;
+  min-height: 28px;
   align-items: center;
   gap: 5px;
-  margin-top: 3px;
-  padding: 0;
+  padding: 0 2px;
   border: 0;
   color: var(--text-tertiary);
   background: transparent;
@@ -1443,85 +1526,47 @@ button:active:not(:disabled) {
   text-align: left;
 }
 
-.application-identity button:hover {
+.application-location:hover {
   color: var(--accent);
 }
 
-.application-identity button svg {
+.application-location svg {
   flex: 0 0 auto;
 }
 
-.application-identity button span {
+.application-location span {
   min-width: 0;
   overflow: hidden;
   font-family: "SF Mono", ui-monospace, monospace;
-  font-size: 8.5px;
+  font-size: 8px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.application-last-used {
+.application-card-action {
+  width: 100%;
+  margin-top: auto;
+}
+
+.application-card-action button {
   display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.application-last-used strong,
-.application-size {
-  color: var(--text-secondary);
-  font-family: "SF Mono", ui-monospace, monospace;
-  font-size: 9.5px;
-  font-weight: 600;
-}
-
-.application-last-used span {
-  color: var(--text-tertiary);
-  font-size: 9px;
-}
-
-.application-last-used.is-unknown strong {
-  color: var(--text-tertiary);
-  font-family: inherit;
-}
-
-.application-size {
-  text-align: right;
-  white-space: nowrap;
-}
-
-.application-row-action {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.application-row-action button {
-  display: inline-flex;
-  min-height: 29px;
+  width: 100%;
+  min-height: 30px;
   align-items: center;
+  justify-content: center;
   gap: 5px;
-  padding: 0 8px;
   border: 1px solid color-mix(in srgb, var(--danger) 24%, var(--border));
   border-radius: 5px;
   color: var(--danger);
   background: transparent;
   cursor: pointer;
   font-size: 9.5px;
-  font-weight: 620;
+  font-weight: 650;
 }
 
-.application-row-action button:hover {
+.application-card-action button:hover {
   border-color: color-mix(in srgb, var(--danger) 46%, var(--border));
   background: var(--danger-soft);
-}
-
-.application-row-action > span {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--text-tertiary);
-  font-size: 9px;
-  white-space: nowrap;
 }
 
 .candidate-entry.has-ai > .candidate-row {
@@ -3895,10 +3940,8 @@ button:active:not(:disabled) {
     display: none;
   }
 
-  .application-table-head,
-  .application-row {
-    grid-template-columns: 24px minmax(210px, 1fr) minmax(105px, 125px) 66px 82px;
-    gap: 9px;
+  .application-grid {
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
   }
 }
 
@@ -4034,45 +4077,25 @@ button:active:not(:disabled) {
     grid-column: 1 / -1;
   }
 
-  .application-table-head {
-    display: none;
+  .application-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
   }
 
-  .application-row {
-    grid-template-columns: 24px minmax(0, 1fr) auto;
-    gap: 8px 10px;
-    min-height: 0;
-    padding: 12px 4px;
+  .application-card {
+    min-height: 266px;
+    padding: 14px 10px 10px;
   }
 
-  .application-row > .row-checkbox,
-  .application-protected-check {
-    grid-column: 1;
-    grid-row: 1;
-    align-self: start;
-    margin-top: 9px;
+  .application-logo {
+    width: 62px;
+    height: 62px;
+    flex-basis: 62px;
   }
 
-  .application-identity {
-    grid-column: 2 / -1;
-    grid-row: 1;
-  }
-
-  .application-last-used {
-    grid-column: 2;
-    grid-row: 2;
-  }
-
-  .application-size {
-    grid-column: 3;
-    grid-row: 2;
-    align-self: start;
-  }
-
-  .application-row-action {
-    grid-column: 2 / -1;
-    grid-row: 3;
-    justify-content: flex-start;
+  .application-card-meta > div {
+    padding-right: 5px;
+    padding-left: 5px;
   }
 
   .candidate-ai-inline {

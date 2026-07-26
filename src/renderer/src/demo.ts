@@ -285,30 +285,6 @@ export const demoResult: ScanResult = {
         consequence: '应用本体会移到废纸篓，其文稿、数据和偏好设置会保留。',
         reversible: true
       }
-    },
-    {
-      id: 'demo-inventory-safari',
-      name: 'Safari',
-      version: '18.5',
-      bundleId: 'com.apple.Safari',
-      location: '/System/Applications/Safari.app',
-      sizeBytes: 37 * MB,
-      lastUsedAt: '2026-07-24T06:32:00.000Z',
-      scope: 'system',
-      unused: false,
-      protectedReason: 'macOS 系统应用'
-    },
-    {
-      id: 'demo-inventory-settings',
-      name: 'System Settings',
-      version: '15.5',
-      bundleId: 'com.apple.systempreferences',
-      location: '/System/Applications/System Settings.app',
-      sizeBytes: 29 * MB,
-      lastUsedAt: '2026-07-19T10:18:00.000Z',
-      scope: 'system',
-      unused: false,
-      protectedReason: 'macOS 系统应用'
     }
   ],
   terminal: {

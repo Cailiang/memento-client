@@ -1067,9 +1067,7 @@ interface ApplicationScan {
 
 const APPLICATION_ROOTS = [
   '/Applications',
-  path.join(HOME, 'Applications'),
-  '/System/Applications',
-  '/System/Library/CoreServices/Applications'
+  path.join(HOME, 'Applications')
 ]
 
 export function applicationScope(target: string): ApplicationScope {
@@ -1169,29 +1167,25 @@ async function scanApplications(
   const appPaths = discovered.flat()
   const inspected = await mapLimit([...new Set(appPaths)], 8, (target) => inspectApplication(target, language))
   const applications = inspected.filter((item): item is ApplicationMetadata => item !== null)
+  const manageableApplications = applications.filter(
+    (application) =>
+      applicationScope(application.target) !== 'system' &&
+      application.bundleId !== 'com.fcl.memento'
+  )
   const candidatePaths = new Set<string>()
   const candidates: ScanCandidate[] = []
 
-  const inventory = applications.map((application): InstalledApplication => {
+  const inventory = manageableApplications.map((application): InstalledApplication => {
     const id = randomUUID()
     const scope = applicationScope(application.target)
-    const isMemento = application.bundleId === 'com.fcl.memento'
-    const protectedReason = scope === 'system'
-      ? t(language, 'macOS 系统应用', 'macOS system application')
-      : isMemento
-        ? t(language, '当前正在运行的 Memento', 'The currently running Memento app')
-        : undefined
-    const actionId = protectedReason ? null : randomUUID()
-    const action: CandidateOperation | undefined = actionId
-      ? {
-          id: actionId,
-          kind: 'trash',
-          label: t(language, '卸载', 'Uninstall'),
-          consequence: t(language, '应用本体会移到废纸篓，其文稿、数据和偏好设置会保留。', 'The app bundle will move to the Trash. Its documents, data, and preferences remain.'),
-          reversible: true
-        }
-      : undefined
-    if (action) actions.set(action.id, { kind: 'trash', target: application.target })
+    const action: CandidateOperation = {
+      id: randomUUID(),
+      kind: 'trash',
+      label: t(language, '卸载', 'Uninstall'),
+      consequence: t(language, '应用本体会移到废纸篓，其文稿、数据和偏好设置会保留。', 'The app bundle will move to the Trash. Its documents, data, and preferences remain.'),
+      reversible: true
+    }
+    actions.set(action.id, { kind: 'trash', target: application.target })
     revealTargets.set(id, application.target)
     return {
       id,
@@ -1205,7 +1199,6 @@ async function scanApplications(
         : null,
       scope,
       unused: isApplicationUnused(application.lastUsedAt),
-      protectedReason,
       action
     }
   })
@@ -1214,7 +1207,7 @@ async function scanApplications(
   )
 
   const byBundle = new Map<string, ApplicationMetadata[]>()
-  for (const application of applications) {
+  for (const application of manageableApplications) {
     if (!application.bundleId) continue
     const group = byBundle.get(application.bundleId) ?? []
     group.push(application)
@@ -1261,7 +1254,7 @@ async function scanApplications(
     }
   }
 
-  for (const application of applications) {
+  for (const application of manageableApplications) {
     if (
       candidatePaths.has(application.target) ||
       !application.lastUsedAt ||
