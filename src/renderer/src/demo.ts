@@ -175,11 +175,11 @@ export const demoResult: ScanResult = {
       section: 'applications',
       name: 'Postman',
       subtitle: '版本 10.21.4',
-      description: 'Spotlight 记录显示该应用已超过半年没有使用。',
+      description: 'Spotlight 记录显示该应用已超过 3 个月没有使用。',
       sizeBytes: 713 * MB,
       ageDays: 286,
       risk: 'review',
-      status: '长期未使用',
+      status: '3 个月未使用',
       evidence: ['286 天未使用', '位置：/Applications/Postman.app'],
       action: {
         kind: 'trash',
@@ -271,7 +271,7 @@ export async function runDemoScan(
         { section: 'system', progress: 8, message: '读取系统状态' },
         { section: 'services', progress: 24, message: '检查后台服务与登录启动项' },
         { section: 'storage', progress: 48, message: '统计开发工具与应用缓存' },
-        { section: 'applications', progress: 68, message: '核对应用版本与最后使用时间' },
+        { section: 'applications', progress: 68, message: '检查应用副本与最近使用时间' },
         { section: 'terminal', progress: 86, message: '测量终端启动并分析 shell 配置' },
         { section: 'system', progress: 100, message: '扫描完成' }
       ]
@@ -340,8 +340,8 @@ function localizedDemoResult(language: AppLanguage): ScanResult {
     'demo-app-postman': {
       name: 'Postman',
       subtitle: 'Version 10.21.4',
-      description: 'Spotlight records show that this application has not been used for more than six months.',
-      status: 'Not used recently',
+      description: 'Spotlight records show that this application has not been used for more than three months.',
+      status: 'Not used for 3+ months',
       evidence: ['Not used for 286 days', 'Location: /Applications/Postman.app']
     }
   }

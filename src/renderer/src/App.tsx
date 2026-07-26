@@ -95,7 +95,7 @@ function navLabel(key: ViewKey, language: AppLanguage): string {
     overview: ['概览', 'Overview'],
     services: ['后台服务', 'Services'],
     storage: ['存储空间', 'Storage'],
-    applications: ['应用版本', 'Applications'],
+    applications: ['应用清理', 'App cleanup'],
     terminal: ['终端诊断', 'Terminal'],
     'ai-settings': ['AI 设置', 'AI settings'],
     settings: ['设置', 'Settings']
@@ -107,7 +107,7 @@ function viewTitle(section: ScanSection, language: AppLanguage): string {
   const titles: Record<ScanSection, [string, string]> = {
     services: ['后台服务', 'Services'],
     storage: ['存储空间', 'Storage'],
-    applications: ['应用版本', 'Applications'],
+    applications: ['应用清理', 'App cleanup'],
     terminal: ['终端诊断', 'Terminal diagnostics']
   }
   return titles[section][language === 'en-US' ? 1 : 0]
@@ -990,9 +990,9 @@ function Overview({
         </button>
         <button type="button" onClick={() => onNavigate('applications')}>
           <AppWindow size={18} />
-          <span>{text('应用建议', 'Application findings')}</span>
+          <span>{text('应用清理', 'App cleanup')}</span>
           <strong>{sectionCount(result, 'applications')}</strong>
-          <small>{text('重复或长期未用', 'Duplicate or unused')}</small>
+          <small>{text('重复或 3 个月未用', 'Duplicate or unused 3+ months')}</small>
         </button>
         <button type="button" onClick={() => onNavigate('terminal')}>
           <SquareTerminal size={18} />
@@ -1214,7 +1214,7 @@ function CandidateView({
               ))}
             </div>
           ) : (
-            <InlineEmpty />
+            <InlineEmpty section={section} />
           )}
         </>
       )}
@@ -1538,13 +1538,22 @@ function TerminalFindingRow({ finding }: { finding: TerminalFinding }): React.JS
   )
 }
 
-function InlineEmpty(): React.JSX.Element {
+function InlineEmpty({ section }: { section?: ScanSection }): React.JSX.Element {
   const { text } = useI18n()
+  const isApplicationCleanup = section === 'applications'
   return (
     <div className="inline-empty">
       <CheckCircle2 size={23} />
-      <strong>{text('这里已经很干净', 'Nothing to clean up here')}</strong>
-      <span>{text('本次扫描没有发现需要处理的项目。', 'This scan found no items that need attention.')}</span>
+      <strong>
+        {isApplicationCleanup
+          ? text('没有需要清理的应用', 'No apps need cleanup')
+          : text('这里已经很干净', 'Nothing to clean up here')}
+      </strong>
+      <span>
+        {isApplicationCleanup
+          ? text('未发现可确认的重复安装或超过 3 个月未使用的应用。', 'No confirmed duplicate apps or apps unused for more than 3 months were found.')
+          : text('本次扫描没有发现需要处理的项目。', 'This scan found no items that need attention.')}
+      </span>
     </div>
   )
 }

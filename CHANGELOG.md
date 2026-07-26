@@ -4,6 +4,24 @@ All notable changes to Memento Client are documented here in English and Simplif
 
 Memento Client 的重要变更会在这里使用英文和简体中文同步记录。
 
+## 0.6.14 - 2026-07-26
+
+### English
+
+- Renamed the Applications module to **App cleanup** so it is clear that the page shows actionable findings rather than every installed application.
+- Reduced the unused-application threshold from 180 days to 90 days while continuing to exclude applications with unknown Spotlight usage metadata.
+- Added a specific empty state explaining that no confirmed duplicate apps or apps unused for more than three months were found.
+- Corrected application size reporting by using Spotlight logical bundle size instead of the directory entry size.
+- Kept duplicate detection for matching Bundle IDs across `/Applications` and `~/Applications`.
+
+### 简体中文
+
+- 将“应用版本”更名为“应用清理”，明确该页面展示的是可处理建议，而不是全部已安装应用。
+- 应用未使用阈值从 180 天缩短为 90 天；Spotlight 使用时间未知的应用仍不会被误判为清理候选。
+- 新增专用空状态，明确说明没有发现可确认的重复应用或超过 3 个月未使用的应用。
+- 改用 Spotlight 的应用包逻辑大小，修复 `.app` 大小可能错误显示为 `1 B` 的问题。
+- 保留 `/Applications` 与 `~/Applications` 中相同 Bundle ID 的重复副本检测。
+
 ## 0.6.13 - 2026-07-26
 
 ### English

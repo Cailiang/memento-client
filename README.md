@@ -36,7 +36,7 @@ macOS builds may not yet be notarized. If macOS blocks the first launch, right-c
 
 - **Background services:** running and stopped LaunchAgents plus running Homebrew services, with separate choices to stop a service, remove only its startup item, or move an explicitly identified related directory to Trash.
 - **Storage:** large temporary files created by Xcode, Homebrew, npm, pnpm, Yarn, Gradle, CocoaPods, and applications, with permanent cleanup for strictly allowlisted rebuildable data.
-- **Applications:** old Homebrew versions, duplicate application copies, and applications that have not been used recently.
+- **App cleanup:** duplicate application copies and applications that have not been used for more than three months.
 - **Terminal startup:** clean-shell baseline, interactive startup time, synchronous initialization, and PATH problems, with confirmed automatic fixes, backups, and one-step undo for deterministic findings.
 - **Optional AI analysis:** a short, plain-language explanation of the software's actual purpose and whether stopping, removing its startup item, deleting it, or cleaning its data will cause problems. Analysis continues in the background while other items are reviewed.
 

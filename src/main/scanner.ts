@@ -38,6 +38,7 @@ import {
 const execFileAsync = promisify(execFile)
 const HOME = os.homedir()
 const DAY_MS = 86_400_000
+export const APPLICATION_UNUSED_DAYS = 90
 
 function t(language: AppLanguage, chinese: string, english: string): string {
   return language === 'en-US' ? english : chinese
@@ -122,6 +123,11 @@ async function pathIsRealDirectory(target: string): Promise<boolean> {
 
 function ageInDays(date: Date): number {
   return Math.max(0, Math.floor((Date.now() - date.getTime()) / DAY_MS))
+}
+
+export function isApplicationUnused(lastUsedAt: Date | null, now = Date.now()): boolean {
+  if (!lastUsedAt) return false
+  return Math.max(0, Math.floor((now - lastUsedAt.getTime()) / DAY_MS)) >= APPLICATION_UNUSED_DAYS
 }
 
 function displayPath(target: string): string {
@@ -1048,9 +1054,12 @@ async function inspectApplication(target: string, language: AppLanguage): Promis
       'kMDItemLastUsedDate',
       '-name',
       'kMDItemFSSize',
+      '-name',
+      'kMDItemLogicalSize',
       target
     ])
-    const sizeValue = parseMetadataValue(stdout, 'kMDItemFSSize')
+    const sizeValue = parseMetadataValue(stdout, 'kMDItemLogicalSize') ??
+      parseMetadataValue(stdout, 'kMDItemFSSize')
     const dateValue = parseMetadataValue(stdout, 'kMDItemLastUsedDate')
     return {
       target,
@@ -1127,7 +1136,7 @@ async function scanApplications(
     if (
       candidatePaths.has(application.target) ||
       !application.lastUsedAt ||
-      ageInDays(application.lastUsedAt) < 180
+      !isApplicationUnused(application.lastUsedAt)
     ) {
       continue
     }
@@ -1139,11 +1148,11 @@ async function scanApplications(
           section: 'applications',
           name: application.name,
           subtitle: t(language, `版本 ${application.version}`, `Version ${application.version}`),
-          description: t(language, 'Spotlight 记录显示该应用已超过半年没有使用。应用数据不会随应用本体一起删除。', 'Spotlight indicates that this application has not been used for more than six months. Its data is not removed with the application bundle.'),
+          description: t(language, 'Spotlight 记录显示该应用已超过 3 个月没有使用。应用数据不会随应用本体一起删除。', 'Spotlight indicates that this application has not been used for more than three months. Its data is not removed with the application bundle.'),
           sizeBytes: application.sizeBytes,
           ageDays,
           risk: 'review',
-          status: t(language, '长期未使用', 'Not used recently'),
+          status: t(language, '3 个月未使用', 'Not used for 3+ months'),
           evidence: [
             t(language, `${ageDays} 天未使用`, `Not used for ${ageDays} days`),
             t(language, `位置：${displayPath(application.target)}`, `Location: ${displayPath(application.target)}`)
@@ -1578,7 +1587,7 @@ export async function runFullScan(
     return []
   })
 
-  onProgress({ section: 'applications', progress: 44, message: t(language, '核对应用版本与最后使用时间', 'Checking application versions and last-used dates') })
+  onProgress({ section: 'applications', progress: 44, message: t(language, '检查应用副本与最近使用时间', 'Checking application copies and recent usage') })
   const applicationsPromise = scanApplications(actions, language).catch((error: Error) => {
     warnings.push(t(language, `应用扫描未完成：${error.message}`, `Application scan did not complete: ${error.message}`))
     return []
