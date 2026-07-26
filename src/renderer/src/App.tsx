@@ -10,6 +10,7 @@ import {
   ChevronRight,
   CircleGauge,
   Clock3,
+  ExternalLink,
   FolderX,
   FolderOpen,
   HardDrive,
@@ -282,6 +283,7 @@ function AppContent({
   const [terminalUndoAvailable, setTerminalUndoAvailable] = useState(false)
   const [terminalFixReviewOpen, setTerminalFixReviewOpen] = useState(false)
   const [terminalFixBusy, setTerminalFixBusy] = useState(false)
+  const [openingApplicationId, setOpeningApplicationId] = useState<string | null>(null)
   const aiTasks = useAiAnalysisTasks()
   const previousAiTaskStatuses = useRef<Map<string, string>>(new Map())
   const startedRef = useRef(false)
@@ -512,6 +514,24 @@ function AppContent({
     void window.memento.revealCandidateLocation(id).catch((reason) => {
       setToast(reason instanceof Error ? reason.message : text('无法打开服务目录', 'Could not open the service location'))
     })
+  }
+
+  const openApplication = async (id: string): Promise<void> => {
+    const application = result?.applications.find((item) => item.id === id)
+    if (!application) return
+    if (!window.memento) {
+      setToast(text(`桌面应用中可打开 ${application.name}`, `Open ${application.name} from the desktop app`))
+      return
+    }
+    setOpeningApplicationId(id)
+    try {
+      await window.memento.openApplication(id)
+      setToast(text(`已打开 ${application.name}`, `Opened ${application.name}`))
+    } catch (reason) {
+      setToast(reason instanceof Error ? reason.message : text('无法打开应用', 'Could not open the application'))
+    } finally {
+      setOpeningApplicationId(null)
+    }
   }
 
   const whitelistCandidate = async (id: string): Promise<void> => {
@@ -756,6 +776,8 @@ function AppContent({
                 onToggle={toggleSelected}
                 onReviewAction={reviewDirectAction}
                 onRevealLocation={revealLocation}
+                onOpenApplication={(id) => void openApplication(id)}
+                openingApplicationId={openingApplicationId}
               />
             ) : (
               <CandidateView
@@ -950,13 +972,17 @@ function ApplicationCleanupView({
   selected,
   onToggle,
   onReviewAction,
-  onRevealLocation
+  onRevealLocation,
+  onOpenApplication,
+  openingApplicationId
 }: {
   result: ScanResult
   selected: Set<string>
   onToggle: (id: string) => void
   onReviewAction: (id: string) => void
   onRevealLocation: (id: string) => void
+  onOpenApplication: (id: string) => void
+  openingApplicationId: string | null
 }): React.JSX.Element {
   const { language, text } = useI18n()
   const [query, setQuery] = useState('')
@@ -1093,6 +1119,18 @@ function ApplicationCleanupView({
                   <div className="application-card-action">
                     <button
                       type="button"
+                      onClick={() => onOpenApplication(application.id)}
+                      disabled={openingApplicationId === application.id}
+                      title={text(`打开 ${application.name}`, `Open ${application.name}`)}
+                    >
+                      {openingApplicationId === application.id
+                        ? <LoaderCircle className="spin" size={14} />
+                        : <ExternalLink size={14} />}
+                      {text('打开', 'Open')}
+                    </button>
+                    <button
+                      type="button"
+                      className="application-uninstall-button"
                       onClick={() => onReviewAction(application.action.id)}
                       title={application.action.consequence}
                     >

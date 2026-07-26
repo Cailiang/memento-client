@@ -649,6 +649,28 @@ app.whenReady().then(async () => {
     if (!application || !target || !existsSync(target)) return null
     return readApplicationIcon(target)
   })
+  ipcMain.handle('memento:open-application', async (_event, id: string) => {
+    if (typeof id !== 'string' || id.length > 100) {
+      throw new Error(mainText('应用入口无效，请重新扫描', 'The application is invalid. Scan again.'))
+    }
+    const application = currentScanResult?.applications.find(
+      (item) => item.id === id && item.scope !== 'system' && !item.protectedReason && item.action
+    )
+    const target = application ? registeredRevealTargets.get(id) : null
+    if (
+      !application ||
+      !target ||
+      path.extname(target).toLowerCase() !== '.app' ||
+      !existsSync(target) ||
+      !lstatSync(target).isDirectory()
+    ) {
+      throw new Error(mainText('应用已经不存在，请重新扫描', 'The application no longer exists. Scan again.'))
+    }
+    const error = await shell.openPath(target)
+    if (error) {
+      throw new Error(mainText(`无法打开应用：${error}`, `Could not open the application: ${error}`))
+    }
+  })
   ipcMain.handle('memento:settings:get', () => appSettings)
   ipcMain.handle('memento:settings:update', async (_event, input: UpdateAppSettingsInput) => {
     appSettings = await appSettingsStore!.update(input)

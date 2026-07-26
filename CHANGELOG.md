@@ -4,6 +4,20 @@ All notable changes to Memento Client are documented here in English and Simplif
 
 Memento Client 的重要变更会在这里使用英文和简体中文同步记录。
 
+## 0.6.19 - 2026-07-26
+
+### English
+
+- App cleanup now uses each application bundle's official Simplified Chinese display name when available, while retaining the official bundle or file name when no localization exists.
+- Added an Open action to every application card, with progress and result feedback and main-process validation against the current scanned application allowlist.
+- Kept Open visually secondary and Uninstall destructive, with a stable two-column action layout and the existing uninstall confirmation.
+
+### 简体中文
+
+- 应用清理现在会优先显示 APP 安装包自带的官方简体中文名称；没有中文本地化资源时保留官方 Bundle 名称或文件名。
+- 每张应用卡新增“打开”操作，提供执行中和结果反馈，并由主进程根据当前扫描清单校验可启动路径。
+- “打开”保持中性次操作，“卸载”继续使用危险操作样式和二次确认，双按钮布局保持稳定。
+
 ## 0.6.18 - 2026-07-26
 
 ### English

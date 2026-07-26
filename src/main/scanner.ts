@@ -1070,6 +1070,51 @@ const APPLICATION_ROOTS = [
   path.join(HOME, 'Applications')
 ]
 
+export function plistApplicationName(info: Record<string, unknown>): string | null {
+  for (const key of ['CFBundleDisplayName', 'CFBundleName']) {
+    const value = info[key]
+    if (typeof value !== 'string') continue
+    const name = value.trim()
+    if (name && !name.includes('$(')) return name
+  }
+  return null
+}
+
+export function applicationNamePlistPaths(target: string, language: AppLanguage): string[] {
+  const resources = path.join(target, 'Contents', 'Resources')
+  const localized = language === 'zh-CN'
+    ? ['zh-Hans.lproj', 'zh_CN.lproj', 'zh.lproj'].map((directory) =>
+        path.join(resources, directory, 'InfoPlist.strings')
+      )
+    : []
+  return [...localized, path.join(target, 'Contents', 'Info.plist')]
+}
+
+async function readPlist(target: string): Promise<Record<string, unknown> | null> {
+  if (!(await pathExists(target))) return null
+  try {
+    const { stdout } = await run('/usr/bin/plutil', ['-convert', 'json', '-o', '-', target])
+    const value = JSON.parse(stdout) as unknown
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? value as Record<string, unknown>
+      : null
+  } catch {
+    return null
+  }
+}
+
+export async function resolveApplicationName(
+  target: string,
+  language: AppLanguage
+): Promise<string> {
+  for (const plistPath of applicationNamePlistPaths(target, language)) {
+    const info = await readPlist(plistPath)
+    const name = info ? plistApplicationName(info) : null
+    if (name) return name
+  }
+  return path.basename(target, '.app')
+}
+
 export function applicationScope(target: string): ApplicationScope {
   if (target === path.join(HOME, 'Applications') || target.startsWith(`${path.join(HOME, 'Applications')}${path.sep}`)) {
     return 'user'
@@ -1101,6 +1146,7 @@ async function findApplications(root: string, depth = 2): Promise<string[]> {
 }
 
 async function inspectApplication(target: string, language: AppLanguage): Promise<ApplicationMetadata | null> {
+  const namePromise = resolveApplicationName(target, language)
   try {
     const { stdout } = await run('/usr/bin/mdls', [
       '-name',
@@ -1120,7 +1166,7 @@ async function inspectApplication(target: string, language: AppLanguage): Promis
     const dateValue = parseMetadataValue(stdout, 'kMDItemLastUsedDate')
     return {
       target,
-      name: path.basename(target, '.app'),
+      name: await namePromise,
       bundleId: parseMetadataValue(stdout, 'kMDItemCFBundleIdentifier'),
       version: parseMetadataValue(stdout, 'kMDItemVersion') ?? t(language, '未知版本', 'Unknown version'),
       sizeBytes: Number.parseInt(sizeValue ?? '0', 10) || 0,
@@ -1133,11 +1179,7 @@ async function inspectApplication(target: string, language: AppLanguage): Promis
       const info = JSON.parse(stdout) as Record<string, unknown>
       return {
         target,
-        name: typeof info.CFBundleDisplayName === 'string'
-          ? info.CFBundleDisplayName
-          : typeof info.CFBundleName === 'string'
-            ? info.CFBundleName
-            : path.basename(target, '.app'),
+        name: await namePromise,
         bundleId: typeof info.CFBundleIdentifier === 'string' ? info.CFBundleIdentifier : null,
         version: typeof info.CFBundleShortVersionString === 'string'
           ? info.CFBundleShortVersionString
@@ -1148,7 +1190,7 @@ async function inspectApplication(target: string, language: AppLanguage): Promis
     } catch {
       return {
         target,
-        name: path.basename(target, '.app'),
+        name: await namePromise,
         bundleId: null,
         version: t(language, '未知版本', 'Unknown version'),
         sizeBytes: 0,

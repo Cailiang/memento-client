@@ -1544,7 +1544,10 @@ button:active:not(:disabled) {
 }
 
 .application-card-action {
+  display: grid;
   width: 100%;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
   margin-top: auto;
 }
 
@@ -1555,9 +1558,10 @@ button:active:not(:disabled) {
   align-items: center;
   justify-content: center;
   gap: 5px;
-  border: 1px solid color-mix(in srgb, var(--danger) 24%, var(--border));
+  min-width: 0;
+  border: 1px solid var(--border-strong);
   border-radius: 5px;
-  color: var(--danger);
+  color: var(--text-secondary);
   background: transparent;
   cursor: pointer;
   font-size: 9.5px;
@@ -1565,7 +1569,24 @@ button:active:not(:disabled) {
 }
 
 .application-card-action button:hover {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.application-card-action button:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+.application-card-action .application-uninstall-button {
+  border-color: color-mix(in srgb, var(--danger) 24%, var(--border));
+  color: var(--danger);
+}
+
+.application-card-action .application-uninstall-button:hover {
   border-color: color-mix(in srgb, var(--danger) 46%, var(--border));
+  color: var(--danger);
   background: var(--danger-soft);
 }
 

@@ -7,6 +7,7 @@ const api: MementoApi = {
   updateAppSettings: (input) => ipcRenderer.invoke('memento:settings:update', input),
   scan: (language) => ipcRenderer.invoke('memento:scan', language),
   getApplicationIcon: (id) => ipcRenderer.invoke('memento:get-application-icon', id),
+  openApplication: (id) => ipcRenderer.invoke('memento:open-application', id),
   runActions: (ids) => ipcRenderer.invoke('memento:run-actions', ids),
   runTerminalFixes: (ids) => ipcRenderer.invoke('memento:run-terminal-fixes', ids),
   undoTerminalFixes: () => ipcRenderer.invoke('memento:undo-terminal-fixes'),

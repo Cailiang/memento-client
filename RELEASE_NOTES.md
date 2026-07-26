@@ -1,16 +1,15 @@
-# Memento 0.6.18
+# Memento 0.6.19
 
 ## English
 
-This release redesigns App cleanup as a visual application grid with real macOS app icons.
+This release makes the application grid easier to identify and use with official localized names and direct launching.
 
 ### Highlights
 
-- Responsive four-column desktop and two-column narrow-window application grids.
-- Real app icons are read securely by the Electron main process and lazy-loaded as cards approach the viewport.
-- Cards keep version, exact last-used date, relative age, size, application scope, and Finder location visible.
-- Search, unused/shared/user filters, sorting, individual uninstall, and batch selection remain available.
-- Protected macOS system apps and the running Memento app are excluded instead of appearing as non-actionable cards.
+- Official Simplified Chinese application names are read from each app bundle when available; apps without an official localization keep their existing name.
+- Every application card now has a direct Open action with visible progress and result feedback.
+- Application launching is restricted to manageable apps in the current scan and validated again in the Electron main process.
+- Open and Uninstall use a compact two-button layout; uninstall remains destructive and requires confirmation.
 
 ### Uninstall scope
 
@@ -22,15 +21,14 @@ Full maintenance scanning and cleanup currently support macOS. This local Intel 
 
 ## 简体中文
 
-这个版本将“应用清理”重做为带真实 macOS 应用图标的可视化网格。
+这个版本让应用网格更容易识别和操作，新增官方中文名称与直接启动功能。
 
 ### 主要变化
 
-- 桌面窗口采用四列网格，窄窗口采用两列网格。
-- 真实 APP 图标由 Electron 主进程安全读取，并在卡片接近可视区域时懒加载。
-- 卡片保留版本、最后使用日期、相对天数、大小、应用范围和 Finder 位置。
-- 继续支持搜索、闲置/共享/个人应用筛选、排序、单项卸载和批量选择。
-- macOS 系统受保护应用和当前运行的 Memento 会直接排除，不再显示不可操作卡片。
+- APP 自带简体中文名称时优先显示官方中文名；没有官方中文本地化时保留原名称。
+- 每张应用卡新增“打开”操作，并显示执行中状态和结果反馈。
+- 仅允许启动当前扫描结果中的可管理应用，Electron 主进程会再次校验路径。
+- “打开”和“卸载”采用紧凑双按钮布局；卸载仍为危险操作并需要二次确认。
 
 ### 卸载范围
 

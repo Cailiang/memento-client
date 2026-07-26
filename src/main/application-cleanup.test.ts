@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import os from 'node:os'
 import path from 'node:path'
-import { APPLICATION_UNUSED_DAYS, applicationScope, isApplicationUnused } from './scanner'
+import {
+  APPLICATION_UNUSED_DAYS,
+  applicationNamePlistPaths,
+  applicationScope,
+  isApplicationUnused,
+  plistApplicationName
+} from './scanner'
 
 describe('application cleanup threshold', () => {
   const now = new Date('2026-07-26T00:00:00Z').getTime()
@@ -20,5 +26,22 @@ describe('application cleanup threshold', () => {
     expect(applicationScope(path.join(os.homedir(), 'Applications', 'Example.app'))).toBe('user')
     expect(applicationScope('/Applications/Example.app')).toBe('shared')
     expect(applicationScope('/System/Applications/Safari.app')).toBe('system')
+  })
+
+  it('prefers official Simplified Chinese bundle-name resources', () => {
+    const target = '/Applications/Lark.app'
+    expect(applicationNamePlistPaths(target, 'zh-CN')).toEqual([
+      path.join(target, 'Contents', 'Resources', 'zh-Hans.lproj', 'InfoPlist.strings'),
+      path.join(target, 'Contents', 'Resources', 'zh_CN.lproj', 'InfoPlist.strings'),
+      path.join(target, 'Contents', 'Resources', 'zh.lproj', 'InfoPlist.strings'),
+      path.join(target, 'Contents', 'Info.plist')
+    ])
+    expect(plistApplicationName({ CFBundleDisplayName: '飞书', CFBundleName: 'Lark' })).toBe('飞书')
+  })
+
+  it('falls back from unresolved display names to the official bundle name', () => {
+    expect(plistApplicationName({ CFBundleDisplayName: '$(PRODUCT_NAME)', CFBundleName: 'Visual Studio Code' }))
+      .toBe('Visual Studio Code')
+    expect(plistApplicationName({ CFBundleName: '' })).toBeNull()
   })
 })
