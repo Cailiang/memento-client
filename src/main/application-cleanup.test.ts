@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { APPLICATION_UNUSED_DAYS, isApplicationUnused } from './scanner'
+import os from 'node:os'
+import path from 'node:path'
+import { APPLICATION_UNUSED_DAYS, applicationScope, isApplicationUnused } from './scanner'
 
 describe('application cleanup threshold', () => {
   const now = new Date('2026-07-26T00:00:00Z').getTime()
@@ -12,5 +14,11 @@ describe('application cleanup threshold', () => {
   it('keeps recent applications and unknown usage out of cleanup suggestions', () => {
     expect(isApplicationUnused(new Date('2026-04-28T00:00:00Z'), now)).toBe(false)
     expect(isApplicationUnused(null, now)).toBe(false)
+  })
+
+  it('classifies user, shared, and protected system application roots', () => {
+    expect(applicationScope(path.join(os.homedir(), 'Applications', 'Example.app'))).toBe('user')
+    expect(applicationScope('/Applications/Example.app')).toBe('shared')
+    expect(applicationScope('/System/Applications/Safari.app')).toBe('system')
   })
 })

@@ -16,6 +16,7 @@ const baseResult: ScanResult = {
     uptimeSeconds: 1
   },
   candidates: [],
+  applications: [],
   terminal: {
     shell: '/bin/zsh',
     baselineMs: 10,

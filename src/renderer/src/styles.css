@@ -275,6 +275,17 @@
   box-sizing: border-box;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 html,
 body,
 #root {
@@ -1237,6 +1248,280 @@ button:active:not(:disabled) {
 
 .candidate-view .list-toolbar + .candidate-list {
   border-top-color: var(--border);
+}
+
+.application-header > div:first-child p {
+  margin: 5px 0 0;
+  color: var(--text-tertiary);
+  font-size: 10.5px;
+}
+
+.application-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto auto;
+  gap: 8px;
+  margin: 16px 0 12px;
+}
+
+.application-search,
+.application-select-control {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-tertiary);
+  background: var(--surface-raised);
+}
+
+.application-search {
+  padding: 0 9px;
+}
+
+.application-search:focus-within,
+.application-select-control:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 13%, transparent);
+}
+
+.application-search input,
+.application-select-control select {
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: var(--text);
+  background: transparent;
+  font: inherit;
+  letter-spacing: 0;
+}
+
+.application-search input {
+  width: 100%;
+  font-size: 11px;
+}
+
+.application-search input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.application-search button {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  place-items: center;
+  border: 0;
+  border-radius: 4px;
+  color: var(--text-tertiary);
+  background: transparent;
+  cursor: pointer;
+}
+
+.application-search button:hover {
+  color: var(--text);
+  background: var(--surface-muted);
+}
+
+.application-select-control {
+  padding: 0 6px 0 9px;
+}
+
+.application-select-control > span {
+  color: var(--text-tertiary);
+  font-size: 9px;
+}
+
+.application-select-control select {
+  height: 32px;
+  cursor: pointer;
+  font-size: 10.5px;
+}
+
+.application-table {
+  border-top: 1px solid var(--border-strong);
+}
+
+.application-table-head,
+.application-row {
+  display: grid;
+  grid-template-columns: 24px minmax(250px, 1fr) minmax(120px, 150px) 78px 92px;
+  align-items: center;
+  gap: 12px;
+}
+
+.application-table-head {
+  min-height: 34px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-tertiary);
+  font-size: 9px;
+  font-weight: 620;
+}
+
+.application-row {
+  min-height: 72px;
+  padding: 9px 8px;
+  border-bottom: 1px solid var(--border);
+  transition: background-color 160ms var(--motion);
+}
+
+.application-row:hover {
+  background: color-mix(in srgb, var(--surface-raised) 72%, transparent);
+}
+
+.application-protected-check {
+  display: inline-grid;
+  width: 17px;
+  height: 17px;
+  place-items: center;
+  color: var(--text-tertiary);
+}
+
+.application-identity {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.application-identity > div {
+  min-width: 0;
+}
+
+.application-name-line {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+}
+
+.application-name-line strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.application-name-line > span {
+  flex: 0 0 auto;
+  padding: 2px 5px;
+  border-radius: 3px;
+  color: var(--notice);
+  background: var(--notice-soft);
+  font-size: 8px;
+  font-weight: 650;
+}
+
+.application-name-line > span.is-system {
+  color: var(--text-secondary);
+  background: var(--surface-muted);
+}
+
+.application-identity p {
+  margin: 3px 0 0;
+  color: var(--text-secondary);
+  font-size: 9.5px;
+}
+
+.application-identity button {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  margin-top: 3px;
+  padding: 0;
+  border: 0;
+  color: var(--text-tertiary);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.application-identity button:hover {
+  color: var(--accent);
+}
+
+.application-identity button svg {
+  flex: 0 0 auto;
+}
+
+.application-identity button span {
+  min-width: 0;
+  overflow: hidden;
+  font-family: "SF Mono", ui-monospace, monospace;
+  font-size: 8.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.application-last-used {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.application-last-used strong,
+.application-size {
+  color: var(--text-secondary);
+  font-family: "SF Mono", ui-monospace, monospace;
+  font-size: 9.5px;
+  font-weight: 600;
+}
+
+.application-last-used span {
+  color: var(--text-tertiary);
+  font-size: 9px;
+}
+
+.application-last-used.is-unknown strong {
+  color: var(--text-tertiary);
+  font-family: inherit;
+}
+
+.application-size {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.application-row-action {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.application-row-action button {
+  display: inline-flex;
+  min-height: 29px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--danger) 24%, var(--border));
+  border-radius: 5px;
+  color: var(--danger);
+  background: transparent;
+  cursor: pointer;
+  font-size: 9.5px;
+  font-weight: 620;
+}
+
+.application-row-action button:hover {
+  border-color: color-mix(in srgb, var(--danger) 46%, var(--border));
+  background: var(--danger-soft);
+}
+
+.application-row-action > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-tertiary);
+  font-size: 9px;
+  white-space: nowrap;
 }
 
 .candidate-entry.has-ai > .candidate-row {
@@ -3609,6 +3894,12 @@ button:active:not(:disabled) {
   .candidate-meta {
     display: none;
   }
+
+  .application-table-head,
+  .application-row {
+    grid-template-columns: 24px minmax(210px, 1fr) minmax(105px, 125px) 66px 82px;
+    gap: 9px;
+  }
 }
 
 @media (max-width: 780px) {
@@ -3733,6 +4024,55 @@ button:active:not(:disabled) {
   .module-tabs {
     min-height: 36px;
     align-self: stretch;
+  }
+
+  .application-toolbar {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .application-search {
+    grid-column: 1 / -1;
+  }
+
+  .application-table-head {
+    display: none;
+  }
+
+  .application-row {
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+    gap: 8px 10px;
+    min-height: 0;
+    padding: 12px 4px;
+  }
+
+  .application-row > .row-checkbox,
+  .application-protected-check {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: start;
+    margin-top: 9px;
+  }
+
+  .application-identity {
+    grid-column: 2 / -1;
+    grid-row: 1;
+  }
+
+  .application-last-used {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .application-size {
+    grid-column: 3;
+    grid-row: 2;
+    align-self: start;
+  }
+
+  .application-row-action {
+    grid-column: 2 / -1;
+    grid-row: 3;
+    justify-content: flex-start;
   }
 
   .candidate-ai-inline {

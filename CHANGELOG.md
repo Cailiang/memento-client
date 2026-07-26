@@ -4,6 +4,24 @@ All notable changes to Memento Client are documented here in English and Simplif
 
 Memento Client 的重要变更会在这里使用英文和简体中文同步记录。
 
+## 0.6.17 - 2026-07-26
+
+### English
+
+- App cleanup now inventories installed apps from shared, user, and macOS system application directories instead of showing only duplicate or long-unused findings.
+- Every app row shows its version, Finder location, bundle size, and exact Spotlight last-used date with a relative age; missing usage metadata is labeled as unknown and is never treated as unused.
+- Added app search, removable/unused/system filters, last-used/size/name sorting, per-app uninstall actions, and batch selection for removable apps.
+- macOS system apps and the running Memento app remain visible but protected from uninstall; other app bundles move to the Trash only after explicit confirmation, while documents and app data remain.
+- Preserved duplicate and 3-month-unused findings for overview health calculations while keeping the complete installed-app inventory separate.
+
+### 简体中文
+
+- 应用清理现在会罗列共享目录、用户目录和 macOS 系统目录中的已安装 APP，不再只显示重复安装或长期未使用的项目。
+- 每个应用都展示版本、Finder 位置、应用大小、Spotlight 最后使用日期和相对天数；缺少使用记录时明确标为未知，且不会误判为闲置应用。
+- 新增应用搜索、可卸载/闲置/系统筛选、按最后使用时间/大小/名称排序、单项卸载和可卸载应用批量选择。
+- macOS 系统应用和当前运行的 Memento 会显示但受保护；其他应用必须确认后才会移到废纸篓，文稿和应用数据仍会保留。
+- 重复应用与近 3 个月未使用的发现仍用于概览健康度计算，完整应用清单与问题建议保持独立。
+
 ## 0.6.16 - 2026-07-26
 
 ### English

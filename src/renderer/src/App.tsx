@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity,
   AppWindow,
   Archive,
+  ArrowUpDown,
   BrainCircuit,
   Check,
   CheckCircle2,
@@ -15,11 +16,13 @@ import {
   Info,
   LayoutDashboard,
   LoaderCircle,
+  LockKeyhole,
   Power,
   RadioTower,
   RefreshCw,
   RotateCcw,
   ScanSearch,
+  Search,
   Settings2,
   ShieldAlert,
   ShieldCheck,
@@ -39,6 +42,7 @@ import {
 import type {
   ActionResult,
   CandidateAction,
+  InstalledApplication,
   RiskLevel,
   ScanCandidate,
   ScanProgress,
@@ -166,7 +170,35 @@ function sectionCount(result: ScanResult | null, section: ScanSection): number {
   if (section === 'terminal') {
     return result.terminal.findings.filter((item) => item.severity !== 'good').length
   }
+  if (section === 'applications') return result.applications.length
   return result.candidates.filter((item) => item.section === section).length
+}
+
+function applicationCandidate(
+  application: InstalledApplication,
+  language: AppLanguage
+): ScanCandidate {
+  const english = language === 'en-US'
+  return {
+    id: application.id,
+    section: 'applications',
+    name: application.name,
+    subtitle: `${english ? 'Version' : '版本'} ${application.version}`,
+    description: english
+      ? 'The application bundle will move to the Trash. Documents, data, and preferences remain.'
+      : '应用本体会移到废纸篓，文稿、数据和偏好设置会保留。',
+    sizeBytes: application.sizeBytes,
+    ageDays: application.lastUsedAt
+      ? Math.max(0, Math.floor((Date.now() - new Date(application.lastUsedAt).getTime()) / 86_400_000))
+      : undefined,
+    risk: application.unused ? 'review' : 'safe',
+    status: application.unused
+      ? english ? 'Not used for 3+ months' : '3 个月未使用'
+      : english ? 'Installed' : '已安装',
+    location: application.location,
+    evidence: [application.location],
+    operations: application.action ? [application.action] : undefined
+  }
 }
 
 function computeHealth(result: ScanResult): number {
@@ -397,10 +429,21 @@ function AppContent({
     }
     return items
   }, [aiExpandedId, aiTasks, dismissedAiTaskKeys, result, text])
-  const selectedItems = useMemo<SelectedCandidateOperation[]>(
-    () => selectedCandidateOperations(result?.candidates ?? [], selected),
-    [result, selected]
-  )
+  const selectedItems = useMemo<SelectedCandidateOperation[]>(() => {
+    const candidateItems = selectedCandidateOperations(result?.candidates ?? [], selected)
+    const included = new Set(candidateItems.map((item) => item.id))
+    const applicationItems = (result?.applications ?? []).flatMap((application) => {
+      if (!application.action || !selected.has(application.action.id) || included.has(application.action.id)) {
+        return []
+      }
+      return [{
+        id: application.action.id,
+        candidate: applicationCandidate(application, language),
+        action: application.action
+      }]
+    })
+    return [...candidateItems, ...applicationItems]
+  }, [language, result, selected])
   const selectedBytes = selectedItems.reduce(
     (sum, item) => sum + (item.action.estimatedBytes ?? item.candidate.sizeBytes ?? 0),
     0
@@ -412,7 +455,13 @@ function AppContent({
       const candidate = result?.candidates.find((item) =>
         candidateOperations(item).some((operation) => operation.id === id)
       )
-      if (!candidate) return next
+      if (!candidate) {
+        const application = result?.applications.find((item) => item.action?.id === id)
+        if (!application?.action) return next
+        if (next.has(id)) next.delete(id)
+        else next.add(id)
+        return next
+      }
 
       const wasSelected = next.has(id)
       for (const operation of candidateOperations(candidate)) next.delete(operation.id)
@@ -536,7 +585,10 @@ function AppContent({
         current
           ? {
               ...current,
-              candidates: applyCompletedCandidateActions(current.candidates, successfulIds, language)
+              candidates: applyCompletedCandidateActions(current.candidates, successfulIds, language),
+              applications: current.applications.filter(
+                (application) => !application.action || !successfulIds.has(application.action.id)
+              )
             }
           : current
       )
@@ -698,6 +750,14 @@ function AppContent({
                 onUndo={() => void triggerTerminalUndo()}
                 onOpenSettings={() => setView('ai-settings')}
               />
+            ) : view === 'applications' ? (
+              <ApplicationCleanupView
+                result={result}
+                selected={selected}
+                onToggle={toggleSelected}
+                onReviewAction={reviewDirectAction}
+                onRevealLocation={revealLocation}
+              />
             ) : (
               <CandidateView
                 key={view}
@@ -772,6 +832,233 @@ function AppContent({
         <div className="toast" role="status">
           <CheckCircle2 size={17} />
           <span>{toast}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+type ApplicationFilter = 'all' | 'removable' | 'unused' | 'system'
+type ApplicationSort = 'last-used-oldest' | 'last-used-newest' | 'size' | 'name'
+
+export function filterAndSortApplications(
+  applications: InstalledApplication[],
+  query: string,
+  filter: ApplicationFilter,
+  sort: ApplicationSort
+): InstalledApplication[] {
+  const normalizedQuery = query.trim().toLocaleLowerCase()
+  const filtered = applications.filter((application) => {
+    if (filter === 'removable' && !application.action) return false
+    if (filter === 'unused' && !application.unused) return false
+    if (filter === 'system' && application.scope !== 'system') return false
+    if (!normalizedQuery) return true
+    return [application.name, application.version, application.bundleId ?? '', application.location]
+      .some((value) => value.toLocaleLowerCase().includes(normalizedQuery))
+  })
+
+  return [...filtered].sort((a, b) => {
+    if (sort === 'name') return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+    if (sort === 'size') return b.sizeBytes - a.sizeBytes
+    const aTime = a.lastUsedAt ? new Date(a.lastUsedAt).getTime() : null
+    const bTime = b.lastUsedAt ? new Date(b.lastUsedAt).getTime() : null
+    if (aTime === null && bTime === null) return a.name.localeCompare(b.name)
+    if (aTime === null) return 1
+    if (bTime === null) return -1
+    return sort === 'last-used-newest' ? bTime - aTime : aTime - bTime
+  })
+}
+
+function formatApplicationLastUsed(value: string | null, language: AppLanguage): {
+  date: string
+  relative: string
+} {
+  if (!value) {
+    return {
+      date: language === 'en-US' ? 'No usage record' : '无使用记录',
+      relative: language === 'en-US' ? 'Spotlight has no date' : 'Spotlight 暂无日期'
+    }
+  }
+  const date = new Date(value)
+  const days = Math.max(0, Math.floor((Date.now() - date.getTime()) / 86_400_000))
+  return {
+    date: new Intl.DateTimeFormat(language, {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(date),
+    relative: days === 0
+      ? language === 'en-US' ? 'Used today' : '今天使用'
+      : language === 'en-US' ? `${days} days ago` : `${days} 天前`
+  }
+}
+
+function ApplicationCleanupView({
+  result,
+  selected,
+  onToggle,
+  onReviewAction,
+  onRevealLocation
+}: {
+  result: ScanResult
+  selected: Set<string>
+  onToggle: (id: string) => void
+  onReviewAction: (id: string) => void
+  onRevealLocation: (id: string) => void
+}): React.JSX.Element {
+  const { language, text } = useI18n()
+  const [query, setQuery] = useState('')
+  const deferredQuery = useDeferredValue(query)
+  const [filter, setFilter] = useState<ApplicationFilter>('all')
+  const [sort, setSort] = useState<ApplicationSort>('last-used-oldest')
+  const applications = useMemo(
+    () => filterAndSortApplications(result.applications, deferredQuery, filter, sort),
+    [deferredQuery, filter, result.applications, sort]
+  )
+  const visibleActions = applications
+    .map((application) => application.action?.id)
+    .filter((id): id is string => Boolean(id))
+  const allVisibleSelected = visibleActions.length > 0 && visibleActions.every((id) => selected.has(id))
+  const totalBytes = result.applications.reduce((sum, application) => sum + application.sizeBytes, 0)
+
+  const toggleVisible = (): void => {
+    for (const id of visibleActions) {
+      if (allVisibleSelected === selected.has(id)) onToggle(id)
+    }
+  }
+
+  return (
+    <div className="view application-view">
+      <header className="module-header application-header">
+        <div>
+          <h1>{text('应用清理', 'App cleanup')}</h1>
+          <p>{text(
+            `共 ${result.applications.length} 个应用，占用 ${formatBytes(totalBytes)}`,
+            `${result.applications.length} apps using ${formatBytes(totalBytes)}`
+          )}</p>
+        </div>
+        <div className="module-stat">
+          <strong>{result.applications.filter((application) => application.unused).length}</strong>
+          <span>{text('近 3 个月未使用', 'unused for 3+ months')}</span>
+        </div>
+      </header>
+
+      <div className="application-toolbar">
+        <label className="application-search">
+          <Search size={15} />
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={text('搜索应用、版本或路径', 'Search apps, versions, or paths')}
+            aria-label={text('搜索应用', 'Search apps')}
+          />
+          {query && (
+            <button type="button" onClick={() => setQuery('')} title={text('清空搜索', 'Clear search')}>
+              <X size={14} />
+            </button>
+          )}
+        </label>
+        <label className="application-select-control">
+          <span>{text('筛选', 'Filter')}</span>
+          <select value={filter} onChange={(event) => setFilter(event.target.value as ApplicationFilter)}>
+            <option value="all">{text('全部应用', 'All apps')}</option>
+            <option value="removable">{text('可卸载', 'Removable')}</option>
+            <option value="unused">{text('3 个月未使用', 'Unused for 3+ months')}</option>
+            <option value="system">{text('系统应用', 'System apps')}</option>
+          </select>
+        </label>
+        <label className="application-select-control">
+          <ArrowUpDown size={14} />
+          <select value={sort} onChange={(event) => setSort(event.target.value as ApplicationSort)}>
+            <option value="last-used-oldest">{text('最久未用优先', 'Least recently used')}</option>
+            <option value="last-used-newest">{text('最近使用优先', 'Most recently used')}</option>
+            <option value="size">{text('体积从大到小', 'Largest first')}</option>
+            <option value="name">{text('名称排序', 'Name')}</option>
+          </select>
+        </label>
+      </div>
+
+      {applications.length ? (
+        <div className="application-table">
+          <div className="application-table-head">
+            <label className="row-checkbox" title={text('选择当前列表中的可卸载应用', 'Select removable apps in this list')}>
+              <input type="checkbox" checked={allVisibleSelected} onChange={toggleVisible} />
+              <span>{allVisibleSelected && <Check size={13} strokeWidth={2.5} />}</span>
+              <span className="sr-only">{text('选择当前列表中的可卸载应用', 'Select removable apps in this list')}</span>
+            </label>
+            <span>{text('应用', 'Application')}</span>
+            <span>{text('最后使用', 'Last used')}</span>
+            <span>{text('大小', 'Size')}</span>
+            <span>{text('操作', 'Action')}</span>
+          </div>
+          {applications.map((application) => {
+            const lastUsed = formatApplicationLastUsed(application.lastUsedAt, language)
+            const selectedApplication = application.action ? selected.has(application.action.id) : false
+            return (
+              <div className="application-row" key={application.id}>
+                {application.action ? (
+                  <label className="row-checkbox" title={text('选择此应用', 'Select this app')}>
+                    <input
+                      type="checkbox"
+                      checked={selectedApplication}
+                      onChange={() => onToggle(application.action!.id)}
+                    />
+                    <span>{selectedApplication && <Check size={13} strokeWidth={2.5} />}</span>
+                  </label>
+                ) : (
+                  <span className="application-protected-check" title={application.protectedReason}>
+                    <LockKeyhole size={13} />
+                  </span>
+                )}
+                <div className="application-identity">
+                  <span className="candidate-icon icon-applications" aria-hidden="true"><AppWindow size={17} /></span>
+                  <div>
+                    <div className="application-name-line">
+                      <strong>{application.name}</strong>
+                      {application.unused && <span>{text('3 个月未使用', 'Unused 3+ months')}</span>}
+                      {application.scope === 'system' && <span className="is-system">{text('系统', 'System')}</span>}
+                    </div>
+                    <p>{text('版本', 'Version')} {application.version}</p>
+                    <button
+                      type="button"
+                      onClick={() => onRevealLocation(application.id)}
+                      title={text('在 Finder 中显示', 'Show in Finder')}
+                    >
+                      <FolderOpen size={12} />
+                      <span>{application.location}</span>
+                    </button>
+                  </div>
+                </div>
+                <div className={`application-last-used ${application.lastUsedAt ? '' : 'is-unknown'}`}>
+                  <strong>{lastUsed.date}</strong>
+                  <span>{lastUsed.relative}</span>
+                </div>
+                <strong className="application-size">{formatBytes(application.sizeBytes)}</strong>
+                <div className="application-row-action">
+                  {application.action ? (
+                    <button
+                      type="button"
+                      className="candidate-direct-action is-destructive"
+                      onClick={() => onReviewAction(application.action!.id)}
+                      title={application.action.consequence}
+                    >
+                      <Trash2 size={14} />
+                      {text('卸载', 'Uninstall')}
+                    </button>
+                  ) : (
+                    <span title={application.protectedReason}><LockKeyhole size={13} />{text('受保护', 'Protected')}</span>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <div className="inline-empty">
+          <Search size={23} />
+          <strong>{text('没有匹配的应用', 'No matching apps')}</strong>
+          <span>{text('调整搜索内容或筛选条件后再试。', 'Try a different search or filter.')}</span>
         </div>
       )}
     </div>
@@ -1038,7 +1325,7 @@ function Overview({
           <AppWindow size={18} />
           <span>{text('应用清理', 'App cleanup')}</span>
           <strong>{sectionCount(result, 'applications')}</strong>
-          <small>{text('重复或 3 个月未用', 'Duplicate or unused 3+ months')}</small>
+          <small>{text('已安装应用', 'Installed applications')}</small>
         </button>
         <button type="button" onClick={() => onNavigate('terminal')}>
           <SquareTerminal size={18} />

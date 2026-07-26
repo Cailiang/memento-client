@@ -37,6 +37,18 @@ const serviceLocations = bundle.result.candidates
     location: candidate.location,
     revealTargetRegistered: bundle.revealTargets.has(candidate.id)
   }))
+const applicationInventoryWithoutLocation = bundle.result.applications.find(
+  (application) => !bundle.revealTargets.has(application.id)
+)
+if (applicationInventoryWithoutLocation) {
+  throw new Error(`application location is not revealable: ${applicationInventoryWithoutLocation.name}`)
+}
+const removableSystemApplication = bundle.result.applications.find(
+  (application) => application.scope === 'system' && application.action
+)
+if (removableSystemApplication) {
+  throw new Error(`system application is removable: ${removableSystemApplication.name}`)
+}
 
 const duplicateStartupRemoval = bundle.result.candidates.find(
   (candidate) =>
@@ -80,6 +92,12 @@ process.stdout.write(
       elapsedMs: Date.now() - started,
       candidates: bySection,
       actionable: bundle.actions.size,
+      applications: {
+        installed: bundle.result.applications.length,
+        removable: bundle.result.applications.filter((application) => application.action).length,
+        unused: bundle.result.applications.filter((application) => application.unused).length,
+        system: bundle.result.applications.filter((application) => application.scope === 'system').length
+      },
       serviceCleanup,
       serviceLocations,
       storageLocations: bundle.result.candidates.filter(

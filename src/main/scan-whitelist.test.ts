@@ -13,6 +13,7 @@ function resultWith(candidates: ScanCandidate[]): ScanResult {
       memoryTotalBytes: 1, memoryUsedBytes: 0, uptimeSeconds: 1
     },
     candidates,
+    applications: [],
     terminal: {
       shell: '/bin/zsh', baselineMs: 1, startupMs: 1, sampleCount: 1,
       findings: [], configFiles: []

@@ -44,6 +44,22 @@ export interface ScanCandidate {
   operations?: CandidateOperation[]
 }
 
+export type ApplicationScope = 'user' | 'shared' | 'system'
+
+export interface InstalledApplication {
+  id: string
+  name: string
+  version: string
+  bundleId: string | null
+  location: string
+  sizeBytes: number
+  lastUsedAt: string | null
+  scope: ApplicationScope
+  unused: boolean
+  protectedReason?: string
+  action?: CandidateOperation
+}
+
 export type TerminalFindingCode =
   | 'shell_startup_slow'
   | 'shell_startup_normal'
@@ -102,6 +118,7 @@ export interface ScanResult {
   completedAt: string
   system: SystemSnapshot
   candidates: ScanCandidate[]
+  applications: InstalledApplication[]
   terminal: {
     shell: string
     baselineMs: number | null

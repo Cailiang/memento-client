@@ -6,7 +6,9 @@ import { promisify } from 'node:util'
 import { randomUUID } from 'node:crypto'
 import type {
   ActionKind,
+  ApplicationScope,
   CandidateOperation,
+  InstalledApplication,
   ScanCandidate,
   ScanProgress,
   ScanResult,
@@ -1058,6 +1060,26 @@ interface ApplicationMetadata {
   lastUsedAt: Date | null
 }
 
+interface ApplicationScan {
+  candidates: ScanCandidate[]
+  applications: InstalledApplication[]
+}
+
+const APPLICATION_ROOTS = [
+  '/Applications',
+  path.join(HOME, 'Applications'),
+  '/System/Applications',
+  '/System/Library/CoreServices/Applications'
+]
+
+export function applicationScope(target: string): ApplicationScope {
+  if (target === path.join(HOME, 'Applications') || target.startsWith(`${path.join(HOME, 'Applications')}${path.sep}`)) {
+    return 'user'
+  }
+  if (target === '/System' || target.startsWith(`/System${path.sep}`)) return 'system'
+  return 'shared'
+}
+
 async function findApplications(root: string, depth = 2): Promise<string[]> {
   if (depth < 0) return []
   let entries: Awaited<ReturnType<typeof fs.readdir>>
@@ -1107,22 +1129,89 @@ async function inspectApplication(target: string, language: AppLanguage): Promis
       lastUsedAt: dateValue ? new Date(dateValue) : null
     }
   } catch {
-    return null
+    try {
+      const infoPath = path.join(target, 'Contents', 'Info.plist')
+      const { stdout } = await run('/usr/bin/plutil', ['-convert', 'json', '-o', '-', infoPath])
+      const info = JSON.parse(stdout) as Record<string, unknown>
+      return {
+        target,
+        name: typeof info.CFBundleDisplayName === 'string'
+          ? info.CFBundleDisplayName
+          : typeof info.CFBundleName === 'string'
+            ? info.CFBundleName
+            : path.basename(target, '.app'),
+        bundleId: typeof info.CFBundleIdentifier === 'string' ? info.CFBundleIdentifier : null,
+        version: typeof info.CFBundleShortVersionString === 'string'
+          ? info.CFBundleShortVersionString
+          : t(language, '未知版本', 'Unknown version'),
+        sizeBytes: await getPathSize(target),
+        lastUsedAt: null
+      }
+    } catch {
+      return {
+        target,
+        name: path.basename(target, '.app'),
+        bundleId: null,
+        version: t(language, '未知版本', 'Unknown version'),
+        sizeBytes: 0,
+        lastUsedAt: null
+      }
+    }
   }
 }
 
 async function scanApplications(
   actions: Map<string, RegisteredAction>,
+  revealTargets: Map<string, string>,
   language: AppLanguage
-): Promise<ScanCandidate[]> {
-  const appPaths = [
-    ...(await findApplications('/Applications')),
-    ...(await findApplications(path.join(HOME, 'Applications')))
-  ]
+): Promise<ApplicationScan> {
+  const discovered = await Promise.all(APPLICATION_ROOTS.map((root) => findApplications(root)))
+  const appPaths = discovered.flat()
   const inspected = await mapLimit([...new Set(appPaths)], 8, (target) => inspectApplication(target, language))
   const applications = inspected.filter((item): item is ApplicationMetadata => item !== null)
   const candidatePaths = new Set<string>()
   const candidates: ScanCandidate[] = []
+
+  const inventory = applications.map((application): InstalledApplication => {
+    const id = randomUUID()
+    const scope = applicationScope(application.target)
+    const isMemento = application.bundleId === 'com.fcl.memento'
+    const protectedReason = scope === 'system'
+      ? t(language, 'macOS 系统应用', 'macOS system application')
+      : isMemento
+        ? t(language, '当前正在运行的 Memento', 'The currently running Memento app')
+        : undefined
+    const actionId = protectedReason ? null : randomUUID()
+    const action: CandidateOperation | undefined = actionId
+      ? {
+          id: actionId,
+          kind: 'trash',
+          label: t(language, '卸载', 'Uninstall'),
+          consequence: t(language, '应用本体会移到废纸篓，其文稿、数据和偏好设置会保留。', 'The app bundle will move to the Trash. Its documents, data, and preferences remain.'),
+          reversible: true
+        }
+      : undefined
+    if (action) actions.set(action.id, { kind: 'trash', target: application.target })
+    revealTargets.set(id, application.target)
+    return {
+      id,
+      name: application.name,
+      version: application.version,
+      bundleId: application.bundleId,
+      location: displayPath(application.target),
+      sizeBytes: application.sizeBytes,
+      lastUsedAt: application.lastUsedAt && !Number.isNaN(application.lastUsedAt.getTime())
+        ? application.lastUsedAt.toISOString()
+        : null,
+      scope,
+      unused: isApplicationUnused(application.lastUsedAt),
+      protectedReason,
+      action
+    }
+  })
+  const inventoryByPath = new Map(
+    inventory.map((application) => [application.location, application])
+  )
 
   const byBundle = new Map<string, ApplicationMetadata[]>()
   for (const application of applications) {
@@ -1139,6 +1228,7 @@ async function scanApplications(
     )
     const newest = sorted.at(-1)!
     for (const application of sorted.slice(0, -1)) {
+      const inventoryApplication = inventoryByPath.get(displayPath(application.target))
       candidatePaths.add(application.target)
       candidates.push(
         registerCandidate(
@@ -1156,14 +1246,16 @@ async function scanApplications(
               t(language, `旧副本：${displayPath(application.target)}`, `Older copy: ${displayPath(application.target)}`),
               t(language, `保留候选：${displayPath(newest.target)}`, `Suggested copy to keep: ${displayPath(newest.target)}`)
             ],
-            action: {
-              kind: 'trash',
-              label: t(language, '移到废纸篓', 'Move to Trash'),
-              consequence: t(language, '这个应用副本会被移到废纸篓，应用数据和偏好设置会保留。', 'This application copy will be moved to the Trash. Its data and preferences remain.'),
-              reversible: true
-            }
+            action: inventoryApplication?.action
+              ? { ...inventoryApplication.action, label: t(language, '移到废纸篓', 'Move to Trash') }
+              : undefined
           },
-          { kind: 'trash', target: application.target }
+          undefined,
+          inventoryApplication?.action ? [{
+            id: inventoryApplication.action.id,
+            action: inventoryApplication.action,
+            registeredAction: { kind: 'trash', target: application.target }
+          }] : []
         )
       )
     }
@@ -1178,6 +1270,7 @@ async function scanApplications(
       continue
     }
     const ageDays = ageInDays(application.lastUsedAt)
+    const inventoryApplication = inventoryByPath.get(displayPath(application.target))
     candidates.push(
       registerCandidate(
         actions,
@@ -1194,19 +1287,24 @@ async function scanApplications(
             t(language, `${ageDays} 天未使用`, `Not used for ${ageDays} days`),
             t(language, `位置：${displayPath(application.target)}`, `Location: ${displayPath(application.target)}`)
           ],
-          action: {
-            kind: 'trash',
-            label: t(language, '移到废纸篓', 'Move to Trash'),
-            consequence: t(language, '应用本体会移到废纸篓，其文稿、数据和偏好设置会保留。', 'The application bundle will be moved to the Trash. Documents, data, and preferences remain.'),
-            reversible: true
-          }
+          action: inventoryApplication?.action
+            ? { ...inventoryApplication.action, label: t(language, '移到废纸篓', 'Move to Trash') }
+            : undefined
         },
-        { kind: 'trash', target: application.target }
+        undefined,
+        inventoryApplication?.action ? [{
+          id: inventoryApplication.action.id,
+          action: inventoryApplication.action,
+          registeredAction: { kind: 'trash', target: application.target }
+        }] : []
       )
     )
   }
 
-  return candidates.sort((a, b) => (b.sizeBytes ?? 0) - (a.sizeBytes ?? 0))
+  return {
+    candidates: candidates.sort((a, b) => (b.sizeBytes ?? 0) - (a.sizeBytes ?? 0)),
+    applications: inventory.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+  }
 }
 
 async function measureShell(shell: string, clean: boolean): Promise<number | null> {
@@ -1599,6 +1697,7 @@ export async function runFullScan(
         completedAt: new Date().toISOString(),
         system,
         candidates: [],
+        applications: [],
         terminal: {
           shell: process.env.ComSpec || process.env.SHELL || 'unsupported',
           baselineMs: null,
@@ -1656,10 +1755,10 @@ export async function runFullScan(
     })
     .finally(() => reportSectionComplete('storage'))
 
-  const applicationsPromise = scanApplications(actions, language)
+  const applicationsPromise = scanApplications(actions, revealTargets, language)
     .catch((error: Error) => {
       warnings.push(t(language, `应用扫描未完成：${error.message}`, `Application scan did not complete: ${error.message}`))
-      return []
+      return { candidates: [], applications: [] }
     })
     .finally(() => reportSectionComplete('applications'))
 
@@ -1677,7 +1776,7 @@ export async function runFullScan(
     })
     .finally(() => reportSectionComplete('terminal'))
 
-  const [services, storage, applications, terminal] = await Promise.all([
+  const [services, storage, applicationScan, terminal] = await Promise.all([
     servicesPromise,
     storagePromise,
     applicationsPromise,
@@ -1696,7 +1795,8 @@ export async function runFullScan(
     startedAt,
     completedAt: new Date().toISOString(),
     system,
-    candidates: [...services, ...storage, ...applications],
+    candidates: [...services, ...storage, ...applicationScan.candidates],
+    applications: applicationScan.applications,
     terminal,
     warnings
   }

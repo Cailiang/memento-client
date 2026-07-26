@@ -195,6 +195,122 @@ export const demoResult: ScanResult = {
       }
     }
   ],
+  applications: [
+    {
+      id: 'demo-inventory-android-studio',
+      name: 'Android Studio Preview',
+      version: '2023.1 Canary 8',
+      bundleId: 'com.google.android.studio',
+      location: '/Applications/Android Studio Preview.app',
+      sizeBytes: 2.1 * GB,
+      lastUsedAt: '2025-06-09T03:20:00.000Z',
+      scope: 'shared',
+      unused: true,
+      action: {
+        id: 'demo-app-android-studio',
+        kind: 'trash',
+        label: '卸载',
+        consequence: '应用本体会移到废纸篓，其文稿、数据和偏好设置会保留。',
+        reversible: true
+      }
+    },
+    {
+      id: 'demo-inventory-postman',
+      name: 'Postman',
+      version: '10.21.4',
+      bundleId: 'com.postmanlabs.mac',
+      location: '/Applications/Postman.app',
+      sizeBytes: 713 * MB,
+      lastUsedAt: '2025-10-13T08:45:00.000Z',
+      scope: 'shared',
+      unused: true,
+      action: {
+        id: 'demo-app-postman',
+        kind: 'trash',
+        label: '卸载',
+        consequence: '应用本体会移到废纸篓，其文稿、数据和偏好设置会保留。',
+        reversible: true
+      }
+    },
+    {
+      id: 'demo-inventory-arc',
+      name: 'Arc',
+      version: '1.102.0',
+      bundleId: 'company.thebrowser.Browser',
+      location: '/Applications/Arc.app',
+      sizeBytes: 624 * MB,
+      lastUsedAt: '2026-07-26T01:14:00.000Z',
+      scope: 'shared',
+      unused: false,
+      action: {
+        id: 'demo-app-arc',
+        kind: 'trash',
+        label: '卸载',
+        consequence: '应用本体会移到废纸篓，其文稿、数据和偏好设置会保留。',
+        reversible: true
+      }
+    },
+    {
+      id: 'demo-inventory-vscode',
+      name: 'Visual Studio Code',
+      version: '1.102.2',
+      bundleId: 'com.microsoft.VSCode',
+      location: '/Applications/Visual Studio Code.app',
+      sizeBytes: 548 * MB,
+      lastUsedAt: '2026-07-25T12:06:00.000Z',
+      scope: 'shared',
+      unused: false,
+      action: {
+        id: 'demo-app-vscode',
+        kind: 'trash',
+        label: '卸载',
+        consequence: '应用本体会移到废纸篓，其文稿、数据和偏好设置会保留。',
+        reversible: true
+      }
+    },
+    {
+      id: 'demo-inventory-miro',
+      name: 'Miro',
+      version: '0.8.97',
+      bundleId: 'com.electron.realtimeboard',
+      location: '~/Applications/Miro.app',
+      sizeBytes: 391 * MB,
+      lastUsedAt: null,
+      scope: 'user',
+      unused: false,
+      action: {
+        id: 'demo-app-miro',
+        kind: 'trash',
+        label: '卸载',
+        consequence: '应用本体会移到废纸篓，其文稿、数据和偏好设置会保留。',
+        reversible: true
+      }
+    },
+    {
+      id: 'demo-inventory-safari',
+      name: 'Safari',
+      version: '18.5',
+      bundleId: 'com.apple.Safari',
+      location: '/System/Applications/Safari.app',
+      sizeBytes: 37 * MB,
+      lastUsedAt: '2026-07-24T06:32:00.000Z',
+      scope: 'system',
+      unused: false,
+      protectedReason: 'macOS 系统应用'
+    },
+    {
+      id: 'demo-inventory-settings',
+      name: 'System Settings',
+      version: '15.5',
+      bundleId: 'com.apple.systempreferences',
+      location: '/System/Applications/System Settings.app',
+      sizeBytes: 29 * MB,
+      lastUsedAt: '2026-07-19T10:18:00.000Z',
+      scope: 'system',
+      unused: false,
+      protectedReason: 'macOS 系统应用'
+    }
+  ],
   terminal: {
     shell: '/bin/zsh',
     baselineMs: 34,
@@ -373,6 +489,15 @@ function localizedDemoResult(language: AppLanguage): ScanResult {
   return {
     ...demoResult,
     system: { ...demoResult.system, hostname: "Fang's MacBook Pro" },
+    applications: demoResult.applications.map((application) => ({
+      ...application,
+      protectedReason: application.protectedReason ? 'macOS system application' : undefined,
+      action: application.action ? {
+        ...application.action,
+        label: 'Uninstall',
+        consequence: 'The app bundle will move to the Trash. Its documents, data, and preferences remain.'
+      } : undefined
+    })),
     candidates: demoResult.candidates.map((candidate) => {
       const copy = candidateCopy[candidate.id]
       const action = candidate.action && actionCopy[candidate.id]
