@@ -9,6 +9,7 @@ const ERROR_COPY: Partial<Record<AiErrorCode, [string, string]>> = {
   AI_QUOTA_EXCEEDED: ['本期 AI 分析额度已用完', 'The AI analysis quota has been used up'],
   AI_RATE_LIMITED: ['AI 请求过于频繁，请稍后重试', 'AI requests are too frequent. Try again shortly'],
   AI_INPUT_TOO_LARGE: ['分析报告过大，无法发送', 'The analysis report is too large to send'],
+  AI_INVALID_INPUT: ['应用与 AI 服务的数据格式不兼容，请更新后重试', 'The app and AI service use incompatible data formats. Update them and try again'],
   AI_PREVIEW_EXPIRED: ['数据预览已过期，请重新准备分析', 'The data preview has expired. Prepare the analysis again'],
   AI_SCAN_CHANGED: ['扫描结果已经变化，请重新扫描', 'The scan results changed. Scan again'],
   AI_REQUEST_TIMEOUT: ['AI 请求超时，请重试', 'The AI request timed out. Try again'],

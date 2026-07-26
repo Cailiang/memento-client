@@ -93,6 +93,10 @@ export class HostedProvider implements AiProvider {
       await response.body?.cancel()
       throw new AiError('AI_REQUEST_TIMEOUT', 'AI 请求超时，请重试', true)
     }
+    if (response.status === 400) {
+      await response.body?.cancel()
+      throw new AiError('AI_INVALID_INPUT', '客户端与 AI 服务的数据格式不兼容')
+    }
     if (!response.ok) {
       await response.body?.cancel()
       throw new AiError('AI_PROVIDER_UNAVAILABLE', '官方 AI 服务暂时不可用', true)

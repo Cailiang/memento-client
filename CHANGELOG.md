@@ -4,6 +4,22 @@ All notable changes to Memento Client are documented here in English and Simplif
 
 Memento Client 的重要变更会在这里使用英文和简体中文同步记录。
 
+## 0.6.16 - 2026-07-26
+
+### English
+
+- Synchronized candidate-analysis actions between the desktop app and Memento Server, including permanent storage cleanup and service-directory cleanup.
+- Fixed storage AI analysis failing when a candidate included the newer `delete-storage` action.
+- Gateway request-format errors now appear as an app/server compatibility issue instead of the misleading “AI service unavailable” message.
+- Added client and server regression tests and verified the repaired path against the real local Gateway and configured model provider.
+
+### 简体中文
+
+- 同步桌面客户端与 Memento Server 的候选分析动作协议，补齐永久存储清理和服务目录清理。
+- 修复存储项目包含新版 `delete-storage` 操作时 AI 分析失败的问题。
+- Gateway 请求格式错误现在会明确提示客户端与服务端不兼容，不再误报“AI 服务暂时不可用”。
+- 新增客户端和服务端回归测试，并使用本地真实 Gateway 与已配置模型完成修复链路验证。
+
 ## 0.6.15 - 2026-07-26
 
 ### English
