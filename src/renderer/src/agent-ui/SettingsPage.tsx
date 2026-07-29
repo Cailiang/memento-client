@@ -199,7 +199,10 @@ export function SettingsPage({
 
   const testConnection = async (): Promise<void> => {
     setBusy('test')
-    setConnectionMessage(text('正在测试工具调用', 'Testing tool calling'))
+    setConnectionMessage(text(
+      `正在验证 ${draft.model} 的工具调用`,
+      `Testing tool calling with ${draft.model}`
+    ))
     setConnectionOk(null)
     try {
       const result = await onTestProvider(draft)

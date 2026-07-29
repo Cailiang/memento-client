@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { PrivateAgentProvider } from './agent-store'
-import { createProviderModel, providerErrorMessage } from './provider-factory'
+import {
+  createProviderModel,
+  PROVIDER_TEST_TIMEOUT,
+  providerErrorMessage,
+  providerTestToolChoice
+} from './provider-factory'
 
 function provider(type: PrivateAgentProvider['type']): PrivateAgentProvider {
   return {
@@ -39,6 +44,12 @@ describe('Agent provider factory', () => {
 
   it('turns SDK timeout errors into an actionable message', () => {
     expect(providerErrorMessage(new Error('request timed out after 20000ms'), 'secret'))
-      .toBe('连接模型超时，请检查服务地址、模型名称和网络后重试')
+      .toBe('模型响应超时，请稍后重试或选择响应更快的模型')
+  })
+
+  it('allows slower reasoning models to complete a two-step tool probe', () => {
+    expect(PROVIDER_TEST_TIMEOUT).toEqual({ totalMs: 60_000, stepMs: 45_000 })
+    expect(providerTestToolChoice(0)).toBe('required')
+    expect(providerTestToolChoice(1)).toBe('none')
   })
 })

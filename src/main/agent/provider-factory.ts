@@ -8,6 +8,15 @@ import type { AgentProviderTestResult } from '../../shared/agent-types'
 import type { PrivateAgentProvider } from './agent-store'
 import { normalizeProviderBaseUrl } from './provider-config'
 
+export const PROVIDER_TEST_TIMEOUT = {
+  totalMs: 60_000,
+  stepMs: 45_000
+} as const
+
+export function providerTestToolChoice(stepNumber: number): 'required' | 'none' {
+  return stepNumber === 0 ? 'required' : 'none'
+}
+
 export function createProviderModel(provider: PrivateAgentProvider): LanguageModel {
   const baseURL = normalizeProviderBaseUrl(provider.type, provider.baseUrl)
   switch (provider.type) {
@@ -56,6 +65,9 @@ export async function testProviderConnection(
     instructions: 'You are a connection tester. Call connection_probe once, then answer with OK.',
     tools: { connection_probe: probe },
     toolChoice: 'required',
+    prepareStep: ({ stepNumber }) => ({
+      toolChoice: providerTestToolChoice(stepNumber)
+    }),
     stopWhen: stepCountIs(2),
     maxOutputTokens: 64,
     temperature: 0
@@ -63,7 +75,7 @@ export async function testProviderConnection(
   await agent.generate({
     prompt: 'Verify that tool calling works.',
     abortSignal: signal,
-    timeout: 20_000
+    timeout: PROVIDER_TEST_TIMEOUT
   })
   if (!toolCalled) throw new Error('模型可以响应，但没有完成工具调用测试')
   return {
@@ -79,7 +91,7 @@ export function providerErrorMessage(error: unknown, apiKey: string): string {
   const withoutKey = apiKey ? source.split(apiKey).join('[REDACTED]') : source
   const sanitized = withoutKey.replace(/\bBearer\s+[^\s,;]+/gi, 'Bearer [REDACTED]')
   if (/timed?\s*out|timeout|aborted due to timeout/i.test(sanitized)) {
-    return '连接模型超时，请检查服务地址、模型名称和网络后重试'
+    return '模型响应超时，请稍后重试或选择响应更快的模型'
   }
   return sanitized
 }

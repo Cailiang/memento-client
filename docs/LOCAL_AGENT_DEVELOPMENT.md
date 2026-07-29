@@ -73,7 +73,7 @@ Provider input is normalized and validated in the main process. URLs accept only
 
 After a URL and credential are available, the Renderer debounces a typed model-discovery IPC call. The main process reuses an existing encrypted key when the field is blank, requests the provider's `/models` endpoint with the correct authentication scheme, and de-duplicates IDs. Capability metadata is preferred when an endpoint supplies it; otherwise known image, audio, realtime, embedding, moderation, and internal-only model families are excluded by conservative ID rules. The response includes the resolved base URL and excluded count so the UI can explain why a mixed catalog contains fewer Agent-selectable models. Requests time out after 15 seconds, errors are sanitized before crossing IPC, and the UI retains refresh plus manual-entry fallback states.
 
-The connection test creates a short `ToolLoopAgent` run with a required `connection_probe` tool. Success therefore means the endpoint, key, model, response protocol, and tool calling all worked. A text-only response is a failed test.
+The connection test creates a two-step `ToolLoopAgent` run with a `connection_probe` tool. The first step requires the tool; the follow-up step disables tool calls and verifies that the provider accepts the tool result and returns a normal response. The probe allows 60 seconds overall and 45 seconds per provider request because reasoning and coding models can exceed 20 seconds for the complete round trip. Success therefore means the endpoint, key, model, response protocol, tool call, and tool-result continuation all worked. A text-only first response is a failed test.
 
 ## 5. Agent Run
 

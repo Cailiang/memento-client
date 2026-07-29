@@ -1,16 +1,15 @@
-# Memento Agent 0.6.23
+# Memento Agent 0.6.24
 
 ## 简体中文
 
-`0.6.23` 修复应用管理误用演示数据和 OpenAI 混合模型列表问题，并与 `prototypes/memento-agent/index.html` 保持一致。
+`0.6.24` 修复推理模型连接测试被错误判定为超时的问题，并与 `prototypes/memento-agent/index.html` 保持一致。
 
 ### 主要变化
 
-- 修复启动阶段 preload 崩溃导致生产应用退回 5 个演示 APP 的问题，恢复当前设备 62 个可管理应用和真实 Logo。
-- 新增真实 Electron 冒烟测试，直接验证 preload、真实应用列表和真实 Logo，不再只依赖浏览器演示数据。
-- OpenAI 模型列表会过滤图片、音频、实时、Embedding、审核和内部专用模型，只显示适合 Agent 的候选项。
-- 设置页会显示可用模型数量和过滤数量；接口缺少能力元数据时仍使用保守规则，并保留手动填写兜底。
-- 已验证该自定义 OpenAI 入口服务正常；其 20 项原始目录中有 14 个 Agent 可用文本模型、6 个不兼容项目。
+- 完整工具调用测试允许 60 秒总耗时和单步 45 秒耗时，适配响应较慢的推理与编程模型。
+- 第一步强制调用工具，第二步收到工具结果后只需正常回复，不再被错误地要求再次调用同一工具。
+- 测试中会显示正在验证的模型；超时提示会准确说明模型响应较慢，不再误导用户检查已经正常的地址和网络。
+- 实测当前 `gpt-5.6-sol` 配置能够完成两步工具调用验证。
 
 ### 安装说明
 
@@ -18,15 +17,14 @@
 
 ## English
 
-`0.6.23` fixes demo-data fallback in Application Management and mixed OpenAI model catalogs while staying aligned with `prototypes/memento-agent/index.html`.
+`0.6.24` fixes false connection-test timeouts for reasoning models while staying aligned with `prototypes/memento-agent/index.html`.
 
 ### Highlights
 
-- Fixes a startup preload crash that made the production app fall back to five demo apps, restoring 62 manageable apps and real icons on the current device.
-- Adds a real Electron smoke test for the preload bridge, application inventory, and application icons instead of relying only on browser demo data.
-- Filters image, audio, realtime, embedding, moderation, and internal-only models out of OpenAI catalogs before they reach the Agent model picker.
-- Reports both Agent-ready and excluded model counts, prefers capability metadata, and retains manual entry when an endpoint is unusual.
-- Confirms the custom OpenAI endpoint is healthy; its raw 20-entry catalog contains 14 Agent-ready text models and 6 incompatible entries.
+- Allows 60 seconds overall and 45 seconds per provider request for the complete tool-call probe, accommodating slower reasoning and coding models.
+- Requires the tool on the first step, then correctly requests a normal response after the tool result instead of forcing the same tool again.
+- Shows which model is being verified and reports response latency accurately instead of suggesting that a healthy URL or network is broken.
+- Confirms the current `gpt-5.6-sol` configuration can complete the two-step tool-call probe.
 
 ### Installation
 

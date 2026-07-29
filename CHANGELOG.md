@@ -8,6 +8,22 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.24 - 2026-07-29
+
+### English
+
+- Fixed false connection-test timeouts for slower reasoning and coding models such as `gpt-5.6-sol`.
+- The full tool probe now allows up to 60 seconds overall and 45 seconds per provider step instead of applying a fragile 20-second limit to both model requests.
+- The first probe step still requires a tool call, while the follow-up step now correctly requires a normal response after receiving the tool result instead of forcing the same tool a second time.
+- Updated the in-progress state to identify the model being verified and replaced the misleading URL/network timeout hint with a response-latency message.
+
+### 简体中文
+
+- 修复 `gpt-5.6-sol` 等推理、编程模型在连接测试中被错误判定为超时的问题。
+- 完整工具验证的总上限由容易误判的 20 秒调整为 60 秒，并为每次供应商请求设置 45 秒上限。
+- 第一步仍强制调用测试工具；第二步收到工具结果后会正确要求普通回复，不再错误地强制模型再次调用同一工具。
+- 测试中状态会显示正在验证的模型，误导性的地址/网络超时提示也改为响应耗时提示。
+
 ## 0.6.23 - 2026-07-29
 
 ### English
