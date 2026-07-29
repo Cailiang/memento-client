@@ -5,7 +5,13 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentPlanItem } from '../../shared/agent-types'
 import type { ScanResult } from '../../shared/types'
 import { AgentStore } from './agent-store'
-import { availablePlanItems, LocalAgentRuntime } from './local-agent-runtime'
+import {
+  availablePlanItems,
+  compactConversationContext,
+  inferPromptFocus,
+  LocalAgentRuntime,
+  resolveContextualFocus
+} from './local-agent-runtime'
 
 const temporaryDirectories: string[] = []
 
@@ -55,6 +61,67 @@ describe('LocalAgentRuntime boundaries', () => {
     expect(availablePlanItems(scan).map((item) => item.id)).toEqual([
       'candidate-1', 'app-action', 'terminal-fix'
     ])
+  })
+
+  it('keeps the exact service focus and pending plan in follow-up context', () => {
+    const scan: ScanResult = {
+      scanId: 'scan-service', startedAt: '', completedAt: '',
+      system: {
+        hostname: 'Mac', osVersion: '15.0', diskTotalBytes: 100, diskFreeBytes: 50,
+        memoryTotalBytes: 100, memoryUsedBytes: 50, uptimeSeconds: 100
+      },
+      candidates: [{
+        id: 'service-cisco', section: 'services',
+        name: 'com.cisco.anyconnect.aciseposture', subtitle: 'Launch agent',
+        description: 'Cisco posture assessment', risk: 'review', status: 'Loaded', evidence: [],
+        operations: [{
+          id: 'stop-cisco', kind: 'stop-launch-agent', label: 'Stop service only',
+          consequence: 'Stops posture checks', reversible: true
+        }, {
+          id: 'remove-cisco', kind: 'trash-service-software', label: 'Stop and remove',
+          consequence: 'Moves registered Cisco components to Trash', reversible: true
+        }]
+      }],
+      applications: [],
+      terminal: { shell: '/bin/zsh', baselineMs: 20, startupMs: 30, sampleCount: 3, configFiles: [], findings: [] },
+      warnings: []
+    }
+    const focus = inferPromptFocus(
+      '检查 com.cisco.anyconnect.aciseposture，说明影响，并把仅停止服务加入计划',
+      scan
+    )
+    expect(focus).toEqual([{
+      kind: 'services', id: 'service-cisco', name: 'com.cisco.anyconnect.aciseposture'
+    }])
+
+    const store = new AgentStore(temporaryDirectory())
+    const provider = store.saveProvider({
+      name: 'Provider', type: 'openai-compatible', baseUrl: 'https://models.example.com/v1',
+      model: 'model', apiKey: 'secret'
+    })
+    const first = store.createRun('Inspect Cisco', provider, 'en-US', 'conversation-cisco', focus)
+    const waiting = store.updateRun(first.id, {
+      status: 'awaiting-confirmation',
+      response: 'Cisco posture assessment is focused.',
+      plan: availablePlanItems(scan, 'en-US').filter((item) => item.id === 'stop-cisco')
+    })
+    expect(compactConversationContext([waiting])).toEqual([expect.objectContaining({
+      focus,
+      pendingPlan: [expect.objectContaining({ operationId: 'stop-cisco' })]
+    })])
+    expect(resolveContextualFocus(
+      '我需要把这个服务停掉并删除和它相关的信息',
+      [],
+      [waiting]
+    )).toEqual(focus)
+    expect(store.listConversationRuns('conversation-cisco')).toEqual([waiting])
+
+    const runtime = new LocalAgentRuntime(store)
+    expect(runtime.addPlanItems({ runId: first.id, itemIds: ['remove-cisco'] }, scan))
+      .toMatchObject({ status: 'awaiting-confirmation', plan: [{ id: 'stop-cisco' }, { id: 'remove-cisco' }] })
+    expect(() => runtime.addPlanItems({ runId: first.id, itemIds: ['invented'] }, scan))
+      .toThrow('stale')
+    store.close()
   })
 
   it('persists cancellation and clears a plan that was waiting for confirmation', () => {

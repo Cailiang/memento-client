@@ -37,13 +37,13 @@ Electron `43.2.0` supplies Node `24` and the built-in `node:sqlite` module. No n
 
 `AgentStore` opens `<userData>/memento.sqlite`, enables WAL and foreign keys, and applies migrations through `PRAGMA user_version`.
 
-Schema version 1 contains:
+Schema version 2 contains:
 
 | Table | Purpose |
 | --- | --- |
 | `ai_providers` | Provider type, URL, model, encrypted API key, default and connection state |
 | `app_settings` | Language, theme, login behavior, menu-bar behavior, and ignored items |
-| `agent_runs` | Prompt, provider snapshot, status, response, plan, results, and error |
+| `agent_runs` | Conversation ID, language, prompt, provider snapshot, status, response, focused entities, structured presentation, plan, results, and error |
 | `tool_calls` | Structured input and output for each Agent tool call |
 
 A legacy `app-settings.json` file is read once when the SQLite settings row does not exist. Values pass through `normalizeAppSettings` before insertion.
@@ -77,7 +77,9 @@ The connection test creates a two-step `ToolLoopAgent` run with a `connection_pr
 
 ## 5. Agent Run
 
-`LocalAgentRuntime.start` requires a completed scan and the default Provider. It stores the run before making a model request and tracks cancellation with an `AbortController`.
+`LocalAgentRuntime.start` requires a completed scan and the default Provider. It stores the run before making a model request and tracks cancellation with an `AbortController`. A new task creates a conversation ID; follow-up runs reuse it.
+
+Before each request, the runtime loads up to eight recent turns from the same conversation and builds a bounded context containing each user request, short outcome, focused entities, pending plan IDs, and status. Direct entity names in the current request are resolved against the current scan. When a follow-up uses a reference such as “这个服务,” “this app,” or “it,” the latest non-empty focus is authoritative; inspection output is narrowed to that entity so unrelated findings cannot displace it.
 
 State progression:
 
@@ -95,13 +97,20 @@ The model can call these tools:
 - `inspect_background_services`
 - `inspect_applications`
 - `inspect_terminal`
+- `present_results`
 - `prepare_action_plan`
 
-Inspection output is compact and excludes API keys, raw file contents, and unrestricted filesystem access. Every tool input and output is stored in `tool_calls`. Runs are limited to ten steps, 1,200 output tokens, and a two-minute timeout.
+Inspection output includes stable finding IDs and is compact enough for model context. `present_results` accepts only those stable IDs and resolves them against the current scan into a persisted `AgentPresentation`. The model supplies plain summary and section-title text; Memento supplies all item data and interactive operations. Arbitrary HTML is never accepted or rendered.
+
+Every tool input and output is stored in `tool_calls`. API keys, raw file contents, and unrestricted filesystem access remain excluded. Runs are limited to twelve steps, 1,400 output tokens, and a two-minute timeout.
+
+The application language is authoritative rather than the language of the latest user prompt. English mode requires all user-visible Agent text in English even if the user writes Chinese. Main-process statuses, fallback responses, plan copy, validation errors, and provider-test results use the same setting. Changing language revokes the old scan snapshot and immediately performs a localized scan.
 
 ## 6. Plan and Execution Security
 
 `availablePlanItems` derives the only IDs a model may propose from the current scan's registered candidate operations, manageable app uninstall operations, and deterministic terminal fixes. Unknown operation IDs are rejected when a plan is prepared.
+
+The Renderer may also add an operation from a structured result directly to the current plan. The `memento:agent:plans:add` handler resolves that ID through `availablePlanItems` for the current in-memory scan before persisting it. This is a UI shortcut into the same confirmation path, not a new execution path.
 
 Before execution, `selectExecutablePlanItems` validates that:
 
@@ -138,6 +147,9 @@ The production Renderer consists of one shell and five prototype-aligned pages u
 - Layouts cover full sidebar, compact sidebar, bottom navigation, tablet, and phone widths.
 - `prefers-reduced-motion` reduces all non-essential transitions.
 - Application icons are requested lazily and only for target paths registered by the current scan.
+- Conversation turns remain visible together, while SQLite keeps their compact focus and pending-plan context available to subsequent runs.
+- Structured application results use a logo grid with last-used time and size; storage, service, and terminal results use compact rows. Their buttons reference only registered application or operation IDs.
+- Model text is rendered as text. The Renderer never uses `dangerouslySetInnerHTML` or model-generated HTML.
 - Preload initialization must not touch the DOM before `DOMContentLoaded`; losing the preload API silently activates browser demo data instead of real device data.
 
 Web development mode uses deterministic demo scan data and an in-memory demo Provider so every page and dialog can be visually tested without touching the computer.
@@ -170,6 +182,6 @@ npm run electron:smoke
 git diff --check
 ```
 
-With the web development server on port `4174`, run `npm run ui:smoke -- http://127.0.0.1:4174`. It captures all pages at four viewports and exercises critical interactions. The Electron smoke test launches the production output and requires the preload API, real application inventory, and at least one real application icon; this prevents browser demo data from masking a main/preload regression.
+With the web development server on port `4174`, run `npm run ui:smoke -- http://127.0.0.1:4174`. It captures all pages at four viewports and exercises structured Agent results, application-result grids, English-only Agent output, plan confirmation, health tabs, application filtering, and provider editing. The Electron smoke test launches the production output and requires the preload API, real application inventory, and at least one real application icon; this prevents browser demo data from masking a main/preload regression.
 
 Every change then requires a patch-version bump, changelog and release-note update, unsigned Intel x64 DMG build, mounted-image verification, bundled version and `x86_64` architecture check, SHA-256 calculation, and a source commit. This rule is also recorded in `AGENTS.md` so it survives future development sessions.

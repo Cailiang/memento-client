@@ -28,12 +28,16 @@ const PLAN: AgentPlanItem[] = [
 function run(status: AgentRunRecord['status'] = 'awaiting-confirmation'): AgentRunRecord {
   return {
     id: 'run-1',
+    conversationId: 'conversation-1',
+    language: 'zh-CN',
     prompt: '清理电脑',
     status,
     providerId: 'provider-1',
     providerName: 'Provider',
     model: 'model',
     response: '已准备计划',
+    presentation: null,
+    focus: [],
     plan: PLAN,
     results: [],
     error: null,
@@ -68,5 +72,12 @@ describe('Agent plan validation', () => {
       runId: 'run-1',
       itemIds: ['storage:cache']
     })).toThrow('处理计划已经失效')
+  })
+
+  it('returns plan validation errors in the run language', () => {
+    expect(() => selectExecutablePlanItems({ ...run(), language: 'en-US' }, {
+      runId: 'run-1',
+      itemIds: ['invented-action']
+    })).toThrow('The action plan contains invalid operations.')
   })
 })

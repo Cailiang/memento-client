@@ -43,7 +43,7 @@ export function filterAndSortApplications(
     })
 }
 
-function ApplicationIcon({ application }: { application: InstalledApplication }): React.JSX.Element {
+export function ApplicationIcon({ application }: { application: Pick<InstalledApplication, 'id' | 'name'> }): React.JSX.Element {
   const [source, setSource] = useState<string | null>(null)
   const [visible, setVisible] = useState(false)
   const ref = useRef<HTMLDivElement>(null)

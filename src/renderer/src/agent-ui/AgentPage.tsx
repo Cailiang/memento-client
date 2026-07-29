@@ -18,6 +18,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { AgentRunRecord } from '../../../shared/agent-types'
 import type { ScanResult } from '../../../shared/types'
 import { useI18n } from '../i18n'
+import { AgentResults } from './AgentResults'
 import { formatBytes, runStatusLabel } from './utils'
 
 const QUICK_ACTIONS: Array<{
@@ -53,42 +54,52 @@ function runIsBusy(run: AgentRunRecord | null): boolean {
 export function AgentPage({
   scan,
   run,
+  conversationRuns,
   statusMessage,
   selectedPlanIds,
   providerConfigured,
+  addingOperationId,
+  openingApplicationId,
   onSubmit,
   onNewTask,
   onOpenHistory,
   onOpenSettings,
+  onOpenApplication,
+  onAddPlanItem,
   onTogglePlanItem,
   onExecutePlan,
   onDiscardPlan
 }: {
   scan: ScanResult | null
   run: AgentRunRecord | null
+  conversationRuns: AgentRunRecord[]
   statusMessage: string
   selectedPlanIds: Set<string>
   providerConfigured: boolean
+  addingOperationId: string | null
+  openingApplicationId: string | null
   onSubmit: (prompt: string) => void
   onNewTask: () => void
   onOpenHistory: () => void
   onOpenSettings: () => void
+  onOpenApplication: (id: string) => void
+  onAddPlanItem: (id: string) => void
   onTogglePlanItem: (id: string) => void
   onExecutePlan: () => void
   onDiscardPlan: () => void
 }): React.JSX.Element {
   const { language, text } = useI18n()
   const [input, setInput] = useState('')
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
   const conversationRef = useRef<HTMLDivElement>(null)
   const busy = runIsBusy(run)
   const waitingConfirmation = run?.status === 'awaiting-confirmation'
   const selectedItems = run?.plan.filter((item) => selectedPlanIds.has(item.id)) ?? []
   const selectedBytes = selectedItems.reduce((sum, item) => sum + item.estimatedBytes, 0)
+  const activePlannedIds = new Set(run?.plan.map((item) => item.id) ?? [])
 
   useEffect(() => {
     conversationRef.current?.scrollTo({ top: conversationRef.current.scrollHeight, behavior: 'smooth' })
-  }, [run?.status, run?.response, statusMessage])
+  }, [conversationRuns.length, run?.status, run?.updatedAt, statusMessage])
 
   const submit = (): void => {
     const prompt = input.trim()
@@ -135,7 +146,7 @@ export function AgentPage({
             </div>
           </div>
 
-          {!run && (
+          {!conversationRuns.length && (
             <div className="quick-actions">
               {QUICK_ACTIONS.map((action) => {
                 const Icon = action.icon
@@ -149,43 +160,59 @@ export function AgentPage({
             </div>
           )}
 
-          {run && (
-            <>
-              <div className="message user">
-                <div className="message-body"><p>{run.prompt}</p></div>
-                <span className="message-avatar"><UserRound size={15} /></span>
-              </div>
-              <div className="message assistant">
-                <span className="message-avatar"><Sparkles size={16} /></span>
-                <div className="message-body">
-                  {(busy || run.status === 'failed' || run.status === 'cancelled') && (
-                    <div className="activity-block">
-                      <div className={`activity-row ${busy ? 'is-running' : 'is-done'}`}>
-                        <span className="activity-icon">{busy ? <LoaderCircle className="spinner" size={13} /> : <CircleCheck size={13} />}</span>
-                        <span>{statusMessage || runStatusLabel(run.status, language)}</span>
-                        <small>{runStatusLabel(run.status, language)}</small>
+          {conversationRuns.map((conversationRun) => {
+            const isActive = conversationRun.id === run?.id
+            const runBusy = isActive && busy
+            const runBytes = conversationRun.plan.reduce((sum, item) => sum + item.estimatedBytes, 0)
+            return (
+              <div className="conversation-turn" key={conversationRun.id}>
+                <div className="message user">
+                  <div className="message-body"><p>{conversationRun.prompt}</p></div>
+                  <span className="message-avatar"><UserRound size={15} /></span>
+                </div>
+                <div className="message assistant">
+                  <span className="message-avatar"><Sparkles size={16} /></span>
+                  <div className="message-body">
+                    {(runBusy || conversationRun.status === 'failed' || conversationRun.status === 'cancelled') && (
+                      <div className="activity-block">
+                        <div className={`activity-row ${runBusy ? 'is-running' : 'is-done'}`}>
+                          <span className="activity-icon">{runBusy ? <LoaderCircle className="spinner" size={13} /> : <CircleCheck size={13} />}</span>
+                          <span>{isActive && statusMessage ? statusMessage : runStatusLabel(conversationRun.status, language)}</span>
+                          <small>{runStatusLabel(conversationRun.status, language)}</small>
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  {run.response && <p>{run.response}</p>}
-                  {run.error && <p role="alert" className="error-copy">{run.error}</p>}
-                  {run.status === 'completed' && run.results.length > 0 && (
-                    <div className="result-summary">
-                      <div><strong>{run.results.filter((item) => item.ok).length}</strong><span>{text('已完成', 'Completed')}</span></div>
-                      <div><strong>{run.results.filter((item) => !item.ok).length}</strong><span>{text('未完成', 'Failed')}</span></div>
-                      <div><strong>{formatBytes(selectedBytes)}</strong><span>{text('计划处理空间', 'Planned space')}</span></div>
-                    </div>
-                  )}
+                    )}
+                    {(conversationRun.presentation?.summary || conversationRun.response) && (
+                      <p>{conversationRun.presentation?.summary ?? conversationRun.response}</p>
+                    )}
+                    {conversationRun.presentation && (
+                      <AgentResults
+                        presentation={conversationRun.presentation}
+                        plannedIds={activePlannedIds}
+                        addingOperationId={isActive ? addingOperationId : null}
+                        openingApplicationId={openingApplicationId}
+                        onOpenApplication={onOpenApplication}
+                        onAddPlanItem={onAddPlanItem}
+                      />
+                    )}
+                    {conversationRun.error && <p role="alert" className="error-copy">{conversationRun.error}</p>}
+                    {conversationRun.status === 'completed' && conversationRun.results.length > 0 && (
+                      <div className="result-summary">
+                        <div><strong>{conversationRun.results.filter((item) => item.ok).length}</strong><span>{text('已完成', 'Completed')}</span></div>
+                        <div><strong>{conversationRun.results.filter((item) => !item.ok).length}</strong><span>{text('未完成', 'Failed')}</span></div>
+                        <div><strong>{formatBytes(runBytes)}</strong><span>{text('计划处理空间', 'Planned space')}</span></div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </>
-          )}
+            )
+          })}
         </div>
 
         <div className="composer-wrap">
           <form className="composer" onSubmit={(event) => { event.preventDefault(); submit() }}>
             <textarea
-              ref={textareaRef}
               rows={1}
               aria-label={text('输入任务', 'Enter task')}
               placeholder={providerConfigured
@@ -223,13 +250,13 @@ export function AgentPage({
             <div>
               <span><ListChecks size={18} /></span>
               <strong>{text('暂无执行计划', 'No execution plan')}</strong>
-              <small>{text('Agent 完成检查后，处理步骤会出现在这里。', 'Steps will appear here after inspection.')}</small>
+              <small>{text('在诊断结果中直接加入操作，或让 Agent 准备计划。', 'Add an action from a result or ask the Agent to prepare a plan.')}</small>
             </div>
           </div>
         ) : (
           <div className="plan-panel is-visible">
             <div className="plan-summary">
-              <div><strong>{formatBytes(selectedBytes)}</strong><span>{text('预计处理空间', 'Estimated space')}</span></div>
+              <div><strong>{selectedBytes ? formatBytes(selectedBytes) : `${selectedItems.length}`}</strong><span>{selectedBytes ? text('预计处理空间', 'Estimated space') : text('待处理操作', 'Pending actions')}</span></div>
               <span className="risk-label review">{text(
                 `包含 ${selectedItems.filter((item) => item.risk === 'review').length} 项确认`,
                 `${selectedItems.filter((item) => item.risk === 'review').length} review items`

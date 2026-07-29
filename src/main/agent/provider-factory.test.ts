@@ -47,6 +47,11 @@ describe('Agent provider factory', () => {
       .toBe('模型响应超时，请稍后重试或选择响应更快的模型')
   })
 
+  it('localizes provider timeouts for English Agent interactions', () => {
+    expect(providerErrorMessage(new Error('request timed out'), 'secret', 'en-US'))
+      .toBe('The model response timed out. Try again later or choose a faster model.')
+  })
+
   it('allows slower reasoning models to complete a two-step tool probe', () => {
     expect(PROVIDER_TEST_TIMEOUT).toEqual({ totalMs: 60_000, stepMs: 45_000 })
     expect(providerTestToolChoice(0)).toBe('required')

@@ -123,7 +123,7 @@ describe('AgentStore', () => {
     expect(store.listRuns()).toEqual([completed])
 
     const database = new DatabaseSync(path.join(directory, 'memento.sqlite'))
-    expect(database.prepare('PRAGMA user_version').get()).toEqual({ user_version: 1 })
+    expect(database.prepare('PRAGMA user_version').get()).toEqual({ user_version: 2 })
     expect(database.prepare('SELECT COUNT(*) AS count FROM tool_calls').get()).toEqual({ count: 1 })
     database.close()
     store.close()

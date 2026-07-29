@@ -1,4 +1,5 @@
 import type { ActionResult, ScanResult } from './types'
+import type { AppLanguage } from './app-settings'
 
 export type AgentProviderType =
   | 'openai-compatible'
@@ -75,19 +76,98 @@ export interface AgentPlanItem {
   reversible: boolean
 }
 
+export type AgentResultKind = 'services' | 'storage' | 'applications' | 'terminal'
+
+export interface AgentResultOperation {
+  id: string
+  label: string
+  consequence: string
+  reversible: boolean
+  estimatedBytes: number
+}
+
+export interface AgentCandidateResultItem {
+  kind: 'services' | 'storage'
+  id: string
+  name: string
+  subtitle: string
+  description: string
+  status: string
+  risk: 'safe' | 'review' | 'protected'
+  sizeBytes: number
+  location: string | null
+  evidence: string[]
+  operations: AgentResultOperation[]
+}
+
+export interface AgentApplicationResultItem {
+  kind: 'applications'
+  id: string
+  name: string
+  version: string
+  location: string
+  sizeBytes: number
+  lastUsedAt: string | null
+  unused: boolean
+  operation: AgentResultOperation | null
+}
+
+export interface AgentTerminalResultItem {
+  kind: 'terminal'
+  id: string
+  title: string
+  detail: string
+  severity: 'good' | 'notice' | 'slow'
+  durationMs: number | null
+  source: string | null
+  recommendation: string | null
+  operation: AgentResultOperation | null
+}
+
+export type AgentResultItem =
+  | AgentCandidateResultItem
+  | AgentApplicationResultItem
+  | AgentTerminalResultItem
+
+export interface AgentResultSection {
+  kind: AgentResultKind
+  title: string
+  items: AgentResultItem[]
+}
+
+export interface AgentFocus {
+  kind: AgentResultKind
+  id: string
+  name: string
+}
+
+export interface AgentPresentation {
+  summary: string
+  sections: AgentResultSection[]
+}
+
 export interface AgentRunRecord {
   id: string
+  conversationId: string
+  language: AppLanguage
   prompt: string
   status: AgentRunStatus
   providerId: string
   providerName: string
   model: string
   response: string | null
+  presentation: AgentPresentation | null
+  focus: AgentFocus[]
   plan: AgentPlanItem[]
   results: ActionResult[]
   error: string | null
   createdAt: string
   updatedAt: string
+}
+
+export interface StartAgentRunInput {
+  prompt: string
+  conversationId?: string
 }
 
 export type AgentRunEvent =
@@ -116,6 +196,11 @@ export interface ExecuteAgentPlanResult {
   scan: ScanResult
 }
 
+export interface AddAgentPlanItemsInput {
+  runId: string
+  itemIds: string[]
+}
+
 export interface MementoAgentApi {
   listAgentProviders: () => Promise<AgentProvider[]>
   discoverAgentProviderModels: (
@@ -125,8 +210,9 @@ export interface MementoAgentApi {
   deleteAgentProvider: (id: string) => Promise<void>
   setDefaultAgentProvider: (id: string) => Promise<AgentProvider[]>
   testAgentProvider: (input: SaveAgentProviderInput) => Promise<AgentProviderTestResult>
-  startAgentRun: (prompt: string) => Promise<AgentRunRecord>
+  startAgentRun: (input: StartAgentRunInput) => Promise<AgentRunRecord>
   cancelAgentRun: (runId: string) => Promise<void>
+  addAgentPlanItems: (input: AddAgentPlanItemsInput) => Promise<AgentRunRecord>
   executeAgentPlan: (input: ExecuteAgentPlanInput) => Promise<ExecuteAgentPlanResult>
   listAgentRuns: () => Promise<AgentRunRecord[]>
   getAgentRun: (runId: string) => Promise<AgentRunRecord | null>

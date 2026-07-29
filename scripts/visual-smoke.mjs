@@ -80,6 +80,8 @@ try {
   await page.locator('textarea[aria-label="输入任务"]').fill('检查可以安全清理的空间')
   await page.locator('button[aria-label="发送"]').click()
   await page.locator('.plan-panel.is-visible').waitFor({ timeout: 5_000 })
+  await page.locator('.agent-result-section').first().waitFor({ timeout: 5_000 })
+  await page.screenshot({ path: '/tmp/memento-interaction-agent-results.png' })
   await page.locator('.plan-actions .primary-button').click()
   await page.locator('[role="dialog"]').waitFor()
   await page.keyboard.press('Escape')
@@ -109,6 +111,48 @@ try {
   await page.getByRole('button', { name: '保存', exact: true }).click()
   await page.getByText('测试供应商', { exact: true }).first().waitFor()
   await page.close()
+
+  for (const [name, viewport] of [
+    ['1024x768', { width: 1024, height: 768 }],
+    ['390x844', { width: 390, height: 844 }]
+  ]) {
+    const resultPage = await browser.newPage({ viewport })
+    await resultPage.goto(baseUrl, { waitUntil: 'networkidle' })
+    await resultPage.locator('textarea[aria-label="输入任务"]').fill('帮我检查长期没用的应用和可以安全清理的应用残留')
+    await resultPage.locator('button[aria-label="发送"]').click()
+    await resultPage.locator('.agent-app-result').first().waitFor({ timeout: 5_000 })
+    await resultPage.screenshot({
+      path: `/tmp/memento-${name}-agent-application-results.png`,
+      fullPage: viewport.width <= 820
+    })
+    const overflow = await resultPage.evaluate(() => (
+      document.documentElement.scrollWidth - document.documentElement.clientWidth
+    ))
+    if (overflow > 1) failures.push(`${name}/agent-application-results: horizontal overflow ${overflow}`)
+    await resultPage.close()
+  }
+
+  const englishPage = await browser.newPage({ viewport: { width: 1024, height: 768 } })
+  await englishPage.goto(baseUrl, { waitUntil: 'networkidle' })
+  await englishPage.locator('.nav-button[title="设置"]').click()
+  await englishPage.locator('.setting-row select').last().selectOption('en-US')
+  await englishPage.locator('.nav-button[title="Agent"]').click()
+  await englishPage.locator('textarea[aria-label="Enter task"]').fill('帮我检查长期没用的应用')
+  await englishPage.locator('button[aria-label="Send"]').click()
+  await englishPage.getByText('Unused applications', { exact: true }).waitFor({ timeout: 5_000 })
+  const englishConversation = await englishPage.locator('.conversation').innerText()
+  if (!englishConversation.includes('I found applications that have not been used for three months.')) {
+    failures.push('english-agent: response did not follow the interface language')
+  }
+  const englishAgentOutput = [
+    await englishPage.locator('.message.assistant').allInnerTexts(),
+    await englishPage.locator('.agent-rail').innerText()
+  ].flat().join('\n')
+  if (/[\u4e00-\u9fff]/.test(englishAgentOutput)) {
+    failures.push('english-agent: Agent output or plan still contains Chinese text')
+  }
+  await englishPage.screenshot({ path: '/tmp/memento-english-agent-results.png' })
+  await englishPage.close()
 } finally {
   await browser.close()
 }

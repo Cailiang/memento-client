@@ -21,9 +21,11 @@ import type {
   TerminalFixRunResult
 } from '../shared/types'
 import type {
+  AddAgentPlanItemsInput,
   DiscoverAgentModelsInput,
   ExecuteAgentPlanInput,
-  SaveAgentProviderInput
+  SaveAgentProviderInput,
+  StartAgentRunInput
 } from '../shared/agent-types'
 import {
   DEFAULT_APP_SETTINGS,
@@ -779,8 +781,16 @@ app.whenReady().then(async () => {
   })
   ipcMain.handle('memento:settings:get', () => appSettings)
   ipcMain.handle('memento:settings:update', (_event, input: UpdateAppSettingsInput) => {
+    const previousLanguage = appSettings.language
     appSettings = agentStore!.updateAppSettings(input)
     applyWindowSettings()
+    if (appSettings.language !== previousLanguage) {
+      currentScanResult = null
+      registeredActions = new Map()
+      registeredRevealTargets = new Map()
+      registeredTerminalFixes = new Map()
+      applicationIconCache.clear()
+    }
     if (currentScanResult && ('serviceWhitelist' in input || 'storageWhitelist' in input)) {
       const filtered = applyScanWhitelist(
         {
@@ -812,7 +822,7 @@ app.whenReady().then(async () => {
     try {
       return await discoverProviderModels(provider)
     } catch (error) {
-      throw new Error(providerErrorMessage(error, provider.apiKey))
+      throw new Error(providerErrorMessage(error, provider.apiKey, appSettings.language))
     }
   })
   ipcMain.handle('memento:agent:providers:save', (_event, input: SaveAgentProviderInput) =>
@@ -827,25 +837,38 @@ app.whenReady().then(async () => {
   ipcMain.handle('memento:agent:providers:test', async (_event, input: SaveAgentProviderInput) => {
     const provider = agentStore!.resolvePrivateProviderInput(input)
     try {
-      const result = await testProviderConnection(provider)
+      const result = await testProviderConnection(provider, undefined, appSettings.language)
       if (input.id) agentStore!.markProviderConnection(input.id, 'connected')
       return result
     } catch (error) {
       if (input.id) agentStore!.markProviderConnection(input.id, 'failed')
-      throw new Error(providerErrorMessage(error, provider.apiKey))
+      throw new Error(providerErrorMessage(error, provider.apiKey, appSettings.language))
     }
   })
   ipcMain.handle('memento:agent:runs:list', () => agentStore!.listRuns())
   ipcMain.handle('memento:agent:runs:get', (_event, runId: string) => agentStore!.getRun(runId))
-  ipcMain.handle('memento:agent:runs:start', (event, prompt: string) => {
-    if (!currentScanResult) throw new Error('请先完成一次电脑体检')
-    if (scanInProgress) throw new Error('电脑体检正在进行，请完成后再启动 Agent')
-    return agentRuntime!.start(prompt, currentScanResult, (agentEvent) => {
+  ipcMain.handle('memento:agent:runs:start', (event, input: StartAgentRunInput) => {
+    if (!currentScanResult) {
+      throw new Error(mainText('请先完成一次电脑体检', 'Complete a computer health scan first.'))
+    }
+    if (scanInProgress) {
+      throw new Error(mainText(
+        '电脑体检正在进行，请完成后再启动 Agent',
+        'The computer health scan is still running. Start the Agent after it completes.'
+      ))
+    }
+    return agentRuntime!.start(input, currentScanResult, appSettings.language, (agentEvent) => {
       if (!event.sender.isDestroyed()) event.sender.send('memento:agent-run-event', agentEvent)
     })
   })
   ipcMain.handle('memento:agent:runs:cancel', (_event, runId: string) => {
     agentRuntime!.cancel(runId)
+  })
+  ipcMain.handle('memento:agent:plans:add', (_event, input: AddAgentPlanItemsInput) => {
+    if (!currentScanResult) {
+      throw new Error(mainText('请先完成一次电脑体检', 'Complete a computer health scan first.'))
+    }
+    return agentRuntime!.addPlanItems(input, currentScanResult)
   })
 
   ipcMain.handle('memento:reveal-candidate-location', async (_event, id: string) => {
@@ -876,7 +899,8 @@ app.whenReady().then(async () => {
   ipcMain.handle('memento:agent:plans:execute', async (event, input: ExecuteAgentPlanInput) => {
     const validated = selectExecutablePlanItems(
       agentStore!.getRun(typeof input?.runId === 'string' ? input.runId : ''),
-      input
+      input,
+      appSettings.language
     )
     const { run, items: selected } = validated
     const sendStatus = (status: 'executing' | 'verifying', message: string): void => {
@@ -893,7 +917,7 @@ app.whenReady().then(async () => {
 
     let results: ActionResult[] = []
     try {
-      sendStatus('executing', '正在执行已确认的操作')
+      sendStatus('executing', mainText('正在执行已确认的操作', 'Executing confirmed operations'))
       const actionResults = await executeActionBatch(
         selected.filter((item) => item.kind === 'action').map((item) => item.id)
       )
@@ -901,14 +925,16 @@ app.whenReady().then(async () => {
         selected.filter((item) => item.kind === 'terminal-fix').map((item) => item.id)
       )
       results = [...actionResults, ...terminalResult.results]
-      sendStatus('verifying', '正在重新体检并验证结果')
+      sendStatus('verifying', mainText('正在重新体检并验证结果', 'Scanning again to verify results'))
       const scan = await performScan(appSettings.language, (progress) => {
         if (!event.sender.isDestroyed()) event.sender.send('memento:scan-progress', progress)
       })
       const completed = agentStore!.updateRun(run.id, {
         status: 'completed',
         results,
-        error: results.some((result) => !result.ok) ? '部分操作未能完成' : null
+        error: results.some((result) => !result.ok)
+          ? mainText('部分操作未能完成', 'Some operations could not be completed.')
+          : null
       })
       if (!event.sender.isDestroyed()) {
         event.sender.send('memento:agent-run-event', { type: 'completed', run: completed })
@@ -918,7 +944,9 @@ app.whenReady().then(async () => {
       const failed = agentStore!.updateRun(run.id, {
         status: 'failed',
         results,
-        error: error instanceof Error ? error.message : '执行后复检失败'
+        error: error instanceof Error
+          ? error.message
+          : mainText('执行后复检失败', 'The post-action verification scan failed.')
       })
       if (!event.sender.isDestroyed()) {
         event.sender.send('memento:agent-run-event', { type: 'failed', run: failed })

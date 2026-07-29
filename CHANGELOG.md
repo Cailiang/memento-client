@@ -8,6 +8,28 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.26 - 2026-07-29
+
+### English
+
+- Added persisted conversation IDs, focused entities, structured presentations, and pending-plan context so follow-up references resolve to the previous exact service, application, storage item, or terminal finding.
+- Restricted referential follow-up inspections to the focused entity, preventing unrelated services from displacing requests such as “stop and remove this service.”
+- Added a validated `present_results` Agent tool and trusted React result components instead of rendering arbitrary model-generated HTML.
+- Added compact, interactive application-logo grids plus storage, service, and terminal result rows with Open and registered Add to plan actions.
+- Kept all result actions behind current-scan operation validation and the existing user-confirmation boundary.
+- Made the application language authoritative for Agent instructions, statuses, summaries, plans, errors, provider tests, and language-triggered scan refreshes.
+- Migrated SQLite to schema version 2 and expanded unit and four-viewport visual coverage for context, structured results, direct actions, and English-only Agent output.
+
+### 简体中文
+
+- 持久化会话 ID、焦点实体、结构化展示和待确认计划上下文，让后续指代继续绑定上一轮的精确服务、应用、存储项目或终端发现。
+- 指代上一轮对象时只检查焦点实体，避免“停止并删除这个服务”被无关服务列表干扰。
+- 新增受校验的 `present_results` Agent 工具和可信 React 结果组件，不渲染模型生成的任意 HTML。
+- 新增带 Logo 的紧凑应用结果网格，以及存储、服务、终端结果行，可直接打开或把已注册操作加入计划。
+- 所有结果动作仍需通过当前扫描操作注册表和既有用户确认边界。
+- 应用语言现在统一控制 Agent 提示词、状态、摘要、计划、错误、供应商测试，并在切换语言后重新体检。
+- SQLite 升级到 schema 2，补充上下文、结构化结果、直接操作和 Agent 全英文输出的单元与四视口视觉测试。
+
 ## 0.6.25 - 2026-07-29
 
 ### English

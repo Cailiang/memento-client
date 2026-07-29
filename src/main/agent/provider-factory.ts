@@ -4,6 +4,7 @@ import { createOpenAI } from '@ai-sdk/openai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { stepCountIs, tool, ToolLoopAgent, type LanguageModel } from 'ai'
 import { z } from 'zod'
+import type { AppLanguage } from '../../shared/app-settings'
 import type { AgentProviderTestResult } from '../../shared/agent-types'
 import type { PrivateAgentProvider } from './agent-store'
 import { normalizeProviderBaseUrl } from './provider-config'
@@ -46,7 +47,8 @@ export function createProviderModel(provider: PrivateAgentProvider): LanguageMod
 
 export async function testProviderConnection(
   provider: PrivateAgentProvider,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  language: AppLanguage = 'zh-CN'
 ): Promise<AgentProviderTestResult> {
   let toolCalled = false
   const probe = tool({
@@ -77,21 +79,47 @@ export async function testProviderConnection(
     abortSignal: signal,
     timeout: PROVIDER_TEST_TIMEOUT
   })
-  if (!toolCalled) throw new Error('模型可以响应，但没有完成工具调用测试')
+  if (!toolCalled) {
+    throw new Error(language === 'en-US'
+      ? 'The model responded but did not complete the tool-calling test.'
+      : '模型可以响应，但没有完成工具调用测试')
+  }
   return {
     ok: true,
-    message: '连接成功，模型支持工具调用',
+    message: language === 'en-US'
+      ? 'Connected. The model supports tool calling.'
+      : '连接成功，模型支持工具调用',
     toolCalling: true,
     testedAt: new Date().toISOString()
   }
 }
 
-export function providerErrorMessage(error: unknown, apiKey: string): string {
-  const source = error instanceof Error ? error.message : '模型供应商请求失败'
+export function providerErrorMessage(
+  error: unknown,
+  apiKey: string,
+  language: AppLanguage = 'zh-CN'
+): string {
+  const source = error instanceof Error
+    ? error.message
+    : language === 'en-US' ? 'The model provider request failed.' : '模型供应商请求失败'
   const withoutKey = apiKey ? source.split(apiKey).join('[REDACTED]') : source
   const sanitized = withoutKey.replace(/\bBearer\s+[^\s,;]+/gi, 'Bearer [REDACTED]')
-  if (/timed?\s*out|timeout|aborted due to timeout/i.test(sanitized)) {
-    return '模型响应超时，请稍后重试或选择响应更快的模型'
+  if (/timed?\s*out|timeout|aborted due to timeout|超时/i.test(sanitized)) {
+    return language === 'en-US'
+      ? 'The model response timed out. Try again later or choose a faster model.'
+      : '模型响应超时，请稍后重试或选择响应更快的模型'
+  }
+  if (language === 'en-US') {
+    const translations: Array<[string, string]> = [
+      ['服务地址格式无效', 'The service URL is invalid.'],
+      ['服务地址只支持 HTTP 或 HTTPS', 'The service URL must use HTTP or HTTPS.'],
+      ['服务地址不能包含用户名或密码', 'The service URL cannot contain a username or password.'],
+      ['模型列表接口返回了无法识别的数据', 'The model-list endpoint returned unrecognized data.'],
+      ['服务已连接，但没有返回可用模型', 'Connected to the service, but it returned no available models.'],
+      ['模型可以响应，但没有完成工具调用测试', 'The model responded but did not complete the tool-calling test.']
+    ]
+    const translated = translations.find(([chinese]) => sanitized.includes(chinese))
+    if (translated) return translated[1]
   }
   return sanitized
 }

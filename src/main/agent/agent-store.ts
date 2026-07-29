@@ -2,7 +2,9 @@ import { createCipheriv, createDecipheriv, randomBytes, randomUUID } from 'node:
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type {
+  AgentFocus,
   AgentPlanItem,
+  AgentPresentation,
   AgentProvider,
   AgentProviderConnectionState,
   AgentRunRecord,
@@ -14,6 +16,7 @@ import {
   DEFAULT_APP_SETTINGS,
   normalizeAppSettings,
   type AppSettings,
+  type AppLanguage,
   type UpdateAppSettingsInput
 } from '../../shared/app-settings'
 import type { ActionResult } from '../../shared/types'
@@ -46,12 +49,16 @@ interface ProviderRow {
 
 interface RunRow {
   id: string
+  conversation_id: string
+  language: AppLanguage
   prompt: string
   status: AgentRunStatus
   provider_id: string
   provider_name: string
   model: string
   response: string | null
+  presentation_json: string
+  focus_json: string
   plan_json: string
   results_json: string
   error: string | null
@@ -78,35 +85,71 @@ function parseJson<T>(value: string, fallback: T): T {
   }
 }
 
-function validateProviderInput(input: SaveAgentProviderInput): SaveAgentProviderInput {
+function storeText(language: AppLanguage, chinese: string, english: string): string {
+  return language === 'en-US' ? english : chinese
+}
+
+function normalizedProviderUrl(
+  language: AppLanguage,
+  type: AgentProvider['type'],
+  value: string
+): string {
+  try {
+    return normalizeProviderBaseUrl(type, value)
+  } catch (error) {
+    if (language !== 'en-US' || !(error instanceof Error)) throw error
+    const translations = new Map([
+      ['服务地址格式无效', 'The service URL is invalid.'],
+      ['服务地址只支持 HTTP 或 HTTPS', 'The service URL must use HTTP or HTTPS.'],
+      ['服务地址不能包含用户名或密码', 'The service URL cannot contain a username or password.']
+    ])
+    throw new Error(translations.get(error.message) ?? error.message)
+  }
+}
+
+function validateProviderInput(
+  input: SaveAgentProviderInput,
+  language: AppLanguage
+): SaveAgentProviderInput {
   const id = typeof input.id === 'string' ? input.id.trim() : undefined
-  if (id && id.length > 100) throw new Error('模型供应商 ID 无效')
+  if (id && id.length > 100) {
+    throw new Error(storeText(language, '模型供应商 ID 无效', 'The model provider ID is invalid.'))
+  }
   const name = input.name.trim().slice(0, 80)
   const baseUrl = input.baseUrl.trim().slice(0, 2048)
   const model = input.model.trim().slice(0, 200)
   if (!name || !baseUrl || !model || !PROVIDER_TYPES.has(input.type)) {
-    throw new Error('供应商名称、接口类型、服务地址和模型不能为空')
+    throw new Error(storeText(
+      language,
+      '供应商名称、接口类型、服务地址和模型不能为空',
+      'Provider name, API type, service URL, and model are required.'
+    ))
   }
   return {
     id,
     name,
     type: input.type,
-    baseUrl: normalizeProviderBaseUrl(input.type, baseUrl),
+    baseUrl: normalizedProviderUrl(language, input.type, baseUrl),
     model,
     apiKey: input.apiKey?.trim()
   }
 }
 
-function validateDiscoveryInput(input: DiscoverAgentModelsInput): Omit<PrivateModelDiscoveryInput, 'apiKey'> & { id?: string; apiKey?: string } {
+function validateDiscoveryInput(
+  input: DiscoverAgentModelsInput,
+  language: AppLanguage
+): Omit<PrivateModelDiscoveryInput, 'apiKey'> & { id?: string; apiKey?: string } {
   const id = typeof input.id === 'string' ? input.id.trim() : undefined
-  if (id && id.length > 100) throw new Error('模型供应商 ID 无效')
+  if (id && id.length > 100) {
+    throw new Error(storeText(language, '模型供应商 ID 无效', 'The model provider ID is invalid.'))
+  }
   if (!PROVIDER_TYPES.has(input.type) || typeof input.baseUrl !== 'string' || !input.baseUrl.trim()) {
-    throw new Error('请先填写有效的服务地址')
+    throw new Error(storeText(language, '请先填写有效的服务地址', 'Enter a valid service URL first.'))
   }
   return {
     id,
     type: input.type,
-    baseUrl: normalizeProviderBaseUrl(input.type, input.baseUrl.slice(0, 2048)),
+    baseUrl: normalizedProviderUrl(language, input.type, input.baseUrl.slice(0, 2048)),
     apiKey: input.apiKey?.trim()
   }
 }
@@ -162,21 +205,36 @@ export class AgentStore {
       ORDER BY is_default DESC, updated_at DESC
       LIMIT 1
     `).get() as unknown as ProviderRow | undefined
-    if (!row) throw new Error('请先在设置中配置模型供应商')
+    if (!row) {
+      throw new Error(storeText(
+        this.getAppSettings().language,
+        '请先在设置中配置模型供应商',
+        'Configure a model provider in Settings first.'
+      ))
+    }
     return this.privateProvider(row)
   }
 
   getPrivateProvider(id: string): PrivateAgentProvider {
     const row = this.providerRow(id)
-    if (!row) throw new Error('模型供应商不存在')
+    if (!row) {
+      throw new Error(storeText(
+        this.getAppSettings().language,
+        '模型供应商不存在',
+        'The model provider does not exist.'
+      ))
+    }
     return this.privateProvider(row)
   }
 
   resolvePrivateProviderInput(input: SaveAgentProviderInput): PrivateAgentProvider {
-    const normalized = validateProviderInput(input)
+    const language = this.getAppSettings().language
+    const normalized = validateProviderInput(input, language)
     const existing = normalized.id ? this.providerRow(normalized.id) : undefined
     const apiKey = normalized.apiKey || (existing ? this.decryptKey(existing) : '')
-    if (!apiKey) throw new Error('请求密钥不能为空')
+    if (!apiKey) {
+      throw new Error(storeText(language, '请求密钥不能为空', 'The API key is required.'))
+    }
     const timestamp = now()
     return {
       id: normalized.id ?? randomUUID(),
@@ -195,10 +253,13 @@ export class AgentStore {
   }
 
   resolveModelDiscoveryInput(input: DiscoverAgentModelsInput): PrivateModelDiscoveryInput {
-    const normalized = validateDiscoveryInput(input)
+    const language = this.getAppSettings().language
+    const normalized = validateDiscoveryInput(input, language)
     const existing = normalized.id ? this.providerRow(normalized.id) : undefined
     const apiKey = normalized.apiKey || (existing ? this.decryptKey(existing) : '')
-    if (!apiKey) throw new Error('请先填写请求密钥')
+    if (!apiKey) {
+      throw new Error(storeText(language, '请先填写请求密钥', 'Enter an API key first.'))
+    }
     return {
       type: normalized.type,
       baseUrl: normalized.baseUrl,
@@ -257,12 +318,24 @@ export class AgentStore {
   deleteProvider(id: string): void {
     const row = this.providerRow(id)
     if (!row) return
-    if (row.is_default === 1) throw new Error('请先把另一个供应商设为默认模型')
+    if (row.is_default === 1) {
+      throw new Error(storeText(
+        this.getAppSettings().language,
+        '请先把另一个供应商设为默认模型',
+        'Set another provider as the default model first.'
+      ))
+    }
     this.database.prepare('DELETE FROM ai_providers WHERE id = ?').run(id)
   }
 
   setDefaultProvider(id: string): AgentProvider[] {
-    if (!this.providerRow(id)) throw new Error('模型供应商不存在')
+    if (!this.providerRow(id)) {
+      throw new Error(storeText(
+        this.getAppSettings().language,
+        '模型供应商不存在',
+        'The model provider does not exist.'
+      ))
+    }
     this.database.exec('BEGIN IMMEDIATE')
     try {
       this.database.prepare('UPDATE ai_providers SET is_default = 0').run()
@@ -282,16 +355,26 @@ export class AgentStore {
     `).run(state, now(), id)
   }
 
-  createRun(prompt: string, provider: AgentProvider): AgentRunRecord {
+  createRun(
+    prompt: string,
+    provider: AgentProvider,
+    language: AppLanguage = 'zh-CN',
+    conversationId: string = randomUUID(),
+    focus: AgentFocus[] = []
+  ): AgentRunRecord {
     const timestamp = now()
     const run: AgentRunRecord = {
       id: randomUUID(),
+      conversationId,
+      language,
       prompt: prompt.trim(),
       status: 'preparing',
       providerId: provider.id,
       providerName: provider.name,
       model: provider.model,
       response: null,
+      presentation: null,
+      focus,
       plan: [],
       results: [],
       error: null,
@@ -314,12 +397,27 @@ export class AgentStore {
     return rows.map((row) => this.runFromRow(row))
   }
 
+  listConversationRuns(conversationId: string, limit = 12): AgentRunRecord[] {
+    const rows = this.database.prepare(`
+      SELECT * FROM agent_runs
+      WHERE conversation_id = ?
+      ORDER BY created_at DESC LIMIT ?
+    `).all(conversationId, Math.max(1, Math.min(limit, 30))) as unknown as RunRow[]
+    return rows.map((row) => this.runFromRow(row)).reverse()
+  }
+
   updateRun(
     id: string,
-    input: Partial<Pick<AgentRunRecord, 'status' | 'response' | 'plan' | 'results' | 'error'>>
+    input: Partial<Pick<AgentRunRecord, 'status' | 'response' | 'presentation' | 'focus' | 'plan' | 'results' | 'error'>>
   ): AgentRunRecord {
     const current = this.getRun(id)
-    if (!current) throw new Error('Agent 任务不存在')
+    if (!current) {
+      throw new Error(storeText(
+        this.getAppSettings().language,
+        'Agent 任务不存在',
+        'The Agent task does not exist.'
+      ))
+    }
     const next: AgentRunRecord = {
       ...current,
       ...input,
@@ -354,9 +452,9 @@ export class AgentStore {
 
   private migrate(): void {
     const versionRow = this.database.prepare('PRAGMA user_version').get() as { user_version: number }
-    if (versionRow.user_version >= 1) return
-    this.database.exec(`
-      BEGIN IMMEDIATE;
+    if (versionRow.user_version < 1) {
+      this.database.exec(`
+        BEGIN IMMEDIATE;
       CREATE TABLE IF NOT EXISTS ai_providers (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -400,9 +498,24 @@ export class AgentStore {
         output_json TEXT NOT NULL,
         created_at TEXT NOT NULL
       );
-      PRAGMA user_version = 1;
-      COMMIT;
-    `)
+        PRAGMA user_version = 1;
+        COMMIT;
+      `)
+    }
+    if (versionRow.user_version < 2) {
+      this.database.exec(`
+        BEGIN IMMEDIATE;
+        ALTER TABLE agent_runs ADD COLUMN conversation_id TEXT NOT NULL DEFAULT '';
+        ALTER TABLE agent_runs ADD COLUMN language TEXT NOT NULL DEFAULT 'zh-CN';
+        ALTER TABLE agent_runs ADD COLUMN presentation_json TEXT NOT NULL DEFAULT 'null';
+        ALTER TABLE agent_runs ADD COLUMN focus_json TEXT NOT NULL DEFAULT '[]';
+        UPDATE agent_runs SET conversation_id = id WHERE conversation_id = '';
+        CREATE INDEX IF NOT EXISTS agent_runs_conversation_created
+          ON agent_runs(conversation_id, created_at);
+        PRAGMA user_version = 2;
+        COMMIT;
+      `)
+    }
   }
 
   private providerRow(id: string): ProviderRow | undefined {
@@ -476,12 +589,16 @@ export class AgentStore {
   private runFromRow(row: RunRow): AgentRunRecord {
     return {
       id: row.id,
+      conversationId: row.conversation_id || row.id,
+      language: row.language === 'en-US' ? 'en-US' : 'zh-CN',
       prompt: row.prompt,
       status: row.status,
       providerId: row.provider_id,
       providerName: row.provider_name,
       model: row.model,
       response: row.response,
+      presentation: parseJson<AgentPresentation | null>(row.presentation_json, null),
+      focus: parseJson<AgentFocus[]>(row.focus_json, []),
       plan: parseJson<AgentPlanItem[]>(row.plan_json, []),
       results: parseJson<ActionResult[]>(row.results_json, []),
       error: row.error,
@@ -493,24 +610,30 @@ export class AgentStore {
   private writeRun(run: AgentRunRecord): void {
     this.database.prepare(`
       INSERT INTO agent_runs (
-        id, prompt, status, provider_id, provider_name, model,
-        response, plan_json, results_json, error, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        id, conversation_id, language, prompt, status, provider_id, provider_name, model,
+        response, presentation_json, focus_json, plan_json, results_json, error, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         status = excluded.status,
         response = excluded.response,
+        presentation_json = excluded.presentation_json,
+        focus_json = excluded.focus_json,
         plan_json = excluded.plan_json,
         results_json = excluded.results_json,
         error = excluded.error,
         updated_at = excluded.updated_at
     `).run(
       run.id,
+      run.conversationId,
+      run.language,
       run.prompt,
       run.status,
       run.providerId,
       run.providerName,
       run.model,
       run.response,
+      JSON.stringify(run.presentation),
+      JSON.stringify(run.focus),
       JSON.stringify(run.plan),
       JSON.stringify(run.results),
       run.error,
