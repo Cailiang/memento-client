@@ -90,6 +90,7 @@ npm run dist:mac
 
 ## 开发文档
 
+- [本地 Agent 开发设计（新方案）](docs/LOCAL_AGENT_DEVELOPMENT.md)
 - [AI 分析功能设计](docs/AI_ANALYSIS_DEVELOPMENT.md)
 - [AI Gateway 可运行示例](examples/ai-gateway-smoke/README.md)
 - [版本更新记录](CHANGELOG.md)

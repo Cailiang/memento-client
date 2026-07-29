@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import {
   Check,
+  EyeOff,
   Languages,
+  ListFilter,
   MonitorUp,
   Palette
 } from 'lucide-react'
@@ -63,11 +65,13 @@ const THEMES: Array<{
 export function SettingsView({
   settings,
   onUpdate,
-  onOpenAiSettings
+  onOpenAiSettings,
+  onManageIgnored
 }: {
   settings: AppSettings
   onUpdate: (input: UpdateAppSettingsInput) => Promise<void>
   onOpenAiSettings: () => void
+  onManageIgnored: (kind: 'services' | 'storage') => void
 }): React.JSX.Element {
   const { text } = useI18n()
   const [busyKey, setBusyKey] = useState<string | null>(null)
@@ -149,6 +153,33 @@ export function SettingsView({
             />
             <span className="toggle-track" aria-hidden="true"><span /></span>
           </label>
+        </div>
+      </section>
+
+      <section className="preference-section ignored-preference-section">
+        <div className="preference-copy">
+          <span className="preference-icon"><EyeOff size={18} /></span>
+          <div><h2>{text('忽略列表', 'Ignored items')}</h2><p>{text('电脑体检和 Agent 都不会处理这些项目。', 'Health checks and Agent will not process these items.')}</p></div>
+        </div>
+        <div className="ignored-settings-summary">
+          <div>
+            <strong>{text(
+              `已忽略 ${settings.storageWhitelist.length + settings.serviceWhitelist.length} 项`,
+              `${settings.storageWhitelist.length + settings.serviceWhitelist.length} ignored`
+            )}</strong>
+            <small>{text(
+              `存储空间 ${settings.storageWhitelist.length} 项 · 后台服务 ${settings.serviceWhitelist.length} 项`,
+              `${settings.storageWhitelist.length} storage · ${settings.serviceWhitelist.length} services`
+            )}</small>
+          </div>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => onManageIgnored(settings.storageWhitelist.length > 0 ? 'storage' : 'services')}
+          >
+            <ListFilter size={15} />
+            {text('管理', 'Manage')}
+          </button>
         </div>
       </section>
 

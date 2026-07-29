@@ -11,12 +11,14 @@ import {
   CircleGauge,
   Clock3,
   ExternalLink,
+  EyeOff,
   FolderX,
   FolderOpen,
   HardDrive,
   Info,
   LayoutDashboard,
   LoaderCircle,
+  MoreHorizontal,
   Power,
   RadioTower,
   RefreshCw,
@@ -62,7 +64,7 @@ import {
 import { AiSettingsView } from './ai/AiSettingsView'
 import { I18nProvider, useI18n } from './i18n'
 import { SettingsView } from './SettingsView'
-import { WhitelistPanel } from './WhitelistView'
+import { IgnoredItemsDialog } from './WhitelistView'
 import {
   applyCompletedCandidateActions,
   candidateOperations,
@@ -284,6 +286,9 @@ function AppContent({
   const [terminalFixReviewOpen, setTerminalFixReviewOpen] = useState(false)
   const [terminalFixBusy, setTerminalFixBusy] = useState(false)
   const [openingApplicationId, setOpeningApplicationId] = useState<string | null>(null)
+  const [pendingIgnoreCandidate, setPendingIgnoreCandidate] = useState<ScanCandidate | null>(null)
+  const [ignoreBusy, setIgnoreBusy] = useState(false)
+  const [ignoreManagerKind, setIgnoreManagerKind] = useState<'services' | 'storage' | null>(null)
   const aiTasks = useAiAnalysisTasks()
   const previousAiTaskStatuses = useRef<Map<string, string>>(new Map())
   const startedRef = useRef(false)
@@ -534,33 +539,46 @@ function AppContent({
     }
   }
 
-  const whitelistCandidate = async (id: string): Promise<void> => {
+  const requestIgnoreCandidate = (id: string): void => {
     const candidate = result?.candidates.find(
       (item) => item.id === id && (item.section === 'services' || item.section === 'storage')
     )
+    if (!candidate) return
+    setPendingIgnoreCandidate(candidate)
+  }
+
+  const ignoreCandidate = async (): Promise<void> => {
+    const candidate = pendingIgnoreCandidate
     if (!candidate) return
     const value = candidateWhitelistValue(candidate)
     if (!value) return
     const currentWhitelist = candidate.section === 'services'
       ? settings.serviceWhitelist
       : settings.storageWhitelist
-    if (currentWhitelist.includes(value)) return
+    if (currentWhitelist.includes(value)) {
+      setPendingIgnoreCandidate(null)
+      return
+    }
+    setIgnoreBusy(true)
     try {
       await onUpdateSettings(candidate.section === 'services'
         ? { serviceWhitelist: [...settings.serviceWhitelist, value] }
         : { storageWhitelist: [...settings.storageWhitelist, value] })
       setResult((current) => current
-        ? { ...current, candidates: current.candidates.filter((item) => item.id !== id) }
+        ? { ...current, candidates: current.candidates.filter((item) => item.id !== candidate.id) }
         : current)
       setSelected((current) => {
         const next = new Set(current)
         for (const operation of candidateOperations(candidate)) next.delete(operation.id)
         return next
       })
-      if (aiExpandedId === id) setAiExpandedId(null)
-      setToast(text(`已将 ${candidate.name} 加入白名单`, `${candidate.name} was added to the whitelist`))
+      if (aiExpandedId === candidate.id) setAiExpandedId(null)
+      setPendingIgnoreCandidate(null)
+      setToast(text(`${candidate.name} 已加入忽略列表`, `${candidate.name} was added to ignored items`))
     } catch (reason) {
-      setToast(reason instanceof Error ? reason.message : text('无法更新白名单', 'Could not update the whitelist'))
+      setToast(reason instanceof Error ? reason.message : text('无法更新忽略列表', 'Could not update ignored items'))
+    } finally {
+      setIgnoreBusy(false)
     }
   }
 
@@ -737,6 +755,7 @@ function AppContent({
               settings={settings}
               onUpdate={updateSettingsFromView}
               onOpenAiSettings={() => setView('ai-settings')}
+              onManageIgnored={setIgnoreManagerKind}
             />
           ) : view === 'ai-settings' ? (
             <AiSettingsView onOpenGeneralSettings={() => setView('settings')} />
@@ -757,7 +776,7 @@ function AppContent({
                 onReviewAction={reviewDirectAction}
                 onAskAi={askAi}
                 onRevealLocation={revealLocation}
-                onWhitelist={(id) => void whitelistCandidate(id)}
+                onWhitelist={requestIgnoreCandidate}
                 selected={selected}
               />
             ) : view === 'terminal' ? (
@@ -786,13 +805,12 @@ function AppContent({
                 result={result}
                 selected={selected}
                 onToggle={toggleSelected}
-                onClearSelection={() => setSelected(new Set())}
                 onReviewAction={reviewDirectAction}
                 onAskAi={askAi}
                 onRevealLocation={revealLocation}
-                onWhitelist={(id) => void whitelistCandidate(id)}
+                onWhitelist={requestIgnoreCandidate}
+                onManageIgnored={setIgnoreManagerKind}
                 settings={settings}
-                onUpdateSettings={updateSettingsFromView}
                 aiExpandedId={aiExpandedId}
                 autoPrepareAiId={aiRequestedId}
                 onAiPrepared={() => setAiRequestedId(null)}
@@ -837,6 +855,25 @@ function AppContent({
           busy={actionBusy}
           onClose={closeConfirmation}
           onConfirm={() => void executeActions()}
+        />
+      )}
+
+      {pendingIgnoreCandidate && (
+        <IgnoreConfirmDialog
+          candidate={pendingIgnoreCandidate}
+          busy={ignoreBusy}
+          onClose={() => setPendingIgnoreCandidate(null)}
+          onConfirm={() => void ignoreCandidate()}
+        />
+      )}
+
+      {ignoreManagerKind && (
+        <IgnoredItemsDialog
+          initialKind={ignoreManagerKind}
+          serviceValues={settings.serviceWhitelist}
+          storageValues={settings.storageWhitelist}
+          onUpdate={updateSettingsFromView}
+          onClose={() => setIgnoreManagerKind(null)}
         />
       )}
 
@@ -1494,7 +1531,6 @@ function CandidateView({
   aiExpandedId,
   autoPrepareAiId,
   onToggle,
-  onClearSelection,
   onReviewAction,
   onAskAi,
   onAiPrepared,
@@ -1502,7 +1538,7 @@ function CandidateView({
   onOpenSettings,
   onRevealLocation,
   onWhitelist,
-  onUpdateSettings
+  onManageIgnored
 }: {
   section: Exclude<ScanSection, 'terminal'>
   result: ScanResult
@@ -1511,7 +1547,6 @@ function CandidateView({
   aiExpandedId: string | null
   autoPrepareAiId: string | null
   onToggle: (id: string) => void
-  onClearSelection: () => void
   onReviewAction: (id: string) => void
   onAskAi: (id: string) => void
   onAiPrepared: () => void
@@ -1519,10 +1554,9 @@ function CandidateView({
   onOpenSettings: () => void
   onRevealLocation: (id: string) => void
   onWhitelist: (id: string) => void
-  onUpdateSettings: (input: UpdateAppSettingsInput) => Promise<void>
+  onManageIgnored: (kind: 'services' | 'storage') => void
 }): React.JSX.Element {
   const { language, text } = useI18n()
-  const [activeTab, setActiveTab] = useState<'results' | 'whitelist'>('results')
   const title = viewTitle(section, language)
   const candidates = result.candidates.filter((item) => item.section === section)
   const supportsWhitelist = section === 'services' || section === 'storage'
@@ -1531,7 +1565,6 @@ function CandidateView({
     : section === 'storage'
       ? settings.storageWhitelist
       : []
-  const showingWhitelist = supportsWhitelist && activeTab === 'whitelist'
   const actionable = candidates.filter((item) => candidateOperations(item).length > 0)
   const totalBytes = actionable.reduce((sum, item) => sum + (item.sizeBytes ?? 0), 0)
   const safeIds = section === 'services'
@@ -1548,97 +1581,70 @@ function CandidateView({
     }
   }
 
-  const selectTab = (tab: 'results' | 'whitelist'): void => {
-    setActiveTab(tab)
-    onClearSelection()
-    onCloseAi()
-  }
-
   return (
     <div className="view candidate-view">
       <header className="module-header">
         <h1>{title}</h1>
-        {supportsWhitelist ? (
-          <div className="module-tabs" role="tablist" aria-label={text(`${title}视图`, `${title} views`)}>
+        <div className="module-header-actions">
+          {supportsWhitelist && (
             <button
               type="button"
-              role="tab"
-              aria-selected={activeTab === 'results'}
-              className={activeTab === 'results' ? 'is-active' : ''}
-              onClick={() => selectTab('results')}
+              className="ignored-count-button"
+              onClick={() => onManageIgnored(section as 'services' | 'storage')}
             >
-              {text('扫描结果', 'Results')}<span>{candidates.length}</span>
+              <EyeOff size={14} />
+              {text(`已忽略 ${whitelistValues.length} 项`, `${whitelistValues.length} ignored`)}
             </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'whitelist'}
-              className={activeTab === 'whitelist' ? 'is-active' : ''}
-              onClick={() => selectTab('whitelist')}
-            >
-              {text('白名单', 'Whitelist')}<span>{whitelistValues.length}</span>
-            </button>
-          </div>
-        ) : (
+          )}
           <div className="module-stat">
-            <strong>{formatBytes(totalBytes)}</strong>
-            <span>{text('可处理空间', 'reclaimable')}</span>
+            <strong>{section === 'storage' ? formatBytes(totalBytes) : candidates.length}</strong>
+            <span>{section === 'storage' ? text('可处理空间', 'reclaimable') : text('检测结果', 'findings')}</span>
           </div>
-        )}
+        </div>
       </header>
 
-      {showingWhitelist ? (
-        <WhitelistPanel
-          kind={section as 'services' | 'storage'}
-          values={whitelistValues}
-          onUpdate={onUpdateSettings}
-        />
-      ) : (
-        <>
-          {safeIds.length > 0 && (
-            <div className="list-toolbar">
-              <label className="select-all">
-                <input type="checkbox" checked={allSafeSelected} onChange={toggleSafe} />
-                <span>{text('选择全部低风险项目', 'Select all low-risk items')}</span>
-              </label>
-            </div>
-          )}
+      {safeIds.length > 0 && (
+        <div className="list-toolbar">
+          <label className="select-all">
+            <input type="checkbox" checked={allSafeSelected} onChange={toggleSafe} />
+            <span>{text('选择全部低风险项目', 'Select all low-risk items')}</span>
+          </label>
+        </div>
+      )}
 
-          {candidates.length ? (
-            <div className="candidate-list">
-              {candidates.map((candidate) => (
-                <div className={`candidate-entry ${aiExpandedId === candidate.id ? 'has-ai' : ''}`} key={candidate.id}>
-                  <CandidateRow
-                    scanId={result.scanId}
+      {candidates.length ? (
+        <div className="candidate-list">
+          {candidates.map((candidate) => (
+            <div className={`candidate-entry ${aiExpandedId === candidate.id ? 'has-ai' : ''}`} key={candidate.id}>
+              <CandidateRow
+                scanId={result.scanId}
+                candidate={candidate}
+                selectedOperationId={selectedOperationId(candidate, selected)}
+                aiExpanded={aiExpandedId === candidate.id}
+                onToggle={onToggle}
+                onReviewAction={onReviewAction}
+                onAskAi={(id) => aiExpandedId === id ? onCloseAi() : onAskAi(id)}
+                onRevealLocation={onRevealLocation}
+                onWhitelist={onWhitelist}
+              />
+              {aiExpandedId === candidate.id && (
+                <div className="candidate-ai-inline">
+                  <AiAnalysisPanel
+                    result={result}
                     candidate={candidate}
-                    selectedOperationId={selectedOperationId(candidate, selected)}
-                    aiExpanded={aiExpandedId === candidate.id}
-                    onToggle={onToggle}
-                    onReviewAction={onReviewAction}
-                    onAskAi={(id) => aiExpandedId === id ? onCloseAi() : onAskAi(id)}
-                    onRevealLocation={onRevealLocation}
-                    onWhitelist={onWhitelist}
+                    compact
+                    autoPrepare={autoPrepareAiId === candidate.id}
+                    onAutoPrepared={onAiPrepared}
+                    onOpenSettings={onOpenSettings}
+                    onClose={onCloseAi}
                   />
-                  {aiExpandedId === candidate.id && (
-                    <div className="candidate-ai-inline">
-                      <AiAnalysisPanel
-                        result={result}
-                        candidate={candidate}
-                        compact
-                        autoPrepare={autoPrepareAiId === candidate.id}
-                        onAutoPrepared={onAiPrepared}
-                        onOpenSettings={onOpenSettings}
-                        onClose={onCloseAi}
-                      />
-                    </div>
-                  )}
                 </div>
-              ))}
+              )}
             </div>
-          ) : (
-            <InlineEmpty section={section} />
-          )}
-        </>
+          ))}
+        </div>
+      ) : (
+        <InlineEmpty section={section} />
       )}
     </div>
   )
@@ -1676,6 +1682,25 @@ function CandidateRow({
   const aiBusy = aiState.status === 'preparing' || aiState.status === 'analyzing'
   const aiReady = aiState.status === 'succeeded'
   const showSubtitle = candidate.subtitle.trim() !== candidate.location?.trim()
+  const [moreOpen, setMoreOpen] = useState(false)
+  const moreMenuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!moreOpen) return
+    const onPointerDown = (event: PointerEvent): void => {
+      if (!moreMenuRef.current?.contains(event.target as Node)) setMoreOpen(false)
+    }
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setMoreOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [moreOpen])
+
   return (
     <div
       className={`candidate-row ${onOpen ? 'is-link' : ''}`}
@@ -1752,20 +1777,6 @@ function CandidateRow({
         {(candidate.section === 'services' || candidate.section === 'storage') && (
           <button
             type="button"
-            className="candidate-whitelist-action"
-            onClick={(event) => {
-              event.stopPropagation()
-              onWhitelist(candidate.id)
-            }}
-            title={text('加入白名单，后续扫描不再显示', 'Add to whitelist and hide from future scans')}
-          >
-            <ShieldCheck size={14} />
-            {text('加入白名单', 'Whitelist')}
-          </button>
-        )}
-        {(candidate.section === 'services' || candidate.section === 'storage') && (
-          <button
-            type="button"
             className="candidate-ai-action"
             aria-expanded={aiExpanded}
             onClick={(event) => {
@@ -1813,6 +1824,40 @@ function CandidateRow({
             {operationLabel(operation, language)}
           </button>
         ))}
+        {(candidate.section === 'services' || candidate.section === 'storage') && (
+          <div className="candidate-more" ref={moreMenuRef}>
+            <button
+              type="button"
+              className="candidate-more-button"
+              aria-haspopup="menu"
+              aria-expanded={moreOpen}
+              onClick={(event) => {
+                event.stopPropagation()
+                setMoreOpen((current) => !current)
+              }}
+              title={text('更多操作', 'More actions')}
+              aria-label={text(`${candidate.name}的更多操作`, `More actions for ${candidate.name}`)}
+            >
+              <MoreHorizontal size={15} />
+            </button>
+            {moreOpen && (
+              <div className="candidate-more-menu" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    setMoreOpen(false)
+                    onWhitelist(candidate.id)
+                  }}
+                >
+                  <EyeOff size={14} />
+                  {text('忽略此项', 'Ignore item')}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
       {onOpen && <ChevronRight className="row-chevron" size={16} />}
     </div>
@@ -2065,6 +2110,84 @@ function AiActivityCenter({
         ))}
       </div>
     </section>
+  )
+}
+
+function IgnoreConfirmDialog({
+  candidate,
+  busy,
+  onClose,
+  onConfirm
+}: {
+  candidate: ScanCandidate
+  busy: boolean
+  onClose: () => void
+  onConfirm: () => void
+}): React.JSX.Element {
+  const { text } = useI18n()
+  const storage = candidate.section === 'storage'
+  const identity = candidateWhitelistValue(candidate) ?? candidate.name
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape' && !busy) onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [busy, onClose])
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={() => !busy && onClose()}>
+      <section
+        className="confirm-dialog ignore-confirm-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ignore-confirm-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="dialog-head">
+          <div>
+            <span>{text('可随时恢复', 'Can be restored anytime')}</span>
+            <h2 id="ignore-confirm-title">{text(`忽略 ${candidate.name}？`, `Ignore ${candidate.name}?`)}</h2>
+            <p>{storage
+              ? text('以后不会清理此项目，也不再计入可释放空间。', 'This item will not be cleaned or counted as reclaimable space.')
+              : text('不会停止或移除该服务，后续体检和 Agent 都会跳过它。', 'The service will not be stopped or removed. Future checks and Agent will skip it.')}</p>
+          </div>
+          <button
+            type="button"
+            className="icon-button"
+            onClick={onClose}
+            disabled={busy}
+            title={text('关闭', 'Close')}
+            aria-label={text('关闭忽略确认', 'Close ignore confirmation')}
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="ignore-confirm-item">
+          <span className={`dialog-item-icon icon-${storage ? 'storage' : 'services'}`}>
+            {storage ? <Archive size={16} /> : <RadioTower size={16} />}
+          </span>
+          <div>
+            <strong>{candidate.name}</strong>
+            <code title={identity}>{identity}</code>
+          </div>
+        </div>
+        <div className="dialog-notice">
+          <EyeOff size={17} />
+          <span>{text('加入后会立即从结果中移除，并同时阻止手动清理和 Agent 操作。', 'The item leaves results immediately and is blocked from both manual cleanup and Agent actions.')}</span>
+        </div>
+        <div className="dialog-actions">
+          <button type="button" className="secondary-button" onClick={onClose} disabled={busy}>
+            {text('取消', 'Cancel')}
+          </button>
+          <button type="button" className="primary-button" onClick={onConfirm} disabled={busy} autoFocus>
+            {busy ? <LoaderCircle className="spinning" size={16} /> : <EyeOff size={16} />}
+            {busy ? text('正在忽略', 'Ignoring') : text('确认忽略', 'Ignore item')}
+          </button>
+        </div>
+      </section>
+    </div>
   )
 }
 

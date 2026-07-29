@@ -1,6 +1,10 @@
 # Memento AI 分析功能开发设计
 
-状态：AI Analysis MVP implemented
+> 历史文档：本文记录已经实现的 AI Gateway / Hosted / BYOK 分析架构。
+> `agent` 分支的新实现将废弃该架构，后续开发以
+> [Memento 本地 Agent 开发设计](LOCAL_AGENT_DEVELOPMENT.md) 为准。
+
+状态：历史实现，等待本地 Agent 架构替换
 目标版本：AI Analysis MVP
 最后更新：2026-07-24
 适用范围：macOS Electron 客户端、可选官方 AI Gateway、本地模型与 BYOK Provider

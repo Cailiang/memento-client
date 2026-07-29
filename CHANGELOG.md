@@ -4,6 +4,24 @@ All notable changes to Memento Client are documented here in English and Simplif
 
 Memento Client 的重要变更会在这里使用英文和简体中文同步记录。
 
+## 0.6.20 - 2026-07-29
+
+### English
+
+- Replaced exposed whitelist controls with the compact Ignored items interaction approved in the Memento Agent prototype.
+- Background-service and storage rows now place Ignore item in a `...` menu and explain the exact effect before confirmation.
+- Added a centralized Ignored items manager in Settings with storage/service tabs, live counts, empty states, and Restore detection actions.
+- Ignored candidates leave current and future scan results immediately; their cleanup actions and Finder targets are also revoked so AI or Agent flows cannot bypass the rule.
+- Documented the Agent prototype as the production UI source of truth and made versioned, verified local DMG delivery mandatory after every code or UI change.
+
+### 简体中文
+
+- 将直接暴露的白名单控件替换为 Memento Agent 原型中确认的紧凑“忽略列表”交互。
+- 后台服务和存储空间行把“忽略此项”收纳到 `...` 菜单，并在确认前明确说明实际影响。
+- 设置页新增统一的忽略列表管理窗口，包含存储空间/后台服务分类、实时数量、空状态和“恢复检测”操作。
+- 忽略项会立即从当前及后续扫描结果中移除，同时撤销清理动作与 Finder 定位能力，AI 或 Agent 流程无法绕过。
+- 将 Agent 原型写入文档作为正式 UI 的实现真源，并明确每次代码或 UI 修改后都必须升级版本、验证并交付本地 DMG。
+
 ## 0.6.19 - 2026-07-26
 
 ### English

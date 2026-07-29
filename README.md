@@ -90,6 +90,7 @@ Tags matching `v*` trigger [.github/workflows/release.yml](.github/workflows/rel
 
 ## Documentation
 
+- [Local Agent design (new architecture, Chinese)](docs/LOCAL_AGENT_DEVELOPMENT.md)
 - [AI analysis design](docs/AI_ANALYSIS_DEVELOPMENT.md)
 - [Runnable AI gateway example](examples/ai-gateway-smoke/README.md)
 - [Version history](CHANGELOG.md)

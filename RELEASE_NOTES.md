@@ -1,19 +1,20 @@
-# Memento 0.6.19
+# Memento 0.6.20
 
 ## English
 
-This release makes the application grid easier to identify and use with official localized names and direct launching.
+This release introduces a compact, centralized way to ignore storage and background-service findings without weakening cleanup boundaries.
 
 ### Highlights
 
-- Official Simplified Chinese application names are read from each app bundle when available; apps without an official localization keep their existing name.
-- Every application card now has a direct Open action with visible progress and result feedback.
-- Application launching is restricted to manageable apps in the current scan and validated again in the Electron main process.
-- Open and Uninstall use a compact two-button layout; uninstall remains destructive and requires confirmation.
+- Storage and background-service rows now expose Ignore item from a compact `...` menu.
+- A confirmation explains whether the item is protected from cleanup or skipped during service checks.
+- Settings includes one Ignored items manager with separate Storage and Services tabs, live counts, and Restore detection.
+- Ignored findings are removed from scan results, registered cleanup actions, Finder locations, and data visible to AI or Agent flows.
+- The approved Agent HTML prototype is now documented as the required source for production UI implementation.
 
-### Uninstall scope
+### Ignore scope
 
-Uninstall still requires confirmation and moves only the selected `.app` bundle to the Trash. Documents, preferences, caches, and other application data are kept.
+Ignoring does not delete storage or stop a service. It prevents future detection and processing until the user restores the item in Settings.
 
 ### Platform note
 
@@ -21,18 +22,19 @@ Full maintenance scanning and cleanup currently support macOS. This local Intel 
 
 ## 简体中文
 
-这个版本让应用网格更容易识别和操作，新增官方中文名称与直接启动功能。
+这个版本提供紧凑、统一的忽略列表管理，同时确保忽略规则真正约束扫描和清理能力。
 
 ### 主要变化
 
-- APP 自带简体中文名称时优先显示官方中文名；没有官方中文本地化时保留原名称。
-- 每张应用卡新增“打开”操作，并显示执行中状态和结果反馈。
-- 仅允许启动当前扫描结果中的可管理应用，Electron 主进程会再次校验路径。
-- “打开”和“卸载”采用紧凑双按钮布局；卸载仍为危险操作并需要二次确认。
+- 存储空间和后台服务列表通过紧凑的 `...` 菜单提供“忽略此项”。
+- 确认弹窗会区分存储保护和后台服务跳过检测的实际影响。
+- 设置页新增统一的“忽略列表”管理窗口，按存储空间和后台服务分类，显示实时数量并支持“恢复检测”。
+- 忽略项会从扫描结果、已注册清理动作、Finder 定位和 AI/Agent 可见数据中同时移除。
+- 开发文档已明确：正式界面必须以确认过的 Agent HTML 原型为实现基准。
 
-### 卸载范围
+### 忽略范围
 
-卸载仍需二次确认，并且只会把所选 `.app` 应用本体移到废纸篓；文稿、偏好设置、缓存和其他应用数据都会保留。
+忽略操作不会删除存储内容，也不会停止后台服务；项目只会在设置中恢复后重新参与检测和处理。
 
 ### 平台说明
 
