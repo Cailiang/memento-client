@@ -1,15 +1,15 @@
-# Memento Agent 0.6.24
+# Memento Agent 0.6.25
 
 ## 简体中文
 
-`0.6.24` 修复推理模型连接测试被错误判定为超时的问题，并与 `prototypes/memento-agent/index.html` 保持一致。
+`0.6.25` 修复正常 APP 被 macOS 废纸篓接口误报权限错误时无法卸载的问题。
 
 ### 主要变化
 
-- 完整工具调用测试允许 60 秒总耗时和单步 45 秒耗时，适配响应较慢的推理与编程模型。
-- 第一步强制调用工具，第二步收到工具结果后只需正常回复，不再被错误地要求再次调用同一工具。
-- 测试中会显示正在验证的模型；超时提示会准确说明模型响应较慢，不再误导用户检查已经正常的地址和网络。
-- 实测当前 `gpt-5.6-sol` 配置能够完成两步工具调用验证。
+- 系统废纸篓接口失败但 APP 仍在原位时，自动回退到当前用户的废纸篓。
+- 回退严格限制为 `/Applications` 和用户应用目录中的真实 APP，系统受保护或嵌套应用不会被处理。
+- 废纸篓中存在同名 APP 时自动选择无冲突名称，不会覆盖已有项目。
+- 只有文件系统确实要求更高权限时才显示 macOS 管理员授权，并在成功后验证原路径已经消失。
 
 ### 安装说明
 
@@ -17,14 +17,14 @@
 
 ## English
 
-`0.6.24` fixes false connection-test timeouts for reasoning models while staying aligned with `prototypes/memento-agent/index.html`.
+`0.6.25` fixes valid applications failing to uninstall when the macOS Trash API reports an unrelated permission error.
 
 ### Highlights
 
-- Allows 60 seconds overall and 45 seconds per provider request for the complete tool-call probe, accommodating slower reasoning and coding models.
-- Requires the tool on the first step, then correctly requests a normal response after the tool result instead of forcing the same tool again.
-- Shows which model is being verified and reports response latency accurately instead of suggesting that a healthy URL or network is broken.
-- Confirms the current `gpt-5.6-sol` configuration can complete the two-step tool-call probe.
+- Falls back to the current user's Trash when the native Trash API fails and leaves the app in place.
+- Restricts fallback moves to real applications under `/Applications` or the user's Applications directory; protected and nested bundles remain excluded.
+- Selects a non-conflicting destination instead of overwriting an existing item in Trash.
+- Requests macOS administrator authorization only for genuine filesystem permission failures and verifies the completed move.
 
 ### Installation
 

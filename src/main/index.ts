@@ -10,7 +10,7 @@ import {
 } from 'electron'
 import { execFile } from 'node:child_process'
 import { existsSync, lstatSync } from 'node:fs'
-import { mkdir, mkdtemp, readFile, readdir, rmdir, unlink } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rename, rmdir, unlink } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
@@ -37,6 +37,11 @@ import { LocalAgentRuntime } from './agent/local-agent-runtime'
 import { selectExecutablePlanItems } from './agent/plan-validation'
 import { providerErrorMessage, testProviderConnection } from './agent/provider-factory'
 import { discoverProviderModels } from './agent/provider-config'
+import {
+  applicationTrashDestination,
+  isAllowedApplicationTrashTarget,
+  isPermissionError
+} from './application-trash'
 import { runFullScan, type RegisteredAction } from './scanner'
 import { applyScanWhitelist } from './scan-whitelist'
 import { buildPrivilegedMoves, privilegedMoveArguments } from './privileged-cleanup'
@@ -264,6 +269,77 @@ async function trashServiceSoftwareWithAdmin(
   await rmdir(stagingDirectory).catch(() => undefined)
 }
 
+async function moveApplicationToTrashWithAdmin(
+  source: string,
+  destination: string
+): Promise<void> {
+  const uid = process.getuid?.()
+  if (uid === undefined) throw new Error(mainText('无法确定当前用户', 'The current user could not be determined.'))
+  try {
+    await execFileAsync(
+      '/usr/bin/osascript',
+      [
+        '-e',
+        PRIVILEGED_STAGE_SCRIPT,
+        '--',
+        ...privilegedMoveArguments(uid, [], [{ source, destination }])
+      ],
+      { timeout: 120_000, maxBuffer: 1024 * 1024 }
+    )
+  } catch (error) {
+    const detail = commandErrorDetail(error)
+    throw new Error(mainText(
+      `macOS 未能将应用移到废纸篓${detail ? `：${detail}` : '，请重试'}`,
+      `macOS could not move the application to Trash${detail ? `: ${detail}` : '. Try again.'}`
+    ))
+  }
+}
+
+async function trashApplication(target: string): Promise<void> {
+  const home = os.homedir()
+  if (
+    !isAllowedApplicationTrashTarget(target, home) ||
+    !existsSync(target) ||
+    !lstatSync(target).isDirectory()
+  ) {
+    throw new Error(mainText(
+      '应用目标未通过本地安全校验，请重新扫描',
+      'The application target did not pass local safety checks. Scan again.'
+    ))
+  }
+
+  try {
+    await shell.trashItem(target)
+  } catch {
+    // Some valid apps trigger unrelated macOS privacy errors in Electron's Trash API.
+  }
+  if (!existsSync(target)) return
+
+  const trashDirectory = path.join(home, '.Trash')
+  if (!existsSync(trashDirectory) || !lstatSync(trashDirectory).isDirectory()) {
+    throw new Error(mainText('无法访问当前用户的废纸篓', 'The current user Trash is unavailable.'))
+  }
+  const destination = applicationTrashDestination(target, trashDirectory)
+  try {
+    await rename(target, destination)
+  } catch (error) {
+    if (!isPermissionError(error)) {
+      const detail = commandErrorDetail(error)
+      throw new Error(mainText(
+        `无法将应用移到废纸篓${detail ? `：${detail}` : ''}`,
+        `The application could not be moved to Trash${detail ? `: ${detail}` : ''}`
+      ))
+    }
+    await moveApplicationToTrashWithAdmin(target, destination)
+  }
+  if (existsSync(target) || !existsSync(destination)) {
+    throw new Error(mainText(
+      '应用仍在原位置，卸载未完成',
+      'The application is still in its original location. Uninstall did not complete.'
+    ))
+  }
+}
+
 function trayCopy(language: AppLanguage): { open: string; quit: string; tooltip: string } {
   return language === 'en-US'
     ? { open: 'Open Memento', quit: 'Quit Memento', tooltip: 'Memento is running' }
@@ -380,10 +456,7 @@ async function executeRegisteredAction(action: RegisteredAction): Promise<void> 
 
   if (action.kind === 'trash') {
     if (!existsSync(action.target)) throw new Error(mainText('项目已不存在，可能已经被移动或删除', 'The item no longer exists. It may have been moved or deleted.'))
-    await shell.trashItem(action.target)
-    if (existsSync(action.target)) {
-      throw new Error(mainText('项目仍在原位置，操作未完成', 'The item is still in its original location. The action did not complete.'))
-    }
+    await trashApplication(action.target)
     return
   }
 

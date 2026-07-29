@@ -8,6 +8,24 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.25 - 2026-07-29
+
+### English
+
+- Fixed application uninstall failures when Electron's macOS Trash API reports an unrelated privacy or DiagnosticReports permission error for a valid application.
+- Uninstall now verifies the registered target, tries the native Trash API first, and safely falls back to moving the application into the current user's Trash when the native call leaves it in place.
+- The fallback accepts only real `.app` bundles under `/Applications` or the user's Applications directory, rejects protected and nested application bundles, and chooses a non-conflicting Finder-style name.
+- Applications that genuinely require elevated filesystem access now use the existing macOS administrator authorization flow, with source and destination verification before the action is marked complete.
+- Added focused allowlist, collision, and permission-error tests, plus a local `/Applications` to Trash round-trip check.
+
+### 简体中文
+
+- 修复 Electron 的 macOS 废纸篓接口对正常应用误报隐私或 DiagnosticReports 权限错误时无法卸载的问题。
+- 卸载现在会先验证已注册目标并调用系统废纸篓接口；如果系统调用后 APP 仍在原位，会安全回退到当前用户的废纸篓。
+- 回退只接受 `/Applications` 或用户应用目录中的真实 `.app`，拒绝系统受保护和嵌套应用，并使用 Finder 风格的无冲突名称。
+- 真正需要更高文件权限的应用会继续使用 macOS 管理员授权，并在标记成功前验证原路径和废纸篓目标。
+- 新增应用白名单、重名、权限错误测试，并完成 `/Applications` 到废纸篓的本机往返验证。
+
 ## 0.6.24 - 2026-07-29
 
 ### English
