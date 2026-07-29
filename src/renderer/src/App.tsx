@@ -1,2387 +1,469 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  Activity,
-  AppWindow,
-  Archive,
-  ArrowUpDown,
-  BrainCircuit,
-  Check,
-  CheckCircle2,
-  ChevronRight,
-  CircleGauge,
-  Clock3,
-  ExternalLink,
-  EyeOff,
-  FolderX,
-  FolderOpen,
-  HardDrive,
-  Info,
-  LayoutDashboard,
-  LoaderCircle,
-  MoreHorizontal,
-  Power,
-  RadioTower,
-  RefreshCw,
-  RotateCcw,
-  ScanSearch,
-  Search,
-  Settings2,
-  ShieldAlert,
-  ShieldCheck,
-  SquareTerminal,
-  Trash2,
-  WandSparkles,
-  X
-} from 'lucide-react'
+import { CheckCircle2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type {
+  AgentPlanItem,
+  AgentProvider,
+  AgentProviderTestResult,
+  AgentRunEvent,
+  AgentRunRecord,
+  SaveAgentProviderInput
+} from '../../shared/agent-types'
 import {
   candidateWhitelistValue,
   DEFAULT_APP_SETTINGS,
-  isCandidateWhitelisted,
-  type AppLanguage,
   type AppSettings,
   type UpdateAppSettingsInput
 } from '../../shared/app-settings'
-import type {
-  ActionResult,
-  CandidateAction,
-  InstalledApplication,
-  RiskLevel,
-  ScanCandidate,
-  ScanProgress,
-  ScanResult,
-  ScanSection,
-  TerminalFinding
-} from '../../shared/types'
-import { runDemoScan } from './demo'
-import { AiAnalysisPanel } from './ai/AiAnalysisPanel'
+import type { InstalledApplication, ScanCandidate, ScanProgress, ScanResult } from '../../shared/types'
+import { AgentPage } from './agent-ui/AgentPage'
+import { ApplicationsPage } from './agent-ui/ApplicationsPage'
 import {
-  AiAnalysisTaskProvider,
-  aiAnalysisTaskKey,
-  useAiAnalysisTask,
-  useAiAnalysisTasks,
-  visibleAiAnalysisTasks
-} from './ai/AiAnalysisTasks'
-import { AiSettingsView } from './ai/AiSettingsView'
-import { I18nProvider, useI18n } from './i18n'
-import { SettingsView } from './SettingsView'
-import { IgnoredItemsDialog } from './WhitelistView'
-import {
-  applyCompletedCandidateActions,
-  candidateOperations,
-  selectedCandidateOperations,
-  type SelectedCandidateOperation
-} from './candidate-actions'
+  IgnoreConfirmDialog,
+  IgnoredItemsDialog,
+  PlanConfirmDialog,
+  UninstallDialog
+} from './agent-ui/Dialogs'
+import { HealthPage } from './agent-ui/HealthPage'
+import { HistoryPage } from './agent-ui/HistoryPage'
+import { SettingsPage } from './agent-ui/SettingsPage'
+import { type AgentViewKey, Shell } from './agent-ui/Shell'
+import { demoResult } from './demo'
+import { I18nProvider } from './i18n'
 
-type ViewKey = 'overview' | ScanSection | 'ai-settings' | 'settings'
-type ScanPhase = 'idle' | 'scanning' | 'ready' | 'error'
-
-interface AiActivityItem {
-  key: string
-  name: string
-  status: 'running' | 'completed'
-  view: Exclude<ViewKey, 'overview' | 'ai-settings' | 'settings'>
-  candidateId?: string
+const DEMO_PROVIDER: AgentProvider = {
+  id: 'demo-provider',
+  name: 'DeepSeek',
+  type: 'openai-compatible',
+  baseUrl: 'https://api.deepseek.com/v1',
+  model: 'deepseek-chat',
+  isDefault: true,
+  connectionState: 'connected',
+  keyPresent: true,
+  keyHint: '••••demo',
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString()
 }
 
-const NAV_ITEMS: Array<{
-  key: ViewKey
-  icon: typeof LayoutDashboard
-}> = [
-  { key: 'overview', icon: LayoutDashboard },
-  { key: 'services', icon: RadioTower },
-  { key: 'storage', icon: HardDrive },
-  { key: 'applications', icon: AppWindow },
-  { key: 'terminal', icon: SquareTerminal },
-  { key: 'settings', icon: Settings2 }
-]
-
-function navLabel(key: ViewKey, language: AppLanguage): string {
-  const english = language === 'en-US'
-  const labels: Record<ViewKey, [string, string]> = {
-    overview: ['概览', 'Overview'],
-    services: ['后台服务', 'Services'],
-    storage: ['存储空间', 'Storage'],
-    applications: ['应用清理', 'App cleanup'],
-    terminal: ['终端诊断', 'Terminal'],
-    'ai-settings': ['AI 设置', 'AI settings'],
-    settings: ['设置', 'Settings']
+function demoPlan(scan: ScanResult): AgentPlanItem[] {
+  const items: AgentPlanItem[] = []
+  for (const candidate of scan.candidates) {
+    const operation = candidate.operations?.[0] ?? (candidate.action ? { id: candidate.id, ...candidate.action } : null)
+    if (!operation || items.length >= 3) continue
+    items.push({
+      id: operation.id,
+      kind: 'action',
+      actionKind: operation.kind,
+      title: operation.label,
+      detail: `${candidate.name} · ${operation.consequence}`,
+      estimatedBytes: operation.estimatedBytes ?? candidate.sizeBytes ?? 0,
+      risk: candidate.risk === 'safe' && operation.reversible ? 'safe' : 'review',
+      reversible: operation.reversible
+    })
   }
-  return labels[key][english ? 1 : 0]
+  return items
 }
 
-function viewTitle(section: ScanSection, language: AppLanguage): string {
-  const titles: Record<ScanSection, [string, string]> = {
-    services: ['后台服务', 'Services'],
-    storage: ['存储空间', 'Storage'],
-    applications: ['应用清理', 'App cleanup'],
-    terminal: ['终端诊断', 'Terminal diagnostics']
-  }
-  return titles[section][language === 'en-US' ? 1 : 0]
-}
+function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSettings['language']) => void }): React.JSX.Element {
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS)
+  const [providers, setProviders] = useState<AgentProvider[]>([])
+  const [runs, setRuns] = useState<AgentRunRecord[]>([])
+  const [result, setResult] = useState<ScanResult | null>(null)
+  const [view, setView] = useState<AgentViewKey>('agent')
+  const [scanBusy, setScanBusy] = useState(false)
+  const [progress, setProgress] = useState<ScanProgress | null>(null)
+  const [activeRun, setActiveRun] = useState<AgentRunRecord | null>(null)
+  const [runStatusMessage, setRunStatusMessage] = useState('')
+  const [selectedPlanIds, setSelectedPlanIds] = useState<Set<string>>(new Set())
+  const [planDialogOpen, setPlanDialogOpen] = useState(false)
+  const [planBusy, setPlanBusy] = useState(false)
+  const [pendingUninstall, setPendingUninstall] = useState<InstalledApplication | null>(null)
+  const [uninstallBusy, setUninstallBusy] = useState(false)
+  const [pendingIgnore, setPendingIgnore] = useState<ScanCandidate | null>(null)
+  const [ignoreBusy, setIgnoreBusy] = useState(false)
+  const [ignoredManagerOpen, setIgnoredManagerOpen] = useState(false)
+  const [ignoredManagerKind, setIgnoredManagerKind] = useState<'storage' | 'services'>('storage')
+  const [restoreBusyValue, setRestoreBusyValue] = useState<string | null>(null)
+  const [openingApplicationId, setOpeningApplicationId] = useState<string | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
+  const started = useRef(false)
+  const activeRunId = useRef<string | null>(null)
 
-function formatBytes(bytes = 0): string {
-  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  const unitIndex = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
-  const value = bytes / 1024 ** unitIndex
-  return `${value >= 10 || unitIndex < 2 ? value.toFixed(0) : value.toFixed(1)} ${units[unitIndex]}`
-}
-
-function formatUptime(seconds: number, language: AppLanguage): string {
-  const days = Math.floor(seconds / 86_400)
-  if (days > 0) return language === 'en-US' ? `${days} days` : `${days} 天`
-  const hours = Math.max(1, Math.floor(seconds / 3_600))
-  return language === 'en-US' ? `${hours} hours` : `${hours} 小时`
-}
-
-function riskLabel(risk: RiskLevel, language: AppLanguage): string {
-  if (risk === 'safe') return language === 'en-US' ? 'Low risk' : '低风险'
-  if (risk === 'protected') return language === 'en-US' ? 'Protected' : '受保护'
-  return language === 'en-US' ? 'Review' : '需确认'
-}
-
-function operationLabel(operation: CandidateAction, language: AppLanguage): string {
-  const english = language === 'en-US'
-  switch (operation.kind) {
-    case 'stop-brew-service':
-    case 'stop-launch-agent':
-      return english ? 'Stop' : '停止'
-    case 'trash-service-software':
-      return english ? 'Uninstall & clean' : '卸载并清理'
-    case 'trash-launch-agent-config':
-      return english ? 'Remove startup item' : '移除启动项'
-    case 'trash-service-directory':
-      return english ? 'Delete related directory' : '删除关联目录'
-    case 'brew-cleanup':
-      return english ? 'Clean up' : '清理'
-    case 'delete-storage':
-      return english ? 'Clean permanently' : '永久清理'
-    case 'trash':
-      return english ? 'Move to Trash' : '移到废纸篓'
-    default:
-      return operation.label
-  }
-}
-
-function selectedOperationId(candidate: ScanCandidate, selected: Set<string>): string | null {
-  return candidateOperations(candidate).find((operation) => selected.has(operation.id))?.id ?? null
-}
-
-function sectionCount(result: ScanResult | null, section: ScanSection): number {
-  if (!result) return 0
-  if (section === 'terminal') {
-    return result.terminal.findings.filter((item) => item.severity !== 'good').length
-  }
-  if (section === 'applications') return result.applications.filter(isManageableApplication).length
-  return result.candidates.filter((item) => item.section === section).length
-}
-
-function applicationCandidate(
-  application: InstalledApplication,
-  language: AppLanguage
-): ScanCandidate {
-  const english = language === 'en-US'
-  return {
-    id: application.id,
-    section: 'applications',
-    name: application.name,
-    subtitle: `${english ? 'Version' : '版本'} ${application.version}`,
-    description: english
-      ? 'The application bundle will move to the Trash. Documents, data, and preferences remain.'
-      : '应用本体会移到废纸篓，文稿、数据和偏好设置会保留。',
-    sizeBytes: application.sizeBytes,
-    ageDays: application.lastUsedAt
-      ? Math.max(0, Math.floor((Date.now() - new Date(application.lastUsedAt).getTime()) / 86_400_000))
-      : undefined,
-    risk: application.unused ? 'review' : 'safe',
-    status: application.unused
-      ? english ? 'Not used for 3+ months' : '3 个月未使用'
-      : english ? 'Installed' : '已安装',
-    location: application.location,
-    evidence: [application.location],
-    operations: application.action ? [application.action] : undefined
-  }
-}
-
-function computeHealth(result: ScanResult): number {
-  const servicePenalty = result.candidates.filter((item) => item.section === 'services').length * 3
-  const applicationPenalty = result.candidates.filter(
-    (item) => item.section === 'applications'
-  ).length * 2
-  const diskRatio = result.system.diskTotalBytes
-    ? result.system.diskFreeBytes / result.system.diskTotalBytes
-    : 1
-  const diskPenalty = diskRatio < 0.08 ? 24 : diskRatio < 0.15 ? 12 : 0
-  const shellPenalty =
-    (result.terminal.startupMs ?? 0) > 700 ? 14 : (result.terminal.startupMs ?? 0) > 300 ? 6 : 0
-  return Math.max(28, Math.min(98, 96 - servicePenalty - applicationPenalty - diskPenalty - shellPenalty))
-}
-
-function App(): React.JSX.Element {
-  const [settings, setSettings] = useState<AppSettings | null>(window.memento ? null : DEFAULT_APP_SETTINGS)
+  const defaultProvider = useMemo(
+    () => providers.find((provider) => provider.isDefault) ?? providers[0] ?? null,
+    [providers]
+  )
 
   useEffect(() => {
-    let active = true
-    if (window.memento) {
-      void window.memento.getAppSettings().then((value) => {
-        if (active) setSettings(value)
-      })
+    activeRunId.current = activeRun?.id ?? null
+  }, [activeRun?.id])
+
+  const refreshProviders = useCallback(async (): Promise<AgentProvider[]> => {
+    const next = window.memento ? await window.memento.listAgentProviders() : [DEMO_PROVIDER]
+    setProviders(next)
+    return next
+  }, [])
+
+  const refreshRuns = useCallback(async (): Promise<void> => {
+    setRuns(window.memento ? await window.memento.listAgentRuns() : [])
+  }, [])
+
+  const scanNow = useCallback(async (): Promise<ScanResult | null> => {
+    if (scanBusy) return null
+    setScanBusy(true)
+    try {
+      const next = window.memento ? await window.memento.scan(settings.language) : demoResult
+      setResult(next)
+      return next
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : '电脑体检失败')
+      return null
+    } finally {
+      setScanBusy(false)
     }
+  }, [scanBusy, settings.language])
+
+  useEffect(() => {
+    const unsubscribeProgress = window.memento?.onScanProgress(setProgress)
+    const unsubscribeAgent = window.memento?.onAgentRunEvent((event: AgentRunEvent) => {
+      if (event.type === 'status') {
+        if (event.runId === activeRunId.current) {
+          setActiveRun((current) => current ? { ...current, status: event.status } : current)
+          setRunStatusMessage(event.message)
+        }
+        return
+      }
+      setRuns((current) => [event.run, ...current.filter((run) => run.id !== event.run.id)])
+      if (event.run.id === activeRunId.current) {
+        setActiveRun(event.run)
+        setRunStatusMessage(event.type === 'failed' ? event.run.error ?? '任务失败' : '')
+        setSelectedPlanIds(new Set(event.run.plan.map((item) => item.id)))
+      }
+    })
     return () => {
-      active = false
+      unsubscribeProgress?.()
+      unsubscribeAgent?.()
     }
   }, [])
 
   useEffect(() => {
-    if (!settings) return
-    document.documentElement.dataset.theme = settings.theme
-    document.documentElement.lang = settings.language
-  }, [settings])
+    if (started.current) return
+    started.current = true
+    void (async () => {
+      try {
+        const initialSettings = window.memento
+          ? await window.memento.getAppSettings()
+          : DEFAULT_APP_SETTINGS
+        setSettings(initialSettings)
+        onLanguageChange(initialSettings.language)
+        document.documentElement.dataset.theme = initialSettings.theme
+        await Promise.all([refreshProviders(), refreshRuns()])
+        setScanBusy(true)
+        const initialResult = window.memento
+          ? await window.memento.scan(initialSettings.language)
+          : demoResult
+        setResult(initialResult)
+      } catch (error) {
+        setToast(error instanceof Error ? error.message : 'Memento 初始化失败')
+      } finally {
+        setScanBusy(false)
+      }
+    })()
+  }, [onLanguageChange, refreshProviders, refreshRuns])
+
+  useEffect(() => {
+    if (!toast) return
+    const timeout = window.setTimeout(() => setToast(null), 2600)
+    return () => window.clearTimeout(timeout)
+  }, [toast])
 
   const updateSettings = async (input: UpdateAppSettingsInput): Promise<void> => {
     const next = window.memento
       ? await window.memento.updateAppSettings(input)
-      : { ...(settings ?? DEFAULT_APP_SETTINGS), ...input }
+      : { ...settings, ...input }
     setSettings(next)
+    onLanguageChange(next.language)
+    document.documentElement.dataset.theme = next.theme
   }
 
-  if (!settings) return <div className="app-bootstrap" aria-hidden="true" />
-
-  return (
-    <I18nProvider language={settings.language}>
-      <AiAnalysisTaskProvider>
-        <AppContent settings={settings} onUpdateSettings={updateSettings} />
-      </AiAnalysisTaskProvider>
-    </I18nProvider>
-  )
-}
-
-function AppContent({
-  settings,
-  onUpdateSettings
-}: {
-  settings: AppSettings
-  onUpdateSettings: (input: UpdateAppSettingsInput) => Promise<void>
-}): React.JSX.Element {
-  const { language, text } = useI18n()
-  const [view, setView] = useState<ViewKey>('overview')
-  const [phase, setPhase] = useState<ScanPhase>('idle')
-  const [result, setResult] = useState<ScanResult | null>(null)
-  const [progress, setProgress] = useState<ScanProgress>({
-    section: 'system',
-    progress: 0,
-    message: text('准备扫描', 'Preparing scan')
-  })
-  const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [aiExpandedId, setAiExpandedId] = useState<string | null>(null)
-  const [aiRequestedId, setAiRequestedId] = useState<string | null>(null)
-  const [confirmOpen, setConfirmOpen] = useState(false)
-  const [directReview, setDirectReview] = useState(false)
-  const [actionBusy, setActionBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [toast, setToast] = useState<string | null>(null)
-  const [appVersion, setAppVersion] = useState<string | null>(null)
-  const [dismissedAiTaskKeys, setDismissedAiTaskKeys] = useState<Set<string>>(() => new Set())
-  const [terminalUndoAvailable, setTerminalUndoAvailable] = useState(false)
-  const [terminalFixReviewOpen, setTerminalFixReviewOpen] = useState(false)
-  const [terminalFixBusy, setTerminalFixBusy] = useState(false)
-  const [openingApplicationId, setOpeningApplicationId] = useState<string | null>(null)
-  const [pendingIgnoreCandidate, setPendingIgnoreCandidate] = useState<ScanCandidate | null>(null)
-  const [ignoreBusy, setIgnoreBusy] = useState(false)
-  const [ignoreManagerKind, setIgnoreManagerKind] = useState<'services' | 'storage' | null>(null)
-  const aiTasks = useAiAnalysisTasks()
-  const previousAiTaskStatuses = useRef<Map<string, string>>(new Map())
-  const startedRef = useRef(false)
-
-  const scanNow = useCallback(async (whitelistOverride?: {
-    serviceWhitelist?: readonly string[]
-    storageWhitelist?: readonly string[]
-  }) => {
-    setPhase('scanning')
-    setError(null)
-    setSelected(new Set())
-    setTerminalFixReviewOpen(false)
-    try {
-      const nextResult = window.memento
-        ? await window.memento.scan(language)
-        : await runDemoScan(setProgress, language)
-      const serviceWhitelist = whitelistOverride?.serviceWhitelist ?? settings.serviceWhitelist
-      const storageWhitelist = whitelistOverride?.storageWhitelist ?? settings.storageWhitelist
-      setResult({
-        ...nextResult,
-        candidates: nextResult.candidates.filter(
-          (candidate) => !isCandidateWhitelisted(
-            candidate,
-            serviceWhitelist,
-            storageWhitelist
-          )
-        )
-      })
-      setPhase('ready')
-    } catch (scanError) {
-      setPhase('error')
-      setError(scanError instanceof Error ? scanError.message : text('扫描未完成', 'Scan did not complete'))
+  const startAgentRun = (prompt: string): void => {
+    if (!result) {
+      setToast('请先完成一次电脑体检')
+      return
     }
-  }, [language, settings.serviceWhitelist, settings.storageWhitelist, text])
-
-  useEffect(() => {
-    let active = true
-    if (window.memento) {
-      void window.memento.getVersion().then((version) => {
-        if (active) setAppVersion(version)
-      })
+    if (!defaultProvider) {
+      setView('settings')
+      setToast('请先配置模型供应商')
+      return
     }
-    return () => {
-      active = false
-    }
-  }, [])
+    setView('agent')
+    setRunStatusMessage('正在准备设备信息')
+    setSelectedPlanIds(new Set())
 
-  useEffect(() => {
-    const unsubscribe = window.memento?.onScanProgress(setProgress)
-    if (!startedRef.current) {
-      startedRef.current = true
-      void scanNow()
-    }
-    return unsubscribe
-  }, [scanNow])
-
-  const previousLanguage = useRef(language)
-  useEffect(() => {
-    if (previousLanguage.current === language) return
-    previousLanguage.current = language
-    void scanNow()
-  }, [language, scanNow])
-
-  useEffect(() => {
-    if (!toast) return
-    const timer = window.setTimeout(() => setToast(null), 3500)
-    return () => window.clearTimeout(timer)
-  }, [toast])
-
-  useEffect(() => {
-    setDismissedAiTaskKeys((current) => {
-      let next = current
-      for (const [key, task] of aiTasks) {
-        if ((task.status === 'preparing' || task.status === 'analyzing') && current.has(key)) {
-          if (next === current) next = new Set(current)
-          next.delete(key)
+    if (!window.memento) {
+      const timestamp = new Date().toISOString()
+      const run: AgentRunRecord = {
+        id: crypto.randomUUID(),
+        prompt,
+        status: 'analyzing',
+        providerId: defaultProvider.id,
+        providerName: defaultProvider.name,
+        model: defaultProvider.model,
+        response: null,
+        plan: [],
+        results: [],
+        error: null,
+        createdAt: timestamp,
+        updatedAt: timestamp
+      }
+      setActiveRun(run)
+      activeRunId.current = run.id
+      window.setTimeout(() => {
+        const plan = demoPlan(result)
+        const completed = {
+          ...run,
+          status: 'awaiting-confirmation' as const,
+          response: '检查完成。我找到了可以由 Memento 直接处理的项目，并准备了下面的计划。执行前你可以取消任意步骤。',
+          plan,
+          updatedAt: new Date().toISOString()
         }
-      }
-      return next
-    })
-
-    for (const [key, task] of aiTasks) {
-      if (task.status !== 'succeeded' || previousAiTaskStatuses.current.get(key) === 'succeeded') {
-        continue
-      }
-      const candidate = result?.candidates.find(
-        (item) => aiAnalysisTaskKey(result.scanId, item.id) === key
-      )
-      const name = candidate?.name ?? text('终端诊断', 'Terminal diagnostics')
-      setToast(text(`AI 分析完成：${name}`, `AI analysis completed: ${name}`))
-    }
-    previousAiTaskStatuses.current = new Map(
-      [...aiTasks].map(([key, task]) => [key, task.status])
-    )
-  }, [aiTasks, result, text])
-
-  useEffect(() => {
-    if (!confirmOpen && !terminalFixReviewOpen) return
-    const closeOnEscape = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape') return
-      if (confirmOpen && !actionBusy) {
-        setConfirmOpen(false)
-        if (directReview) setSelected(new Set())
-        setDirectReview(false)
-      } else if (terminalFixReviewOpen && !terminalFixBusy) {
-        setTerminalFixReviewOpen(false)
-      }
-    }
-    window.addEventListener('keydown', closeOnEscape)
-    return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [actionBusy, confirmOpen, directReview, terminalFixBusy, terminalFixReviewOpen])
-
-  const aiActivityItems = useMemo<AiActivityItem[]>(() => {
-    if (!result) return []
-    const terminalKey = aiAnalysisTaskKey(result.scanId)
-    const expandedKey = aiExpandedId
-      ? aiAnalysisTaskKey(result.scanId, aiExpandedId)
-      : null
-    const items: AiActivityItem[] = []
-    for (const [key, task] of visibleAiAnalysisTasks(aiTasks, dismissedAiTaskKeys)) {
-      if (key === expandedKey) continue
-      const status = task.status === 'succeeded' ? 'completed' : 'running'
-      if (key === terminalKey) {
-        items.push({
-          key,
-          name: text('终端诊断', 'Terminal diagnostics'),
-          status,
-          view: 'terminal'
-        })
-        continue
-      }
-      const candidate = result.candidates.find(
-        (item) => aiAnalysisTaskKey(result.scanId, item.id) === key
-      )
-      if (candidate) {
-        items.push({
-          key,
-          name: candidate.name,
-          status,
-          view: candidate.section,
-          candidateId: candidate.id
-        })
-      }
-    }
-    return items
-  }, [aiExpandedId, aiTasks, dismissedAiTaskKeys, result, text])
-  const selectedItems = useMemo<SelectedCandidateOperation[]>(() => {
-    const candidateItems = selectedCandidateOperations(result?.candidates ?? [], selected)
-    const included = new Set(candidateItems.map((item) => item.id))
-    const applicationItems = (result?.applications ?? []).flatMap((application) => {
-      if (!application.action || !selected.has(application.action.id) || included.has(application.action.id)) {
-        return []
-      }
-      return [{
-        id: application.action.id,
-        candidate: applicationCandidate(application, language),
-        action: application.action
-      }]
-    })
-    return [...candidateItems, ...applicationItems]
-  }, [language, result, selected])
-  const selectedBytes = selectedItems.reduce(
-    (sum, item) => sum + (item.action.estimatedBytes ?? item.candidate.sizeBytes ?? 0),
-    0
-  )
-
-  const toggleSelected = (id: string): void => {
-    setSelected((current) => {
-      const next = new Set(current)
-      const candidate = result?.candidates.find((item) =>
-        candidateOperations(item).some((operation) => operation.id === id)
-      )
-      if (!candidate) {
-        const application = result?.applications.find((item) => item.action?.id === id)
-        if (!application?.action) return next
-        if (next.has(id)) next.delete(id)
-        else next.add(id)
-        return next
-      }
-
-      const wasSelected = next.has(id)
-      for (const operation of candidateOperations(candidate)) next.delete(operation.id)
-      if (!wasSelected) next.add(id)
-      return next
-    })
-  }
-
-  const reviewDirectAction = (id: string): void => {
-    setSelected(new Set([id]))
-    setDirectReview(true)
-    setConfirmOpen(true)
-  }
-
-  const closeConfirmation = (): void => {
-    setConfirmOpen(false)
-    if (directReview) setSelected(new Set())
-    setDirectReview(false)
-  }
-
-  const askAi = (id: string): void => {
-    const candidate = result?.candidates.find((item) => item.id === id)
-    if (candidate) setView(candidate.section)
-    if (result) {
-      const key = aiAnalysisTaskKey(result.scanId, id)
-      setDismissedAiTaskKeys((current) => new Set(current).add(key))
-    }
-    setAiExpandedId(id)
-    setAiRequestedId(id)
-  }
-
-  const openAiActivity = (item: AiActivityItem): void => {
-    if (item.status === 'completed') {
-      setDismissedAiTaskKeys((current) => new Set(current).add(item.key))
-    }
-    setView(item.view)
-    setAiExpandedId(item.candidateId ?? null)
-  }
-
-  const dismissAiActivity = (key: string): void => {
-    setDismissedAiTaskKeys((current) => new Set(current).add(key))
-  }
-
-  const revealLocation = (id: string): void => {
-    if (!window.memento) {
-      setToast(text('请在桌面应用中打开此目录', 'Open this location from the desktop app'))
+        setActiveRun(completed)
+        setRuns((current) => [completed, ...current])
+        setSelectedPlanIds(new Set(plan.map((item) => item.id)))
+        setRunStatusMessage('处理计划已经准备好')
+      }, 900)
       return
     }
-    void window.memento.revealCandidateLocation(id).catch((reason) => {
-      setToast(reason instanceof Error ? reason.message : text('无法打开服务目录', 'Could not open the service location'))
-    })
+
+    void window.memento.startAgentRun(prompt).then((run) => {
+      activeRunId.current = run.id
+      setActiveRun(run)
+      setRuns((current) => [run, ...current.filter((item) => item.id !== run.id)])
+    }).catch((error) => setToast(error instanceof Error ? error.message : '无法启动 Agent'))
   }
 
-  const openApplication = async (id: string): Promise<void> => {
-    const application = result?.applications.find((item) => item.id === id)
-    if (!application) return
-    if (!window.memento) {
-      setToast(text(`桌面应用中可打开 ${application.name}`, `Open ${application.name} from the desktop app`))
-      return
-    }
-    setOpeningApplicationId(id)
+  const executePlan = async (): Promise<void> => {
+    if (!activeRun || !selectedPlanIds.size) return
+    setPlanBusy(true)
     try {
-      await window.memento.openApplication(id)
-      setToast(text(`已打开 ${application.name}`, `Opened ${application.name}`))
-    } catch (reason) {
-      setToast(reason instanceof Error ? reason.message : text('无法打开应用', 'Could not open the application'))
+      if (!window.memento) {
+        const completed: AgentRunRecord = {
+          ...activeRun,
+          status: 'completed',
+          results: [...selectedPlanIds].map((id) => ({ id, ok: true, message: '操作完成' })),
+          updatedAt: new Date().toISOString()
+        }
+        setActiveRun(completed)
+        setRuns((current) => [completed, ...current.filter((run) => run.id !== completed.id)])
+        setPlanDialogOpen(false)
+        setToast('计划执行完成并已重新体检')
+        return
+      }
+      const executed = await window.memento.executeAgentPlan({
+        runId: activeRun.id,
+        itemIds: [...selectedPlanIds]
+      })
+      setActiveRun(executed.run)
+      setResult(executed.scan)
+      setRuns((current) => [executed.run, ...current.filter((run) => run.id !== executed.run.id)])
+      setPlanDialogOpen(false)
+      setToast(executed.run.error ?? '计划执行完成并已重新体检')
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : '处理计划执行失败')
     } finally {
-      setOpeningApplicationId(null)
+      setPlanBusy(false)
     }
   }
 
-  const requestIgnoreCandidate = (id: string): void => {
-    const candidate = result?.candidates.find(
-      (item) => item.id === id && (item.section === 'services' || item.section === 'storage')
-    )
-    if (!candidate) return
-    setPendingIgnoreCandidate(candidate)
+  const discardPlan = (): void => {
+    if (!activeRun) return
+    if (window.memento) void window.memento.cancelAgentRun(activeRun.id)
+    const cancelled: AgentRunRecord = {
+      ...activeRun,
+      status: 'cancelled',
+      plan: [],
+      error: null,
+      updatedAt: new Date().toISOString()
+    }
+    setActiveRun(cancelled)
+    setRuns((current) => [cancelled, ...current.filter((run) => run.id !== cancelled.id)])
+    setSelectedPlanIds(new Set())
+    setRunStatusMessage('计划已取消')
   }
 
-  const ignoreCandidate = async (): Promise<void> => {
-    const candidate = pendingIgnoreCandidate
-    if (!candidate) return
-    const value = candidateWhitelistValue(candidate)
+  const openIgnoredManager = (kind: 'storage' | 'services' = 'storage'): void => {
+    setIgnoredManagerKind(kind)
+    setIgnoredManagerOpen(true)
+  }
+
+  const confirmIgnore = async (): Promise<void> => {
+    if (!pendingIgnore) return
+    const value = candidateWhitelistValue(pendingIgnore)
     if (!value) return
-    const currentWhitelist = candidate.section === 'services'
-      ? settings.serviceWhitelist
-      : settings.storageWhitelist
-    if (currentWhitelist.includes(value)) {
-      setPendingIgnoreCandidate(null)
-      return
-    }
     setIgnoreBusy(true)
     try {
-      await onUpdateSettings(candidate.section === 'services'
+      const nextInput = pendingIgnore.section === 'services'
         ? { serviceWhitelist: [...settings.serviceWhitelist, value] }
-        : { storageWhitelist: [...settings.storageWhitelist, value] })
+        : { storageWhitelist: [...settings.storageWhitelist, value] }
+      await updateSettings(nextInput)
       setResult((current) => current
-        ? { ...current, candidates: current.candidates.filter((item) => item.id !== candidate.id) }
+        ? { ...current, candidates: current.candidates.filter((candidate) => candidate.id !== pendingIgnore.id) }
         : current)
-      setSelected((current) => {
-        const next = new Set(current)
-        for (const operation of candidateOperations(candidate)) next.delete(operation.id)
-        return next
-      })
-      if (aiExpandedId === candidate.id) setAiExpandedId(null)
-      setPendingIgnoreCandidate(null)
-      setToast(text(`${candidate.name} 已加入忽略列表`, `${candidate.name} was added to ignored items`))
-    } catch (reason) {
-      setToast(reason instanceof Error ? reason.message : text('无法更新忽略列表', 'Could not update ignored items'))
+      setToast(`${pendingIgnore.name} 已加入忽略列表`)
+      setPendingIgnore(null)
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : '无法更新忽略列表')
     } finally {
       setIgnoreBusy(false)
     }
   }
 
-  const updateSettingsFromView = async (input: UpdateAppSettingsInput): Promise<void> => {
-    await onUpdateSettings(input)
-    if ('serviceWhitelist' in input || 'storageWhitelist' in input) {
-      await scanNow({
-        serviceWhitelist: input.serviceWhitelist ?? settings.serviceWhitelist,
-        storageWhitelist: input.storageWhitelist ?? settings.storageWhitelist
-      })
-    }
-  }
-
-  const navigate = (nextView: ViewKey): void => {
-    setView(nextView)
-    setAiExpandedId(null)
-    setAiRequestedId(null)
-    setToast(null)
-  }
-
-  const executeActions = async (): Promise<void> => {
-    if (!selectedItems.length) return
-    setActionBusy(true)
-    let actionResults: ActionResult[]
+  const restoreIgnored = async (kind: 'services' | 'storage', value: string): Promise<void> => {
+    setRestoreBusyValue(value)
     try {
-      actionResults = window.memento
-        ? await window.memento.runActions(selectedItems.map((item) => item.id))
-        : await new Promise((resolve) =>
-            window.setTimeout(
-              () =>
-                resolve(
-                  selectedItems.map((item) => ({ id: item.id, ok: true, message: text('操作完成', 'Action completed') }))
-                ),
-              850
-            )
-          )
-      const successfulIds = new Set(actionResults.filter((item) => item.ok).map((item) => item.id))
-      const failures = actionResults.filter((item) => !item.ok)
-      const failedCount = failures.length
-      setResult((current) =>
-        current
-          ? {
-              ...current,
-              candidates: applyCompletedCandidateActions(current.candidates, successfulIds, language),
-              applications: current.applications.filter(
-                (application) => !application.action || !successfulIds.has(application.action.id)
-              )
-            }
-          : current
-      )
-      setSelected(new Set())
-      setConfirmOpen(false)
-      setDirectReview(false)
-      const keptStoppedService = selectedItems.some(
-        (item) => successfulIds.has(item.id) && item.action.kind.startsWith('stop-')
-      )
-      const keptServiceDirectory = selectedItems.some(
-        (item) =>
-          successfulIds.has(item.id) &&
-          item.action.kind === 'trash-launch-agent-config' &&
-          candidateOperations(item.candidate).some(
-            (operation) =>
-              operation.id !== item.id &&
-              (operation.kind === 'trash-service-directory' ||
-                operation.kind === 'trash-service-software')
-          )
-      )
-      const completionMessage = failedCount
-          ? failedCount === 1
-            ? failures[0].message
-            : text(`${successfulIds.size} 项已完成，${failedCount} 项失败：${failures[0].message}`, `${successfulIds.size} completed and ${failedCount} failed: ${failures[0].message}`)
-          : keptServiceDirectory
-            ? text('启动项已移除，程序目录仍然保留；可以继续选择删除关联目录', 'The startup item was removed and the program directory remains. You can still remove the related directory.')
-          : keptStoppedService
-            ? text('服务已停止并保留在列表中；软件和数据没有删除', 'The service is stopped and remains in the list. Its software and data were not deleted.')
-            : text(`${successfulIds.size} 项操作已完成`, `${successfulIds.size} actions completed`)
-      if (successfulIds.size > 0 && window.memento) await scanNow()
-      setToast(completionMessage)
-    } catch (actionError) {
-      setToast(actionError instanceof Error ? actionError.message : text('操作失败', 'Action failed'))
+      await updateSettings(kind === 'services'
+        ? { serviceWhitelist: settings.serviceWhitelist.filter((item) => item !== value) }
+        : { storageWhitelist: settings.storageWhitelist.filter((item) => item !== value) })
+      await scanNow()
+      setToast('已恢复检测')
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : '无法恢复检测')
     } finally {
-      setActionBusy(false)
+      setRestoreBusyValue(null)
     }
   }
 
-  const runTerminalFixes = async (ids: string[]): Promise<boolean> => {
+  const openApplication = async (application: InstalledApplication): Promise<void> => {
+    setOpeningApplicationId(application.id)
     try {
-      const outcome = window.memento
-        ? await window.memento.runTerminalFixes(ids)
-        : await new Promise<{ results: ActionResult[]; canUndo: boolean }>((resolve) =>
-            window.setTimeout(() => resolve({
-              results: ids.map((id) => ({ id, ok: true, message: text('终端配置已自动优化', 'Terminal configuration optimized automatically') })),
-              canUndo: true
-            }), 700)
-          )
-      const successes = outcome.results.filter((item) => item.ok)
-      const failures = outcome.results.filter((item) => !item.ok)
-      setTerminalUndoAvailable(outcome.canUndo)
-      if (successes.length) {
-        if (window.memento) await scanNow()
-        else {
-          const completed = new Set(successes.map((item) => item.id))
-          setResult((current) => current ? {
-            ...current,
-            terminal: {
-              ...current.terminal,
-              findings: current.terminal.findings.filter((finding) => !completed.has(finding.id))
-            }
-          } : current)
-        }
-      }
-      setToast(failures.length
-        ? failures[0].message
-        : text(`已自动优化 ${successes.length} 项终端配置`, `${successes.length} terminal optimizations completed`))
-      return failures.length === 0
-    } catch (reason) {
-      setToast(reason instanceof Error ? reason.message : text('终端自动优化失败', 'Terminal optimization failed'))
-      return false
+      if (window.memento) await window.memento.openApplication(application.id)
+      setToast(`已打开 ${application.name}`)
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : '无法打开应用')
+    } finally {
+      setOpeningApplicationId(null)
     }
   }
 
-  const undoTerminalFixes = async (): Promise<boolean> => {
+  const uninstallApplication = async (): Promise<void> => {
+    if (!pendingUninstall?.action) return
+    setUninstallBusy(true)
     try {
       const results = window.memento
-        ? await window.memento.undoTerminalFixes()
-        : [{ id: 'demo', ok: true, message: text('已恢复终端配置', 'Terminal configuration restored') }]
+        ? await window.memento.runActions([pendingUninstall.action.id])
+        : [{ id: pendingUninstall.action.id, ok: true, message: '操作完成' }]
       const failure = results.find((item) => !item.ok)
-      if (failure) {
-        setToast(failure.message)
-        return false
-      }
-      setTerminalUndoAvailable(false)
+      if (failure) throw new Error(failure.message)
+      setPendingUninstall(null)
       await scanNow()
-      setToast(text('已撤销上次终端优化', 'The last terminal optimization was undone'))
-      return true
-    } catch (reason) {
-      setToast(reason instanceof Error ? reason.message : text('无法撤销终端优化', 'Terminal optimization could not be undone'))
-      return false
-    }
-  }
-
-  const confirmTerminalFixes = async (ids: string[]): Promise<void> => {
-    setTerminalFixBusy(true)
-    try {
-      await runTerminalFixes(ids)
-      setTerminalFixReviewOpen(false)
+      setToast(`${pendingUninstall.name} 已移到废纸篓`)
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : '无法卸载应用')
     } finally {
-      setTerminalFixBusy(false)
+      setUninstallBusy(false)
     }
   }
 
-  const triggerTerminalUndo = async (): Promise<void> => {
-    setTerminalFixBusy(true)
+  const saveProvider = async (input: SaveAgentProviderInput): Promise<AgentProvider> => {
     try {
-      await undoTerminalFixes()
-    } finally {
-      setTerminalFixBusy(false)
-    }
-  }
-
-  return (
-    <div className="app-shell">
-      <Sidebar view={view} result={result} appVersion={appVersion} onChange={navigate} />
-      <div className="workspace">
-        <Topbar
-          result={result}
-          phase={phase}
-          isDemo={!window.memento}
-          onScan={() => void scanNow()}
-        />
-        <main className="main-content">
-          {view === 'settings' ? (
-            <SettingsView
-              settings={settings}
-              onUpdate={updateSettingsFromView}
-              onOpenAiSettings={() => setView('ai-settings')}
-              onManageIgnored={setIgnoreManagerKind}
-            />
-          ) : view === 'ai-settings' ? (
-            <AiSettingsView onOpenGeneralSettings={() => setView('settings')} />
-          ) : phase === 'scanning' && !result ? (
-            <ScanState progress={progress} />
-          ) : phase === 'error' && !result ? (
-            <ErrorState message={error ?? text('扫描未完成', 'Scan did not complete')} onRetry={() => void scanNow()} />
-          ) : result ? (
-            view === 'overview' ? (
-              <Overview
-                result={result}
-                onNavigate={navigate}
-                onOpenCandidate={(id) => {
-                  const candidate = result.candidates.find((item) => item.id === id)
-                  if (candidate) setView(candidate.section)
-                }}
-                onToggle={toggleSelected}
-                onReviewAction={reviewDirectAction}
-                onAskAi={askAi}
-                onRevealLocation={revealLocation}
-                onWhitelist={requestIgnoreCandidate}
-                selected={selected}
-              />
-            ) : view === 'terminal' ? (
-              <TerminalView
-                result={result}
-                canUndo={terminalUndoAvailable}
-                busy={terminalFixBusy}
-                onReviewFixes={() => setTerminalFixReviewOpen(true)}
-                onUndo={() => void triggerTerminalUndo()}
-                onOpenSettings={() => setView('ai-settings')}
-              />
-            ) : view === 'applications' ? (
-              <ApplicationCleanupView
-                result={result}
-                selected={selected}
-                onToggle={toggleSelected}
-                onReviewAction={reviewDirectAction}
-                onRevealLocation={revealLocation}
-                onOpenApplication={(id) => void openApplication(id)}
-                openingApplicationId={openingApplicationId}
-              />
-            ) : (
-              <CandidateView
-                key={view}
-                section={view}
-                result={result}
-                selected={selected}
-                onToggle={toggleSelected}
-                onReviewAction={reviewDirectAction}
-                onAskAi={askAi}
-                onRevealLocation={revealLocation}
-                onWhitelist={requestIgnoreCandidate}
-                onManageIgnored={setIgnoreManagerKind}
-                settings={settings}
-                aiExpandedId={aiExpandedId}
-                autoPrepareAiId={aiRequestedId}
-                onAiPrepared={() => setAiRequestedId(null)}
-                onCloseAi={() => {
-                  setAiExpandedId(null)
-                  setAiRequestedId(null)
-                }}
-                onOpenSettings={() => {
-                  setAiExpandedId(null)
-                  setView('ai-settings')
-                }}
-              />
-            )
-          ) : null}
-        </main>
-      </div>
-
-      {selectedItems.length > 0 && !confirmOpen && (
-        <ActionDock
-          count={selectedItems.length}
-          bytes={selectedBytes}
-          onClear={() => setSelected(new Set())}
-          onReview={() => {
-            setDirectReview(false)
-            setConfirmOpen(true)
-          }}
-        />
-      )}
-
-      {aiActivityItems.length > 0 && (
-        <AiActivityCenter
-          items={aiActivityItems}
-          hasActionDock={selectedItems.length > 0 && !confirmOpen}
-          onOpen={openAiActivity}
-          onDismiss={dismissAiActivity}
-        />
-      )}
-
-      {confirmOpen && (
-        <ConfirmDialog
-          items={selectedItems}
-          busy={actionBusy}
-          onClose={closeConfirmation}
-          onConfirm={() => void executeActions()}
-        />
-      )}
-
-      {pendingIgnoreCandidate && (
-        <IgnoreConfirmDialog
-          candidate={pendingIgnoreCandidate}
-          busy={ignoreBusy}
-          onClose={() => setPendingIgnoreCandidate(null)}
-          onConfirm={() => void ignoreCandidate()}
-        />
-      )}
-
-      {ignoreManagerKind && (
-        <IgnoredItemsDialog
-          initialKind={ignoreManagerKind}
-          serviceValues={settings.serviceWhitelist}
-          storageValues={settings.storageWhitelist}
-          onUpdate={updateSettingsFromView}
-          onClose={() => setIgnoreManagerKind(null)}
-        />
-      )}
-
-      {terminalFixReviewOpen && result && (
-        <TerminalFixDialog
-          findings={result.terminal.findings.filter((finding) => finding.fix)}
-          busy={terminalFixBusy}
-          onClose={() => setTerminalFixReviewOpen(false)}
-          onConfirm={(ids) => void confirmTerminalFixes(ids)}
-        />
-      )}
-
-      {toast && (
-        <div className="toast" role="status">
-          <CheckCircle2 size={17} />
-          <span>{toast}</span>
-        </div>
-      )}
-    </div>
-  )
-}
-
-type ManageableApplication = InstalledApplication & {
-  action: NonNullable<InstalledApplication['action']>
-}
-type ApplicationFilter = 'all' | 'unused' | 'user' | 'shared'
-type ApplicationSort = 'last-used-oldest' | 'last-used-newest' | 'size' | 'name'
-
-function isManageableApplication(
-  application: InstalledApplication
-): application is ManageableApplication {
-  return application.scope !== 'system' && !application.protectedReason && Boolean(application.action)
-}
-
-export function filterAndSortApplications(
-  applications: InstalledApplication[],
-  query: string,
-  filter: ApplicationFilter,
-  sort: ApplicationSort
-): ManageableApplication[] {
-  const normalizedQuery = query.trim().toLocaleLowerCase()
-  const filtered = applications.filter(isManageableApplication).filter((application) => {
-    if (filter === 'unused' && !application.unused) return false
-    if (filter === 'user' && application.scope !== 'user') return false
-    if (filter === 'shared' && application.scope !== 'shared') return false
-    if (!normalizedQuery) return true
-    return [application.name, application.version, application.bundleId ?? '', application.location]
-      .some((value) => value.toLocaleLowerCase().includes(normalizedQuery))
-  })
-
-  return [...filtered].sort((a, b) => {
-    if (sort === 'name') return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
-    if (sort === 'size') return b.sizeBytes - a.sizeBytes
-    const aTime = a.lastUsedAt ? new Date(a.lastUsedAt).getTime() : null
-    const bTime = b.lastUsedAt ? new Date(b.lastUsedAt).getTime() : null
-    if (aTime === null && bTime === null) return a.name.localeCompare(b.name)
-    if (aTime === null) return 1
-    if (bTime === null) return -1
-    return sort === 'last-used-newest' ? bTime - aTime : aTime - bTime
-  })
-}
-
-const applicationIconCache = new Map<string, string | null>()
-
-function ApplicationIcon({ application }: { application: InstalledApplication }): React.JSX.Element {
-  const containerRef = useRef<HTMLSpanElement>(null)
-  const cached = applicationIconCache.get(application.id)
-  const [iconUrl, setIconUrl] = useState<string | null | undefined>(cached)
-
-  useEffect(() => {
-    if (iconUrl !== undefined || !window.memento) return
-    let active = true
-    let observer: IntersectionObserver | null = null
-    const loadIcon = (): void => {
-      void window.memento?.getApplicationIcon(application.id).then((value) => {
-        applicationIconCache.set(application.id, value)
-        if (active) setIconUrl(value)
-      })
-    }
-
-    if ('IntersectionObserver' in window && containerRef.current) {
-      observer = new IntersectionObserver((entries) => {
-        if (!entries.some((entry) => entry.isIntersecting)) return
-        observer?.disconnect()
-        loadIcon()
-      }, { rootMargin: '160px' })
-      observer.observe(containerRef.current)
-    } else {
-      loadIcon()
-    }
-
-    return () => {
-      active = false
-      observer?.disconnect()
-    }
-  }, [application.id, iconUrl])
-
-  return (
-    <span ref={containerRef} className={`application-logo ${iconUrl ? 'has-icon' : ''}`} aria-hidden="true">
-      {iconUrl
-        ? <img src={iconUrl} alt="" loading="lazy" />
-        : <AppWindow size={29} strokeWidth={1.45} />}
-    </span>
-  )
-}
-
-function formatApplicationLastUsed(value: string | null, language: AppLanguage): {
-  date: string
-  relative: string
-} {
-  if (!value) {
-    return {
-      date: language === 'en-US' ? 'No usage record' : '无使用记录',
-      relative: language === 'en-US' ? 'Spotlight has no date' : 'Spotlight 暂无日期'
-    }
-  }
-  const date = new Date(value)
-  const days = Math.max(0, Math.floor((Date.now() - date.getTime()) / 86_400_000))
-  return {
-    date: new Intl.DateTimeFormat(language, {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
-    }).format(date),
-    relative: days === 0
-      ? language === 'en-US' ? 'Used today' : '今天使用'
-      : language === 'en-US' ? `${days} days ago` : `${days} 天前`
-  }
-}
-
-function ApplicationCleanupView({
-  result,
-  selected,
-  onToggle,
-  onReviewAction,
-  onRevealLocation,
-  onOpenApplication,
-  openingApplicationId
-}: {
-  result: ScanResult
-  selected: Set<string>
-  onToggle: (id: string) => void
-  onReviewAction: (id: string) => void
-  onRevealLocation: (id: string) => void
-  onOpenApplication: (id: string) => void
-  openingApplicationId: string | null
-}): React.JSX.Element {
-  const { language, text } = useI18n()
-  const [query, setQuery] = useState('')
-  const deferredQuery = useDeferredValue(query)
-  const [filter, setFilter] = useState<ApplicationFilter>('all')
-  const [sort, setSort] = useState<ApplicationSort>('last-used-oldest')
-  const availableApplications = useMemo(
-    () => result.applications.filter(isManageableApplication),
-    [result.applications]
-  )
-  const applications = useMemo(
-    () => filterAndSortApplications(availableApplications, deferredQuery, filter, sort),
-    [availableApplications, deferredQuery, filter, sort]
-  )
-  const visibleActions = applications
-    .map((application) => application.action?.id)
-    .filter((id): id is string => Boolean(id))
-  const allVisibleSelected = visibleActions.length > 0 && visibleActions.every((id) => selected.has(id))
-  const totalBytes = availableApplications.reduce((sum, application) => sum + application.sizeBytes, 0)
-
-  const toggleVisible = (): void => {
-    for (const id of visibleActions) {
-      if (allVisibleSelected === selected.has(id)) onToggle(id)
-    }
-  }
-
-  return (
-    <div className="view application-view">
-      <header className="module-header application-header">
-        <div>
-          <h1>{text('应用清理', 'App cleanup')}</h1>
-          <p>{text(
-            `共 ${availableApplications.length} 个应用，占用 ${formatBytes(totalBytes)}`,
-            `${availableApplications.length} apps using ${formatBytes(totalBytes)}`
-          )}</p>
-        </div>
-        <div className="module-stat">
-          <strong>{availableApplications.filter((application) => application.unused).length}</strong>
-          <span>{text('近 3 个月未使用', 'unused for 3+ months')}</span>
-        </div>
-      </header>
-
-      <div className="application-toolbar">
-        <label className="application-search">
-          <Search size={15} />
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={text('搜索应用、版本或路径', 'Search apps, versions, or paths')}
-            aria-label={text('搜索应用', 'Search apps')}
-          />
-          {query && (
-            <button type="button" onClick={() => setQuery('')} title={text('清空搜索', 'Clear search')}>
-              <X size={14} />
-            </button>
-          )}
-        </label>
-        <label className="application-select-control">
-          <span>{text('筛选', 'Filter')}</span>
-          <select value={filter} onChange={(event) => setFilter(event.target.value as ApplicationFilter)}>
-            <option value="all">{text('全部应用', 'All apps')}</option>
-            <option value="unused">{text('3 个月未使用', 'Unused for 3+ months')}</option>
-            <option value="shared">{text('共享应用', 'Shared apps')}</option>
-            <option value="user">{text('个人应用', 'User apps')}</option>
-          </select>
-        </label>
-        <label className="application-select-control">
-          <ArrowUpDown size={14} />
-          <select value={sort} onChange={(event) => setSort(event.target.value as ApplicationSort)}>
-            <option value="last-used-oldest">{text('最久未用优先', 'Least recently used')}</option>
-            <option value="last-used-newest">{text('最近使用优先', 'Most recently used')}</option>
-            <option value="size">{text('体积从大到小', 'Largest first')}</option>
-            <option value="name">{text('名称排序', 'Name')}</option>
-          </select>
-        </label>
-      </div>
-
-      {applications.length ? (
-        <>
-          <div className="application-grid-toolbar">
-            <label className="application-batch-select" title={text('选择当前列表中的可卸载应用', 'Select removable apps in this list')}>
-              <span className="row-checkbox">
-                <input type="checkbox" checked={allVisibleSelected} onChange={toggleVisible} />
-                <span>{allVisibleSelected && <Check size={13} strokeWidth={2.5} />}</span>
-              </span>
-              <span>{text('选择当前结果', 'Select current results')}</span>
-            </label>
-            <span>{text(`显示 ${applications.length} 个应用`, `${applications.length} apps shown`)}</span>
-          </div>
-          <div className="application-grid">
-            {applications.map((application) => {
-              const lastUsed = formatApplicationLastUsed(application.lastUsedAt, language)
-              const selectedApplication = application.action ? selected.has(application.action.id) : false
-              return (
-                <article className={`application-card ${selectedApplication ? 'is-selected' : ''}`} key={application.id}>
-                  <label className="row-checkbox" title={text('选择此应用', 'Select this app')}>
-                    <input
-                      type="checkbox"
-                      checked={selectedApplication}
-                      onChange={() => onToggle(application.action.id)}
-                    />
-                    <span>{selectedApplication && <Check size={13} strokeWidth={2.5} />}</span>
-                  </label>
-                  {application.unused && (
-                    <span className="application-unused-badge">{text('3 个月未使用', 'Unused 3+ months')}</span>
-                  )}
-                  <ApplicationIcon application={application} />
-                  <div className="application-card-title">
-                    <strong title={application.name}>{application.name}</strong>
-                    <span>{text('版本', 'Version')} {application.version}</span>
-                  </div>
-                  <div className="application-card-meta">
-                    <div className={application.lastUsedAt ? '' : 'is-unknown'}>
-                      <span>{text('最后使用', 'Last used')}</span>
-                      <strong>{lastUsed.date}</strong>
-                      <small>{lastUsed.relative}</small>
-                    </div>
-                    <div>
-                      <span>{text('大小', 'Size')}</span>
-                      <strong>{formatBytes(application.sizeBytes)}</strong>
-                      <small>{application.scope === 'user' ? text('个人应用', 'User app') : text('共享应用', 'Shared app')}</small>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className="application-location"
-                    onClick={() => onRevealLocation(application.id)}
-                    title={text('在 Finder 中显示', 'Show in Finder')}
-                  >
-                    <FolderOpen size={12} />
-                    <span>{application.location}</span>
-                  </button>
-                  <div className="application-card-action">
-                    <button
-                      type="button"
-                      onClick={() => onOpenApplication(application.id)}
-                      disabled={openingApplicationId === application.id}
-                      title={text(`打开 ${application.name}`, `Open ${application.name}`)}
-                    >
-                      {openingApplicationId === application.id
-                        ? <LoaderCircle className="spin" size={14} />
-                        : <ExternalLink size={14} />}
-                      {text('打开', 'Open')}
-                    </button>
-                    <button
-                      type="button"
-                      className="application-uninstall-button"
-                      onClick={() => onReviewAction(application.action.id)}
-                      title={application.action.consequence}
-                    >
-                      <Trash2 size={14} />
-                      {text('卸载', 'Uninstall')}
-                    </button>
-                  </div>
-                </article>
-              )
-            })}
-          </div>
-        </>
-      ) : (
-        <div className="inline-empty">
-          <Search size={23} />
-          <strong>{text('没有匹配的应用', 'No matching apps')}</strong>
-          <span>{text('调整搜索内容或筛选条件后再试。', 'Try a different search or filter.')}</span>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function Sidebar({
-  view,
-  result,
-  appVersion,
-  onChange
-}: {
-  view: ViewKey
-  result: ScanResult | null
-  appVersion: string | null
-  onChange: (view: ViewKey) => void
-}): React.JSX.Element {
-  const { language, text } = useI18n()
-  return (
-    <aside className="sidebar">
-      <div className="brand">
-        <div className="brand-mark" aria-hidden="true">
-          <Archive size={18} />
-        </div>
-        <div className="brand-copy">
-          <span>Memento</span>
-          <small>{appVersion ? `v${appVersion}` : text('开发预览', 'Development preview')}</small>
-        </div>
-      </div>
-      <nav className="nav-list" aria-label={text('主要导航', 'Primary navigation')}>
-        {NAV_ITEMS.map((item) => {
-          const Icon = item.icon
-          const label = navLabel(item.key, language)
-          const count = item.key === 'overview' || item.key === 'ai-settings' || item.key === 'settings'
-            ? 0
-            : sectionCount(result, item.key)
-          const active = view === item.key || (item.key === 'settings' && view === 'ai-settings')
-          return (
-            <button
-              type="button"
-              key={item.key}
-              className={`nav-item ${active ? 'is-active' : ''}`}
-              onClick={() => onChange(item.key)}
-              title={label}
-            >
-              <Icon size={18} strokeWidth={1.8} />
-              <span>{label}</span>
-              {count > 0 && <span className="nav-count">{count}</span>}
-            </button>
-          )
-        })}
-      </nav>
-      <div className="sidebar-foot">
-        <ShieldAlert size={16} />
-        <p>{text('所有操作都先确认。缓存永久清理，其他文件优先移到废纸篓。', 'Every action is confirmed first. Caches are deleted permanently; other files prefer the Trash.')}</p>
-      </div>
-    </aside>
-  )
-}
-
-function Topbar({
-  result,
-  phase,
-  isDemo,
-  onScan
-}: {
-  result: ScanResult | null
-  phase: ScanPhase
-  isDemo: boolean
-  onScan: () => void
-}): React.JSX.Element {
-  const { language, text } = useI18n()
-  return (
-    <header className="topbar">
-      <div className="device-meta">
-        <strong>{result?.system.hostname ?? text('这台 Mac', 'This Mac')}</strong>
-        <span>
-          {result
-            ? text(`macOS ${result.system.osVersion}，已运行 ${formatUptime(result.system.uptimeSeconds, language)}`, `macOS ${result.system.osVersion}, up for ${formatUptime(result.system.uptimeSeconds, language)}`)
-            : text('正在建立系统快照', 'Building system snapshot')}
-        </span>
-      </div>
-      <div className="topbar-actions">
-        {isDemo && <span className="demo-label">{text('浏览器演示数据', 'Browser demo data')}</span>}
-        {result && (
-          <span className="last-scan">
-            <Clock3 size={14} />
-            {new Date(result.completedAt).toLocaleTimeString(language, {
-              hour: '2-digit',
-              minute: '2-digit'
-            })}
-          </span>
-        )}
-        <button
-          type="button"
-          className="secondary-button scan-button"
-          onClick={onScan}
-          disabled={phase === 'scanning'}
-        >
-          <RefreshCw className={phase === 'scanning' ? 'spinning' : ''} size={16} />
-          <span>{phase === 'scanning' ? text('扫描中', 'Scanning') : text('重新扫描', 'Scan again')}</span>
-        </button>
-      </div>
-    </header>
-  )
-}
-
-function ScanState({ progress }: { progress: ScanProgress }): React.JSX.Element {
-  const { text } = useI18n()
-  const stages: Array<{ section: ScanSection; label: string; icon: typeof RadioTower }> = [
-    { section: 'services', label: text('后台服务', 'Services'), icon: RadioTower },
-    { section: 'storage', label: text('存储空间', 'Storage'), icon: HardDrive },
-    { section: 'applications', label: text('应用清理', 'App cleanup'), icon: AppWindow },
-    { section: 'terminal', label: text('终端诊断', 'Terminal'), icon: SquareTerminal }
-  ]
-  const completed = new Set(progress.completedSections ?? [])
-  const active = new Set(
-    progress.activeSections ?? (progress.section === 'system' ? [] : [progress.section])
-  )
-
-  return (
-    <section className="scan-state" aria-live="polite">
-      <div className="scan-visual" aria-hidden="true">
-        <span className="scan-core">
-          <ScanSearch size={27} />
-        </span>
-        <span className="scan-orbit" />
-        <span className="scan-pulse" />
-      </div>
-      <h1>{text('正在检查这台 Mac', 'Checking this Mac')}</h1>
-      <p className="scan-message">{progress.message}</p>
-      <ol className="scan-stages" aria-label={text('扫描模块', 'Scan modules')}>
-        {stages.map(({ section, label, icon: Icon }) => {
-          const state = completed.has(section) ? 'complete' : active.has(section) ? 'active' : 'pending'
-          return (
-            <li key={section} className={`is-${state}`}>
-              <span className="scan-stage-icon" aria-hidden="true">
-                {state === 'complete' ? <Check size={16} /> : <Icon size={16} />}
-              </span>
-              <span className="scan-stage-copy">
-                <strong>{label}</strong>
-                <small>
-                  {state === 'complete'
-                    ? text('已完成', 'Complete')
-                    : state === 'active'
-                      ? text('检查中', 'Checking')
-                      : text('等待中', 'Waiting')}
-                </small>
-              </span>
-            </li>
-          )
-        })}
-      </ol>
-      <div className="scan-progress-meta">
-        <span>{text('总体进度', 'Overall progress')}</span>
-        <strong>{progress.progress}%</strong>
-      </div>
-      <div
-        className="scan-progress"
-        role="progressbar"
-        aria-label={text('扫描进度', 'Scan progress')}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={progress.progress}
-      >
-        <span style={{ transform: `scaleX(${progress.progress / 100})` }} />
-      </div>
-    </section>
-  )
-}
-
-function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }): React.JSX.Element {
-  const { text } = useI18n()
-  return (
-    <section className="empty-state">
-      <ShieldAlert size={28} />
-      <h1>{text('扫描没有完成', 'Scan did not complete')}</h1>
-      <p>{message}</p>
-      <button type="button" className="primary-button" onClick={onRetry}>
-        <RefreshCw size={16} />
-        {text('重试', 'Retry')}
-      </button>
-    </section>
-  )
-}
-
-function Overview({
-  result,
-  selected,
-  onNavigate,
-  onOpenCandidate,
-  onToggle,
-  onReviewAction,
-  onAskAi,
-  onRevealLocation,
-  onWhitelist
-}: {
-  result: ScanResult
-  selected: Set<string>
-  onNavigate: (view: ViewKey) => void
-  onOpenCandidate: (id: string) => void
-  onToggle: (id: string) => void
-  onReviewAction: (id: string) => void
-  onAskAi: (id: string) => void
-  onRevealLocation: (id: string) => void
-  onWhitelist: (id: string) => void
-}): React.JSX.Element {
-  const { language, text } = useI18n()
-  const score = computeHealth(result)
-  const actionable = result.candidates.filter((item) => candidateOperations(item).length > 0)
-  const reclaimable = actionable.reduce((sum, item) => sum + (item.sizeBytes ?? 0), 0)
-  const diskUsed = Math.max(0, result.system.diskTotalBytes - result.system.diskFreeBytes)
-  const diskPercent = result.system.diskTotalBytes
-    ? Math.round((diskUsed / result.system.diskTotalBytes) * 100)
-    : 0
-  const recommendations = [...actionable]
-    .sort((a, b) => {
-      if (a.risk === 'safe' && b.risk !== 'safe') return -1
-      if (b.risk === 'safe' && a.risk !== 'safe') return 1
-      return (b.sizeBytes ?? 0) - (a.sizeBytes ?? 0)
-    })
-    .slice(0, 5)
-  const statusText = score >= 82 ? text('状态良好', 'In good shape') : score >= 65 ? text('建议整理', 'Worth reviewing') : text('需要处理', 'Needs attention')
-
-  return (
-    <div className="view overview-view">
-      <div className="overview-heading">
-        <div>
-          <span className="section-kicker">{text('本次扫描', 'Current scan')}</span>
-          <h1>{statusText}</h1>
-          <p>
-            {text(`找到 ${actionable.length} 项可操作建议，可释放约 ${formatBytes(reclaimable)}。`, `${actionable.length} actionable items found, with about ${formatBytes(reclaimable)} reclaimable.`)}
-          </p>
-        </div>
-        <div className="health-score" aria-label={text(`系统健康评分 ${score}`, `System health score ${score}`)}>
-          <div
-            className="score-ring"
-            style={{ '--score': `${score * 3.6}deg` } as React.CSSProperties}
-          >
-            <strong>{score}</strong>
-            <span>/ 100</span>
-          </div>
-          <div>
-            <strong>{text('系统状态', 'System status')}</strong>
-            <span>{text('基于磁盘、服务与启动耗时', 'Based on disk, services, and startup time')}</span>
-          </div>
-        </div>
-      </div>
-
-      <section className="metric-strip" aria-label={text('系统摘要', 'System summary')}>
-        <button type="button" onClick={() => onNavigate('storage')}>
-          <HardDrive size={18} />
-          <span>{text('磁盘已用', 'Disk used')}</span>
-          <strong>{diskPercent}%</strong>
-          <small>{text(`剩余 ${formatBytes(result.system.diskFreeBytes)}`, `${formatBytes(result.system.diskFreeBytes)} free`)}</small>
-        </button>
-        <button type="button" onClick={() => onNavigate('services')}>
-          <RadioTower size={18} />
-          <span>{text('后台服务', 'Background services')}</span>
-          <strong>{sectionCount(result, 'services')}</strong>
-          <small>{text('需要逐项确认', 'Review individually')}</small>
-        </button>
-        <button type="button" onClick={() => onNavigate('applications')}>
-          <AppWindow size={18} />
-          <span>{text('应用清理', 'App cleanup')}</span>
-          <strong>{sectionCount(result, 'applications')}</strong>
-          <small>{text('已安装应用', 'Installed applications')}</small>
-        </button>
-        <button type="button" onClick={() => onNavigate('terminal')}>
-          <SquareTerminal size={18} />
-          <span>{text('终端启动', 'Terminal startup')}</span>
-          <strong>
-            {result.terminal.startupMs === null ? text('未知', 'Unknown') : `${result.terminal.startupMs} ms`}
-          </strong>
-          <small>{text(`无配置基线 ${result.terminal.baselineMs ?? '未知'} ms`, `Clean baseline ${result.terminal.baselineMs ?? 'unknown'} ms`)}</small>
-        </button>
-      </section>
-
-      <div className="overview-grid">
-        <section className="recommendations">
-          <div className="section-heading-row">
-            <div>
-              <h2>{text('优先建议', 'Priority findings')}</h2>
-              <p>{text('低风险项目排在前面，所有操作都需要确认。', 'Lower-risk items appear first. Every action requires confirmation.')}</p>
-            </div>
-            <span>{text(`${recommendations.length} 项`, `${recommendations.length} items`)}</span>
-          </div>
-          {recommendations.length ? (
-            <div className="candidate-list compact-list">
-              {recommendations.map((candidate) => (
-                <CandidateRow
-                  key={candidate.id}
-                  scanId={result.scanId}
-                  candidate={candidate}
-                  selectedOperationId={selectedOperationId(candidate, selected)}
-                  onToggle={onToggle}
-                  onOpen={onOpenCandidate}
-                  onReviewAction={onReviewAction}
-                  onAskAi={onAskAi}
-                  onRevealLocation={onRevealLocation}
-                  onWhitelist={onWhitelist}
-                />
-              ))}
-            </div>
-          ) : (
-            <InlineEmpty />
-          )}
-        </section>
-
-        <aside className="diagnostic-summary">
-          <div className="terminal-summary-icon">
-            <SquareTerminal size={20} />
-          </div>
-          <h2>{text('终端启动分析', 'Terminal startup analysis')}</h2>
-          <strong>
-            {result.terminal.startupMs === null ? text('未完成计时', 'Timing unavailable') : `${result.terminal.startupMs} ms`}
-          </strong>
-          <p>
-            {result.terminal.findings.find((item) => item.severity === 'slow')?.title ??
-              text('没有发现明显的同步阻塞项', 'No obvious synchronous blocking item was found')}
-          </p>
-          <button type="button" className="text-button" onClick={() => onNavigate('terminal')}>
-            {text('查看诊断', 'View diagnostics')}
-            <ChevronRight size={15} />
-          </button>
-        </aside>
-      </div>
-
-      {result.warnings.length > 0 && (
-        <div className="warning-band">
-          <Info size={17} />
-          <span>{result.warnings.join('；')}</span>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function CandidateView({
-  section,
-  result,
-  settings,
-  selected,
-  aiExpandedId,
-  autoPrepareAiId,
-  onToggle,
-  onReviewAction,
-  onAskAi,
-  onAiPrepared,
-  onCloseAi,
-  onOpenSettings,
-  onRevealLocation,
-  onWhitelist,
-  onManageIgnored
-}: {
-  section: Exclude<ScanSection, 'terminal'>
-  result: ScanResult
-  settings: AppSettings
-  selected: Set<string>
-  aiExpandedId: string | null
-  autoPrepareAiId: string | null
-  onToggle: (id: string) => void
-  onReviewAction: (id: string) => void
-  onAskAi: (id: string) => void
-  onAiPrepared: () => void
-  onCloseAi: () => void
-  onOpenSettings: () => void
-  onRevealLocation: (id: string) => void
-  onWhitelist: (id: string) => void
-  onManageIgnored: (kind: 'services' | 'storage') => void
-}): React.JSX.Element {
-  const { language, text } = useI18n()
-  const title = viewTitle(section, language)
-  const candidates = result.candidates.filter((item) => item.section === section)
-  const supportsWhitelist = section === 'services' || section === 'storage'
-  const whitelistValues = section === 'services'
-    ? settings.serviceWhitelist
-    : section === 'storage'
-      ? settings.storageWhitelist
-      : []
-  const actionable = candidates.filter((item) => candidateOperations(item).length > 0)
-  const totalBytes = actionable.reduce((sum, item) => sum + (item.sizeBytes ?? 0), 0)
-  const safeIds = section === 'services'
-    ? []
-    : actionable
-        .filter((item) => item.risk === 'safe')
-        .map((item) => candidateOperations(item)[0]?.id)
-        .filter((id): id is string => Boolean(id))
-  const allSafeSelected = safeIds.length > 0 && safeIds.every((id) => selected.has(id))
-
-  const toggleSafe = (): void => {
-    for (const id of safeIds) {
-      if (allSafeSelected === selected.has(id)) onToggle(id)
-    }
-  }
-
-  return (
-    <div className="view candidate-view">
-      <header className="module-header">
-        <h1>{title}</h1>
-        <div className="module-header-actions">
-          {supportsWhitelist && (
-            <button
-              type="button"
-              className="ignored-count-button"
-              onClick={() => onManageIgnored(section as 'services' | 'storage')}
-            >
-              <EyeOff size={14} />
-              {text(`已忽略 ${whitelistValues.length} 项`, `${whitelistValues.length} ignored`)}
-            </button>
-          )}
-          <div className="module-stat">
-            <strong>{section === 'storage' ? formatBytes(totalBytes) : candidates.length}</strong>
-            <span>{section === 'storage' ? text('可处理空间', 'reclaimable') : text('检测结果', 'findings')}</span>
-          </div>
-        </div>
-      </header>
-
-      {safeIds.length > 0 && (
-        <div className="list-toolbar">
-          <label className="select-all">
-            <input type="checkbox" checked={allSafeSelected} onChange={toggleSafe} />
-            <span>{text('选择全部低风险项目', 'Select all low-risk items')}</span>
-          </label>
-        </div>
-      )}
-
-      {candidates.length ? (
-        <div className="candidate-list">
-          {candidates.map((candidate) => (
-            <div className={`candidate-entry ${aiExpandedId === candidate.id ? 'has-ai' : ''}`} key={candidate.id}>
-              <CandidateRow
-                scanId={result.scanId}
-                candidate={candidate}
-                selectedOperationId={selectedOperationId(candidate, selected)}
-                aiExpanded={aiExpandedId === candidate.id}
-                onToggle={onToggle}
-                onReviewAction={onReviewAction}
-                onAskAi={(id) => aiExpandedId === id ? onCloseAi() : onAskAi(id)}
-                onRevealLocation={onRevealLocation}
-                onWhitelist={onWhitelist}
-              />
-              {aiExpandedId === candidate.id && (
-                <div className="candidate-ai-inline">
-                  <AiAnalysisPanel
-                    result={result}
-                    candidate={candidate}
-                    compact
-                    autoPrepare={autoPrepareAiId === candidate.id}
-                    onAutoPrepared={onAiPrepared}
-                    onOpenSettings={onOpenSettings}
-                    onClose={onCloseAi}
-                  />
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <InlineEmpty section={section} />
-      )}
-    </div>
-  )
-}
-
-function CandidateRow({
-  scanId,
-  candidate,
-  selectedOperationId: activeOperationId,
-  aiExpanded = false,
-  onToggle,
-  onOpen,
-  onReviewAction,
-  onAskAi,
-  onRevealLocation,
-  onWhitelist
-}: {
-  scanId: string
-  candidate: ScanCandidate
-  selectedOperationId: string | null
-  aiExpanded?: boolean
-  onToggle: (id: string) => void
-  onOpen?: (id: string) => void
-  onReviewAction: (id: string) => void
-  onAskAi: (id: string) => void
-  onRevealLocation: (id: string) => void
-  onWhitelist: (id: string) => void
-}): React.JSX.Element {
-  const { language, text } = useI18n()
-  const { state: aiState } = useAiAnalysisTask(aiAnalysisTaskKey(scanId, candidate.id))
-  const operations = candidateOperations(candidate)
-  const primaryOperation = operations[0]
-  const selectable = Boolean(primaryOperation)
-  const selected = Boolean(activeOperationId)
-  const aiBusy = aiState.status === 'preparing' || aiState.status === 'analyzing'
-  const aiReady = aiState.status === 'succeeded'
-  const showSubtitle = candidate.subtitle.trim() !== candidate.location?.trim()
-  const [moreOpen, setMoreOpen] = useState(false)
-  const moreMenuRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!moreOpen) return
-    const onPointerDown = (event: PointerEvent): void => {
-      if (!moreMenuRef.current?.contains(event.target as Node)) setMoreOpen(false)
-    }
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') setMoreOpen(false)
-    }
-    document.addEventListener('pointerdown', onPointerDown)
-    document.addEventListener('keydown', onKeyDown)
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown)
-      document.removeEventListener('keydown', onKeyDown)
-    }
-  }, [moreOpen])
-
-  return (
-    <div
-      className={`candidate-row ${onOpen ? 'is-link' : ''}`}
-      role={onOpen ? 'button' : undefined}
-      tabIndex={onOpen ? 0 : undefined}
-      onClick={onOpen ? () => onOpen(candidate.id) : undefined}
-      onKeyDown={onOpen ? (event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault()
-          onOpen(candidate.id)
+      if (!window.memento) {
+        const timestamp = new Date().toISOString()
+        const existing = providers.find((provider) => provider.id === input.id)
+        const provider: AgentProvider = {
+          ...DEMO_PROVIDER,
+          ...input,
+          id: input.id ?? crypto.randomUUID(),
+          isDefault: existing?.isDefault ?? providers.length === 0,
+          connectionState: 'untested',
+          keyPresent: true,
+          keyHint: input.apiKey ? `••••${input.apiKey.slice(-4)}` : DEMO_PROVIDER.keyHint,
+          createdAt: timestamp,
+          updatedAt: timestamp
         }
-      } : undefined}
-    >
-      {candidate.section === 'services' ? (
-        <span className="row-checkbox-placeholder" aria-hidden="true" />
-      ) : (
-        <label
-          className={`row-checkbox ${!selectable ? 'is-disabled' : ''}`}
-          onClick={(event) => event.stopPropagation()}
-          title={selectable ? text('选择此项目', 'Select this item') : text('此项目仅供分析', 'This item is analysis only')}
-        >
-          <input
-            type="checkbox"
-            checked={selected}
-            disabled={!selectable}
-            onChange={() => {
-              const operationId = activeOperationId ?? primaryOperation?.id
-              if (operationId) onToggle(operationId)
-            }}
-          />
-          <span aria-hidden="true">{selected && <Check size={13} strokeWidth={2.5} />}</span>
-        </label>
-      )}
-      <div className={`candidate-icon icon-${candidate.section}`} aria-hidden="true">
-        {candidate.section === 'services' ? (
-          <Power size={17} />
-        ) : candidate.section === 'storage' ? (
-          <Archive size={17} />
-        ) : (
-          <AppWindow size={17} />
-        )}
-      </div>
-      <div className="candidate-copy">
-        <div className="candidate-title-line">
-          <strong>{candidate.name}</strong>
-          <span className={`risk-label risk-${candidate.risk}`}>{riskLabel(candidate.risk, language)}</span>
-        </div>
-        <p className="candidate-summary">
-          {showSubtitle && <span>{candidate.subtitle}</span>}
-          {candidate.description}
-        </p>
-        {candidate.location && (
-          <button
-            type="button"
-            className="candidate-location-button"
-            onClick={(event) => {
-              event.stopPropagation()
-              onRevealLocation(candidate.id)
-            }}
-            title={candidate.section === 'storage'
-              ? text('在 Finder 中查看存储位置', 'Show storage location in Finder')
-              : text('在 Finder 中打开服务目录', 'Open service location in Finder')}
-          >
-            <FolderOpen size={12} />
-            <span>{candidate.location}</span>
-          </button>
-        )}
-      </div>
-      <div className="candidate-meta">
-        <strong>{candidate.sizeBytes ? formatBytes(candidate.sizeBytes) : candidate.status}</strong>
-        <span>{candidate.ageDays !== undefined ? text(`${candidate.ageDays} 天`, `${candidate.ageDays} days`) : candidate.status}</span>
-      </div>
-      <div className="candidate-actions" aria-label={text('快捷操作', 'Quick actions')}>
-        {(candidate.section === 'services' || candidate.section === 'storage') && (
-          <button
-            type="button"
-            className="candidate-ai-action"
-            aria-expanded={aiExpanded}
-            onClick={(event) => {
-              event.stopPropagation()
-              onAskAi(candidate.id)
-            }}
-            title={text('不确定时询问 AI', 'Ask AI when you are unsure')}
-          >
-            {aiExpanded
-              ? <X size={14} />
-              : aiBusy
-                ? <LoaderCircle className="spinning" size={14} />
-                : aiReady
-                  ? <Check size={14} />
-                  : <BrainCircuit size={14} />}
-            {aiExpanded
-              ? aiReady
-                ? text('收起结果', 'Hide result')
-                : aiBusy
-                  ? text('收起分析', 'Hide analysis')
-                  : text('收起 AI', 'Hide AI')
-              : aiBusy
-                ? text('AI 分析中', 'AI analyzing')
-                : aiReady
-                  ? text('查看 AI 结果', 'View AI result')
-                  : text('问 AI', 'Ask AI')}
-          </button>
-        )}
-        {operations.map((operation) => (
-          <button
-            type="button"
-            className={operation.kind.includes('stop') ? 'candidate-direct-action' : 'candidate-direct-action is-destructive'}
-            key={operation.id}
-            onClick={(event) => {
-              event.stopPropagation()
-              onReviewAction(operation.id)
-            }}
-            title={operation.consequence}
-          >
-            {operation.kind.includes('stop')
-              ? <Power size={14} />
-              : operation.kind === 'trash-service-directory'
-                ? <FolderX size={14} />
-                : <Trash2 size={14} />}
-            {operationLabel(operation, language)}
-          </button>
-        ))}
-        {(candidate.section === 'services' || candidate.section === 'storage') && (
-          <div className="candidate-more" ref={moreMenuRef}>
-            <button
-              type="button"
-              className="candidate-more-button"
-              aria-haspopup="menu"
-              aria-expanded={moreOpen}
-              onClick={(event) => {
-                event.stopPropagation()
-                setMoreOpen((current) => !current)
-              }}
-              title={text('更多操作', 'More actions')}
-              aria-label={text(`${candidate.name}的更多操作`, `More actions for ${candidate.name}`)}
-            >
-              <MoreHorizontal size={15} />
-            </button>
-            {moreOpen && (
-              <div className="candidate-more-menu" role="menu">
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    setMoreOpen(false)
-                    onWhitelist(candidate.id)
-                  }}
-                >
-                  <EyeOff size={14} />
-                  {text('忽略此项', 'Ignore item')}
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-      {onOpen && <ChevronRight className="row-chevron" size={16} />}
-    </div>
-  )
-}
-
-function TerminalView({
-  result,
-  canUndo,
-  busy,
-  onReviewFixes,
-  onUndo,
-  onOpenSettings
-}: {
-  result: ScanResult
-  canUndo: boolean
-  busy: boolean
-  onReviewFixes: () => void
-  onUndo: () => void
-  onOpenSettings: () => void
-}): React.JSX.Element {
-  const { language, text } = useI18n()
-  const { terminal } = result
-  const fixableFindings = terminal.findings.filter((finding) => finding.fix)
-  const title = viewTitle('terminal', language)
-  const configCost =
-    terminal.startupMs !== null && terminal.baselineMs !== null
-      ? Math.max(0, terminal.startupMs - terminal.baselineMs)
-      : null
-  const grade =
-    terminal.startupMs === null
-      ? text('无法计时', 'Timing unavailable')
-      : terminal.startupMs > 700
-        ? text('启动偏慢', 'Slow startup')
-        : terminal.startupMs > 300
-          ? text('可以优化', 'Can be improved')
-          : text('启动正常', 'Normal startup')
-
-  return (
-    <div className="view terminal-view">
-      <div className="page-title-row">
-        <div>
-          <h1>{title}</h1>
-        </div>
-        <div className="page-stat">
-          <strong>{terminal.startupMs === null ? text('未知', 'Unknown') : `${terminal.startupMs} ms`}</strong>
-          <span>{grade}</span>
-        </div>
-      </div>
-
-      <section className="timing-comparison">
-        <div className="timing-label">
-          <CircleGauge size={20} />
-          <div>
-            <h2>{text('启动耗时对比', 'Startup timing')}</h2>
-            <p>{text('每项运行三次并取中位数，避免偶发波动。', 'Each measurement runs three times and uses the median to reduce noise.')}</p>
-          </div>
-        </div>
-        <div className="timing-values">
-          <div>
-            <span>{text('无配置基线', 'Clean baseline')}</span>
-            <strong>{terminal.baselineMs ?? text('未知', 'Unknown')}<small> ms</small></strong>
-          </div>
-          <div className="timing-plus">+</div>
-          <div className={configCost !== null && configCost > 400 ? 'is-slow' : ''}>
-            <span>{text('用户配置', 'User config')}</span>
-            <strong>{configCost ?? text('未知', 'Unknown')}<small> ms</small></strong>
-          </div>
-          <div className="timing-equals">=</div>
-          <div className={terminal.startupMs !== null && terminal.startupMs > 700 ? 'is-slow' : ''}>
-            <span>{text('完整启动', 'Full startup')}</span>
-            <strong>{terminal.startupMs ?? text('未知', 'Unknown')}<small> ms</small></strong>
-          </div>
-        </div>
-      </section>
-
-      <AiAnalysisPanel result={result} onOpenSettings={onOpenSettings} />
-
-      <section className="finding-section">
-        <div className="section-heading-row">
-          <div>
-            <h2>{text('诊断结果', 'Diagnostic findings')}</h2>
-            <p>
-              {fixableFindings.length
-                ? text(`${fixableFindings.length} 项可自动优化，配置文件会先备份。`, `${fixableFindings.length} items can be optimized automatically. Configuration files are backed up first.`)
-                : text('没有可自动优化的配置项。', 'No configuration items can be optimized automatically.')}
-            </p>
-          </div>
-          <div className="terminal-actions">
-            {canUndo && (
-              <button type="button" className="secondary-button" onClick={onUndo} disabled={busy}>
-                <RotateCcw size={15} />
-                {text('撤销上次优化', 'Undo last optimization')}
-              </button>
-            )}
-            {fixableFindings.length > 0 && (
-              <button type="button" className="primary-button" onClick={onReviewFixes} disabled={busy}>
-                <WandSparkles size={15} />
-                {text(`一键优化 ${fixableFindings.length} 项`, `Optimize ${fixableFindings.length} items`)}
-              </button>
-            )}
-          </div>
-        </div>
-        <div className="finding-list">
-          {terminal.findings.map((finding) => (
-            <TerminalFindingRow key={finding.id} finding={finding} />
-          ))}
-        </div>
-      </section>
-    </div>
-  )
-}
-
-function TerminalFindingRow({ finding }: { finding: TerminalFinding }): React.JSX.Element {
-  const { text } = useI18n()
-  return (
-    <div className="finding-row">
-      <div className={`finding-status severity-${finding.severity}`} aria-hidden="true">
-        {finding.severity === 'good' ? (
-          <CheckCircle2 size={17} />
-        ) : finding.severity === 'slow' ? (
-          <Activity size={17} />
-        ) : (
-          <Info size={17} />
-        )}
-      </div>
-      <div className="finding-copy">
-        <div>
-          <strong>{finding.title}</strong>
-          {finding.fix && (
-            <span className="finding-fix-badge">
-              <WandSparkles size={11} />
-              {text('可自动优化', 'Auto fix')}
-            </span>
-          )}
-          {finding.source && <code>{finding.source}</code>}
-        </div>
-        <p>{finding.detail}</p>
-        {finding.recommendation && <small>{finding.recommendation}</small>}
-      </div>
-      {finding.durationMs !== undefined && (
-        <span className="finding-duration">{finding.durationMs} ms</span>
-      )}
-    </div>
-  )
-}
-
-function InlineEmpty({ section }: { section?: ScanSection }): React.JSX.Element {
-  const { text } = useI18n()
-  const isApplicationCleanup = section === 'applications'
-  return (
-    <div className="inline-empty">
-      <CheckCircle2 size={23} />
-      <strong>
-        {isApplicationCleanup
-          ? text('没有需要清理的应用', 'No apps need cleanup')
-          : text('这里已经很干净', 'Nothing to clean up here')}
-      </strong>
-      <span>
-        {isApplicationCleanup
-          ? text('未发现可确认的重复安装或超过 3 个月未使用的应用。', 'No confirmed duplicate apps or apps unused for more than 3 months were found.')
-          : text('本次扫描没有发现需要处理的项目。', 'This scan found no items that need attention.')}
-      </span>
-    </div>
-  )
-}
-
-function ActionDock({
-  count,
-  bytes,
-  onClear,
-  onReview
-}: {
-  count: number
-  bytes: number
-  onClear: () => void
-  onReview: () => void
-}): React.JSX.Element {
-  const { text } = useI18n()
-  return (
-    <div className="action-dock">
-      <div>
-        <strong>{text(`已选择 ${count} 项`, `${count} selected`)}</strong>
-        <span>{bytes > 0 ? text(`预计处理 ${formatBytes(bytes)}`, `About ${formatBytes(bytes)} affected`) : text('将停止所选服务', 'Selected services will be stopped')}</span>
-      </div>
-      <button type="button" className="dock-clear" onClick={onClear} title={text('清除选择', 'Clear selection')}>
-        <X size={17} />
-      </button>
-      <button type="button" className="primary-button" onClick={onReview}>
-        {text('查看并确认', 'Review and confirm')}
-        <ChevronRight size={16} />
-      </button>
-    </div>
-  )
-}
-
-function AiActivityCenter({
-  items,
-  hasActionDock,
-  onOpen,
-  onDismiss
-}: {
-  items: AiActivityItem[]
-  hasActionDock: boolean
-  onOpen: (item: AiActivityItem) => void
-  onDismiss: (key: string) => void
-}): React.JSX.Element {
-  const { text } = useI18n()
-  return (
-    <section
-      className={`ai-activity-center ${hasActionDock ? 'has-action-dock' : ''}`}
-      aria-label={text('AI 分析任务', 'AI analysis tasks')}
-      aria-live="polite"
-    >
-      <header>
-        <div>
-          <BrainCircuit size={15} />
-          <strong>{text('AI 分析', 'AI analyses')}</strong>
-        </div>
-        <span>{text(`${items.length} 项`, `${items.length} ${items.length === 1 ? 'item' : 'items'}`)}</span>
-      </header>
-      <div className="ai-activity-list">
-        {items.map((item) => (
-          <div className={`ai-activity-item is-${item.status}`} key={item.key}>
-            {item.status === 'running'
-              ? <LoaderCircle className="spinning" size={16} />
-              : <CheckCircle2 size={16} />}
-            <div>
-              <strong title={item.name}>{item.name}</strong>
-              <span>
-                {item.status === 'running'
-                  ? text('正在分析', 'Analyzing')
-                  : text('分析完成，可查看结果', 'Analysis complete')}
-              </span>
-            </div>
-            <button type="button" className="secondary-button" onClick={() => onOpen(item)}>
-              {text('查看', 'View')}<ChevronRight size={14} />
-            </button>
-            {item.status === 'completed' && (
-              <button
-                type="button"
-                className="icon-button ai-activity-dismiss"
-                onClick={() => onDismiss(item.key)}
-                title={text('关闭此结果提示', 'Dismiss this result')}
-              >
-                <X size={14} />
-              </button>
-            )}
-          </div>
-        ))}
-      </div>
-    </section>
-  )
-}
-
-function IgnoreConfirmDialog({
-  candidate,
-  busy,
-  onClose,
-  onConfirm
-}: {
-  candidate: ScanCandidate
-  busy: boolean
-  onClose: () => void
-  onConfirm: () => void
-}): React.JSX.Element {
-  const { text } = useI18n()
-  const storage = candidate.section === 'storage'
-  const identity = candidateWhitelistValue(candidate) ?? candidate.name
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape' && !busy) onClose()
+        setProviders((current) => [
+          provider,
+          ...current.filter((item) => item.id !== provider.id)
+        ])
+        return provider
+      }
+      const provider = await window.memento.saveAgentProvider(input)
+      await refreshProviders()
+      return provider
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : '无法保存供应商')
+      throw error
     }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [busy, onClose])
+  }
+
+  const testProvider = async (input: SaveAgentProviderInput): Promise<AgentProviderTestResult> => {
+    try {
+      const tested = window.memento
+        ? await window.memento.testAgentProvider(input)
+        : { ok: true, message: '连接成功，模型支持工具调用', toolCalling: true, testedAt: new Date().toISOString() }
+      if (window.memento) await refreshProviders()
+      return tested
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : '连接测试失败')
+      throw error
+    }
+  }
+
+  const deleteProvider = async (id: string): Promise<void> => {
+    try {
+      if (window.memento) await window.memento.deleteAgentProvider(id)
+      setProviders((current) => current.filter((provider) => provider.id !== id))
+      setToast('供应商配置已删除')
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : '无法删除供应商')
+      throw error
+    }
+  }
+
+  const setDefaultProvider = async (id: string): Promise<void> => {
+    try {
+      const next = window.memento
+        ? await window.memento.setDefaultAgentProvider(id)
+        : providers.map((provider) => ({ ...provider, isDefault: provider.id === id }))
+      setProviders(next)
+      setToast('默认模型已更新')
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : '无法更新默认模型')
+      throw error
+    }
+  }
+
+  const healthCount = result
+    ? result.candidates.filter((candidate) => candidate.section === 'storage' || candidate.section === 'services').length + result.terminal.findings.filter((finding) => finding.fix).length
+    : 0
+  const selectedPlan = activeRun?.plan.filter((item) => selectedPlanIds.has(item.id)) ?? []
 
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={() => !busy && onClose()}>
-      <section
-        className="confirm-dialog ignore-confirm-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="ignore-confirm-title"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="dialog-head">
-          <div>
-            <span>{text('可随时恢复', 'Can be restored anytime')}</span>
-            <h2 id="ignore-confirm-title">{text(`忽略 ${candidate.name}？`, `Ignore ${candidate.name}?`)}</h2>
-            <p>{storage
-              ? text('以后不会清理此项目，也不再计入可释放空间。', 'This item will not be cleaned or counted as reclaimable space.')
-              : text('不会停止或移除该服务，后续体检和 Agent 都会跳过它。', 'The service will not be stopped or removed. Future checks and Agent will skip it.')}</p>
-          </div>
-          <button
-            type="button"
-            className="icon-button"
-            onClick={onClose}
-            disabled={busy}
-            title={text('关闭', 'Close')}
-            aria-label={text('关闭忽略确认', 'Close ignore confirmation')}
-          >
-            <X size={18} />
-          </button>
-        </div>
-        <div className="ignore-confirm-item">
-          <span className={`dialog-item-icon icon-${storage ? 'storage' : 'services'}`}>
-            {storage ? <Archive size={16} /> : <RadioTower size={16} />}
-          </span>
-          <div>
-            <strong>{candidate.name}</strong>
-            <code title={identity}>{identity}</code>
-          </div>
-        </div>
-        <div className="dialog-notice">
-          <EyeOff size={17} />
-          <span>{text('加入后会立即从结果中移除，并同时阻止手动清理和 Agent 操作。', 'The item leaves results immediately and is blocked from both manual cleanup and Agent actions.')}</span>
-        </div>
-        <div className="dialog-actions">
-          <button type="button" className="secondary-button" onClick={onClose} disabled={busy}>
-            {text('取消', 'Cancel')}
-          </button>
-          <button type="button" className="primary-button" onClick={onConfirm} disabled={busy} autoFocus>
-            {busy ? <LoaderCircle className="spinning" size={16} /> : <EyeOff size={16} />}
-            {busy ? text('正在忽略', 'Ignoring') : text('确认忽略', 'Ignore item')}
-          </button>
-        </div>
-      </section>
-    </div>
+    <Shell
+      activeView={view}
+      provider={defaultProvider}
+      healthCount={healthCount}
+      applicationCount={result?.applications.length ?? 0}
+      hostname={result?.system.hostname ?? ''}
+      osVersion={result?.system.osVersion ?? ''}
+      scanBusy={scanBusy}
+      onNavigate={setView}
+      onQuickScan={() => { setView('health'); void scanNow() }}
+    >
+      {view === 'agent' && <AgentPage scan={result} run={activeRun} statusMessage={runStatusMessage} selectedPlanIds={selectedPlanIds} providerConfigured={Boolean(defaultProvider)} onSubmit={startAgentRun} onNewTask={() => { setActiveRun(null); activeRunId.current = null; setSelectedPlanIds(new Set()); setRunStatusMessage('') }} onOpenHistory={() => setView('history')} onOpenSettings={() => setView('settings')} onTogglePlanItem={(id) => setSelectedPlanIds((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next })} onExecutePlan={() => setPlanDialogOpen(true)} onDiscardPlan={discardPlan} />}
+      {view === 'health' && <HealthPage result={result} settings={settings} scanBusy={scanBusy} progress={progress} onScan={() => void scanNow()} onAgentPrompt={startAgentRun} onIgnore={setPendingIgnore} onManageIgnored={openIgnoredManager} />}
+      {view === 'apps' && <ApplicationsPage applications={result?.applications ?? []} openingId={openingApplicationId} onOpen={(application) => void openApplication(application)} onUninstall={setPendingUninstall} onAgentPrompt={startAgentRun} />}
+      {view === 'history' && <HistoryPage runs={runs} onOpenRun={(run) => { setActiveRun(run); activeRunId.current = run.id; setSelectedPlanIds(new Set(run.plan.map((item) => item.id))); setView('agent') }} onToast={setToast} />}
+      {view === 'settings' && <SettingsPage settings={settings} providers={providers} onUpdateSettings={updateSettings} onSaveProvider={saveProvider} onTestProvider={testProvider} onDeleteProvider={deleteProvider} onSetDefaultProvider={setDefaultProvider} onManageIgnored={() => openIgnoredManager()} onToast={setToast} />}
+
+      {planDialogOpen && <PlanConfirmDialog items={selectedPlan} busy={planBusy} onClose={() => setPlanDialogOpen(false)} onConfirm={() => void executePlan()} />}
+      {pendingUninstall && <UninstallDialog application={pendingUninstall} busy={uninstallBusy} onClose={() => setPendingUninstall(null)} onConfirm={() => void uninstallApplication()} />}
+      {pendingIgnore && <IgnoreConfirmDialog candidate={pendingIgnore} busy={ignoreBusy} onClose={() => setPendingIgnore(null)} onConfirm={() => void confirmIgnore()} />}
+      {ignoredManagerOpen && <IgnoredItemsDialog initialKind={ignoredManagerKind} serviceValues={settings.serviceWhitelist} storageValues={settings.storageWhitelist} busyValue={restoreBusyValue} onRestore={(kind, value) => void restoreIgnored(kind, value)} onClose={() => setIgnoredManagerOpen(false)} />}
+      {toast && <div className="toast is-visible" role="status"><CheckCircle2 size={16} /><span>{toast}</span></div>}
+    </Shell>
   )
 }
 
-function ConfirmDialog({
-  items,
-  busy,
-  onClose,
-  onConfirm
-}: {
-  items: SelectedCandidateOperation[]
-  busy: boolean
-  onClose: () => void
-  onConfirm: () => void
-}): React.JSX.Element {
-  const { language, text } = useI18n()
-  const irreversible = items.some((item) => !item.action.reversible)
-  const includesPermanentStorage = items.some((item) => item.action.kind === 'delete-storage')
-  const onlyPermanentStorage = items.every((item) => item.action.kind === 'delete-storage')
-  const includesSoftwareCleanup = items.some(
-    (item) =>
-      item.action.kind === 'trash-service-software' ||
-      item.action.kind === 'trash-service-directory'
-  )
-  const includesDirectoryCleanup = items.some(
-    (item) => item.action.kind === 'trash-service-directory'
-  )
-  const requiresAdmin = items.some((item) => item.action.requiresAdmin)
-  const onlyStops = items.every((item) => item.action.kind.includes('stop'))
-  const onlyStartupItems = items.every(
-    (item) => item.action.kind === 'trash-launch-agent-config'
-  )
-  const permanentStorageBytes = items.reduce(
-    (total, item) => item.action.kind === 'delete-storage'
-      ? total + (item.action.estimatedBytes ?? item.candidate.sizeBytes ?? 0)
-      : total,
-    0
-  )
-  return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={() => !busy && onClose()}>
-      <section
-        className="confirm-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="confirm-title"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="dialog-head">
-          <div>
-            <span>{text('执行前确认', 'Confirm before running')}</span>
-            <h2 id="confirm-title">{text(`将处理 ${items.length} 个项目`, `${items.length} items will be processed`)}</h2>
-          </div>
-          <button type="button" className="icon-button" onClick={onClose} disabled={busy} title={text('关闭', 'Close')}>
-            <X size={18} />
-          </button>
-        </div>
-        <div className="dialog-items">
-          {items.map((item) => (
-            <div key={item.id}>
-              <span className={`dialog-item-icon icon-${item.candidate.section}`}>
-                {item.action.kind.includes('stop')
-                  ? <Power size={16} />
-                  : item.action.kind === 'trash-service-directory'
-                    ? <FolderX size={16} />
-                    : <Trash2 size={16} />}
-              </span>
-              <div>
-                <strong>{item.candidate.name} · {operationLabel(item.action, language)}</strong>
-                <p>{item.action.consequence}</p>
-              </div>
-              <span>
-                {item.action.kind === 'delete-storage'
-                  ? item.action.estimatedBytes || item.candidate.sizeBytes
-                    ? text(`${formatBytes(item.action.estimatedBytes ?? item.candidate.sizeBytes)} · 永久删除`, `${formatBytes(item.action.estimatedBytes ?? item.candidate.sizeBytes)} · Permanent`)
-                    : text('永久删除', 'Permanent')
-                  : item.action.estimatedBytes || item.candidate.sizeBytes
-                    ? formatBytes(item.action.estimatedBytes ?? item.candidate.sizeBytes)
-                  : item.action.kind.includes('stop')
-                    ? text('停止', 'Stop')
-                    : text('废纸篓', 'Trash')}
-              </span>
-            </div>
-          ))}
-        </div>
-        <div className={`dialog-notice ${irreversible || includesDirectoryCleanup ? 'is-warning' : ''}`}>
-          {irreversible || includesDirectoryCleanup ? <ShieldAlert size={17} /> : <CheckCircle2 size={17} />}
-          <span>
-            {includesPermanentStorage
-              ? text(
-                  `${onlyPermanentStorage ? '这些缓存' : '其中的缓存'}会绕过废纸篓永久删除${permanentStorageBytes > 0 ? `，预计立即释放 ${formatBytes(permanentStorageBytes)}` : ''}。删除后无法撤销。`,
-                  `${onlyPermanentStorage ? 'These caches' : 'The included caches'} will bypass the Trash and be deleted permanently${permanentStorageBytes > 0 ? `, releasing about ${formatBytes(permanentStorageBytes)} immediately` : ''}. This cannot be undone.`
-                )
-              : irreversible
-                ? text('部分 Homebrew 清理操作不能通过废纸篓撤销。', 'Some Homebrew cleanup actions cannot be restored from the Trash.')
-              : includesDirectoryCleanup
-                ? text('将删除整个关联目录，包括其中的源码、虚拟环境和数据。请先确认目录内容不再需要；项目会移到废纸篓。', 'The entire related directory, including source code, virtual environments, and data, will be removed. Confirm its contents are no longer needed; the directory will move to the Trash.')
-              : onlyStartupItems
-                ? requiresAdmin
-                  ? text('macOS 会先请求管理员授权。只移除启动配置；程序目录和用户数据都会保留。', 'macOS will request administrator authorization first. Only the startup configuration is removed; the program directory and user data remain.')
-                  : text('只移除启动配置；程序目录和用户数据都会保留。', 'Only the startup configuration is removed; the program directory and user data remain.')
-              : requiresAdmin
-                ? text('执行前 macOS 会请求管理员授权；取消授权不会移动任何文件。', 'macOS will request administrator authorization first. Cancelling it will not move any files.')
-              : onlyStops
-                ? text('只会停止所选服务并取消自动启动，不会删除应用、配置或用户数据；之后仍可重新启动。', 'Only the selected services will stop and automatic startup will be disabled. Apps, settings, and user data remain, and the services can be started again.')
-              : includesSoftwareCleanup
-                ? text('会先停止服务，再将扫描时确认的应用、启动项和精确匹配数据移到废纸篓。', 'The service will stop first, then the confirmed app, login item, and exact-match data will move to the Trash.')
-                : text('文件会进入 macOS 废纸篓，停止的服务也可以重新启动。', 'Files will move to the macOS Trash, and stopped services can be started again.')}
-          </span>
-        </div>
-        <div className="dialog-actions">
-          <button type="button" className="secondary-button" onClick={onClose} disabled={busy}>
-            {text('取消', 'Cancel')}
-          </button>
-          <button type="button" className="danger-button" onClick={onConfirm} disabled={busy}>
-            {busy ? <LoaderCircle className="spinning" size={16} /> : <Check size={16} />}
-            {busy
-              ? text('正在处理', 'Processing')
-              : onlyPermanentStorage
-                ? text('永久删除并释放空间', 'Delete permanently')
-                : text('确认执行', 'Confirm')}
-          </button>
-        </div>
-      </section>
-    </div>
-  )
+export default function App(): React.JSX.Element {
+  const [language, setLanguage] = useState(DEFAULT_APP_SETTINGS.language)
+  return <I18nProvider language={language}><AppContent onLanguageChange={setLanguage} /></I18nProvider>
 }
-
-function TerminalFixDialog({
-  findings,
-  busy,
-  onClose,
-  onConfirm
-}: {
-  findings: TerminalFinding[]
-  busy: boolean
-  onClose: () => void
-  onConfirm: (ids: string[]) => void
-}): React.JSX.Element {
-  const { text } = useI18n()
-  const fixIds = findings.flatMap((finding) => finding.fix ? [finding.fix.id] : [])
-
-  return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={() => !busy && onClose()}>
-      <section
-        className="confirm-dialog terminal-fix-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="terminal-fix-title"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="dialog-head">
-          <div>
-            <span>{text('自动优化终端', 'Automatic terminal optimization')}</span>
-            <h2 id="terminal-fix-title">{text(`将优化 ${findings.length} 个配置项`, `${findings.length} configuration items will be optimized`)}</h2>
-          </div>
-          <button type="button" className="icon-button" onClick={onClose} disabled={busy} title={text('关闭', 'Close')}>
-            <X size={18} />
-          </button>
-        </div>
-        <div className="dialog-items">
-          {findings.map((finding) => (
-            <div key={finding.id}>
-              <span className="dialog-item-icon icon-terminal">
-                <WandSparkles size={16} />
-              </span>
-              <div>
-                <strong>{finding.fix?.label ?? finding.title}</strong>
-                <p>{finding.fix?.consequence}</p>
-              </div>
-              <span>{finding.source ?? text('终端配置', 'Shell config')}</span>
-            </div>
-          ))}
-        </div>
-        <div className="dialog-notice">
-          <ShieldCheck size={17} />
-          <span>{text('只执行 Memento 内置的本地优化规则，不运行 AI 生成的命令。每个配置文件会先在原目录备份，完成后可撤销。', 'Only Memento\'s built-in local optimization rules run. AI-generated commands are never executed. Each configuration file is backed up in place and can be restored afterward.')}</span>
-        </div>
-        <div className="dialog-actions">
-          <button type="button" className="secondary-button" onClick={onClose} disabled={busy}>
-            {text('取消', 'Cancel')}
-          </button>
-          <button
-            type="button"
-            className="primary-button"
-            onClick={() => onConfirm(fixIds)}
-            disabled={busy || fixIds.length === 0}
-            autoFocus
-          >
-            {busy ? <LoaderCircle className="spinning" size={16} /> : <WandSparkles size={16} />}
-            {busy ? text('正在优化', 'Optimizing') : text('确认并自动优化', 'Confirm and optimize')}
-          </button>
-        </div>
-      </section>
-    </div>
-  )
-}
-
-export default App

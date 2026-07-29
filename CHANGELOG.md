@@ -4,6 +4,40 @@ All notable changes to Memento Client are documented here in English and Simplif
 
 Memento Client 的重要变更会在这里使用英文和简体中文同步记录。
 
+Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are retained as historical records of the previous implementation.
+
+0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
+
+## 0.6.21 - 2026-07-29
+
+### English
+
+- Rebuilt the product from scratch against `prototypes/memento-agent/index.html`, with new Agent, Computer Health, Applications, Task History, and Settings work areas across desktop and mobile layouts.
+- Replaced the old hosted AI/Gateway flow with a local Vercel AI SDK `ToolLoopAgent` supporting OpenAI-compatible, OpenAI, Anthropic, and Google Gemini providers.
+- Added multiple-provider management, required tool-calling connection tests, default-model selection, and Electron `node:sqlite` persistence.
+- Added AES-256-GCM API-key encryption with a separate `0600` master-key file; plaintext credentials stay out of the Renderer, SQLite, logs, and Agent context.
+- Added read-only inspection tools and confirmed plan execution through the existing registered cleanup and terminal-fix boundaries, followed by a fresh verification scan.
+- Added persisted cancellation and strict rejection of invented, stale, oversized, empty, or unconfirmed operation IDs.
+- Rebuilt application management as a real-icon grid showing manageable apps, last-used time, size, Open, and confirmed Uninstall while excluding protected system apps.
+- Kept storage/service ignored items outside visible scans, action registries, reveal targets, and Agent context.
+- Removed the old AI service, hosted authentication, Gateway providers and examples, AI Renderer pages, old settings store, protocol registration, and obsolete documentation.
+- Added AgentStore encryption/migration/provider/history tests, plan-validation tests, and an automated 20-screenshot UI smoke test covering four viewports and critical interactions.
+- Rewrote the English and Chinese READMEs, Local Agent architecture, release notes, and repository development contract for the rebuilt product.
+
+### 简体中文
+
+- 严格按照 `prototypes/memento-agent/index.html` 从头重建产品，实现新的 Agent、电脑体检、应用管理、任务记录和设置工作区，并覆盖桌面与移动布局。
+- 使用本地 Vercel AI SDK `ToolLoopAgent` 替代旧 Hosted AI/Gateway 流程，支持 OpenAI 兼容、OpenAI、Anthropic 和 Google Gemini。
+- 新增多供应商管理、真实工具调用连接测试、默认模型选择，以及 Electron `node:sqlite` 持久化。
+- 使用 AES-256-GCM 加密 API Key，主密钥单独保存在权限为 `0600` 的文件中；明文密钥不会进入 Renderer、SQLite、日志或 Agent 上下文。
+- 新增只读检查工具，处理计划仍通过现有清理与终端修复注册表确认执行，结束后重新体检验证。
+- 取消等待确认的计划会真正持久化；伪造、过期、超量、空或未确认的操作 ID 会被严格拒绝。
+- 将应用管理重建为真实 Logo 网格，展示可管理 APP、最后使用时间、大小、打开和确认卸载，同时排除系统受保护应用。
+- 存储/服务忽略项会同时离开可见体检、操作注册表、Finder 定位目标和 Agent 上下文。
+- 删除旧 AI 服务、Hosted 登录、Gateway Provider 与示例、旧 AI 页面、旧设置存储、协议注册和过时文档。
+- 新增 AgentStore 加密/迁移/供应商/历史测试、计划校验测试，以及覆盖四种视口和关键交互的 20 张截图 UI 冒烟测试。
+- 完整重写中英文 README、本地 Agent 架构、发布说明和仓库开发约束，使文档与重建后的产品一致。
+
 ## 0.6.20 - 2026-07-29
 
 ### English

@@ -27,12 +27,24 @@ export interface MementoSettingsApi {
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   language: 'zh-CN',
-  theme: 'porcelain',
+  theme: 'mars',
   launchAtLogin: false,
   closeToTray: false,
   serviceWhitelist: [],
   storageWhitelist: []
 }
+
+const APP_LANGUAGES = new Set<AppLanguage>(['zh-CN', 'en-US'])
+const APP_THEMES = new Set<AppTheme>([
+  'porcelain',
+  'graphite',
+  'tiffany',
+  'klein',
+  'burgundy',
+  'mars',
+  'prussian',
+  'midnight'
+])
 
 function normalizeWhitelist(value: unknown, maximumLength: number): string[] {
   if (!Array.isArray(value)) return []
@@ -49,6 +61,23 @@ export function normalizeServiceWhitelist(value: unknown): string[] {
 
 export function normalizeStorageWhitelist(value: unknown): string[] {
   return normalizeWhitelist(value, 1024)
+}
+
+export function normalizeAppSettings(value: unknown): AppSettings {
+  if (!value || typeof value !== 'object') return { ...DEFAULT_APP_SETTINGS }
+  const candidate = value as Partial<AppSettings>
+  return {
+    language: APP_LANGUAGES.has(candidate.language as AppLanguage)
+      ? (candidate.language as AppLanguage)
+      : DEFAULT_APP_SETTINGS.language,
+    theme: APP_THEMES.has(candidate.theme as AppTheme)
+      ? (candidate.theme as AppTheme)
+      : DEFAULT_APP_SETTINGS.theme,
+    launchAtLogin: candidate.launchAtLogin === true,
+    closeToTray: candidate.closeToTray === true,
+    serviceWhitelist: normalizeServiceWhitelist(candidate.serviceWhitelist),
+    storageWhitelist: normalizeStorageWhitelist(candidate.storageWhitelist)
+  }
 }
 
 export function candidateWhitelistValue(candidate: {

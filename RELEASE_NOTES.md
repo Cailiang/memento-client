@@ -1,41 +1,41 @@
-# Memento 0.6.20
-
-## English
-
-This release introduces a compact, centralized way to ignore storage and background-service findings without weakening cleanup boundaries.
-
-### Highlights
-
-- Storage and background-service rows now expose Ignore item from a compact `...` menu.
-- A confirmation explains whether the item is protected from cleanup or skipped during service checks.
-- Settings includes one Ignored items manager with separate Storage and Services tabs, live counts, and Restore detection.
-- Ignored findings are removed from scan results, registered cleanup actions, Finder locations, and data visible to AI or Agent flows.
-- The approved Agent HTML prototype is now documented as the required source for production UI implementation.
-
-### Ignore scope
-
-Ignoring does not delete storage or stop a service. It prevents future detection and processing until the user restores the item in Settings.
-
-### Platform note
-
-Full maintenance scanning and cleanup currently support macOS. This local Intel x64 package is unsigned and unnotarized.
+# Memento Agent 0.6.21
 
 ## 简体中文
 
-这个版本提供紧凑、统一的忽略列表管理，同时确保忽略规则真正约束扫描和清理能力。
+`0.6.21` 是 `agent` 分支第一次完整重建版本。它不再沿用旧 Renderer 和远端 AI Gateway，而是严格按照 `prototypes/memento-agent/index.html` 实现新的本地 Agent 产品。
 
 ### 主要变化
 
-- 存储空间和后台服务列表通过紧凑的 `...` 菜单提供“忽略此项”。
-- 确认弹窗会区分存储保护和后台服务跳过检测的实际影响。
-- 设置页新增统一的“忽略列表”管理窗口，按存储空间和后台服务分类，显示实时数量并支持“恢复检测”。
-- 忽略项会从扫描结果、已注册清理动作、Finder 定位和 AI/Agent 可见数据中同时移除。
-- 开发文档已明确：正式界面必须以确认过的 Agent HTML 原型为实现基准。
+- 从头实现 Agent、电脑体检、应用管理、任务记录和设置五个工作区，并覆盖桌面、窄侧边栏、平板与手机布局。
+- 引入 Vercel AI SDK `ToolLoopAgent`，支持 OpenAI 兼容、OpenAI、Anthropic 和 Google Gemini，可保存多个供应商并选择默认模型。
+- 使用 Electron 43 自带的 SQLite 保存供应商、加密密钥、应用设置、Agent 任务与工具记录。
+- Agent 能读取真实体检数据并准备可执行计划，但不能直接执行或生成任意 Shell 命令；用户确认后才会调用现有受控操作注册表。
+- 执行结束会重新体检并保存真实结果；伪造、过期或未确认的操作 ID 会被拒绝。
+- 应用管理以带真实 Logo 的网格展示可管理 APP、最后使用时间、大小、打开和卸载操作，系统受保护应用不会列出。
+- 存储空间和后台服务支持紧凑的忽略交互；忽略项会同时离开体检结果、执行注册表和 Agent 上下文。
+- 删除旧 Hosted AI、Gateway、OAuth、旧 AI 页面、旧配置存储与相关示例，全部开发文档已按新架构重写。
+- 新增 SQLite 加密/迁移/供应商测试、Agent 计划边界测试，以及覆盖五个页面和四种视口的 UI 冒烟脚本。
 
-### 忽略范围
+### 安装说明
 
-忽略操作不会删除存储内容，也不会停止后台服务；项目只会在设置中恢复后重新参与检测和处理。
+完整扫描和清理目前支持 macOS。本地 Intel x64 DMG 未签名、未公证，安装时可能需要在“系统设置 > 隐私与安全性”中手动允许。
 
-### 平台说明
+## English
 
-完整的维护扫描和清理功能目前只支持 macOS。本地 Intel x64 安装包未签名、未公证。
+`0.6.21` is the first complete rebuild on the `agent` branch. It replaces the old Renderer and remote AI Gateway with the local Agent product defined by `prototypes/memento-agent/index.html`.
+
+### Highlights
+
+- Rebuilt Agent, Computer Health, Applications, Task History, and Settings for desktop, compact sidebar, tablet, and phone layouts.
+- Added Vercel AI SDK `ToolLoopAgent` with OpenAI-compatible, OpenAI, Anthropic, and Google Gemini providers, multiple saved configurations, and one default model.
+- Added Electron 43 built-in SQLite storage for providers, encrypted keys, app settings, Agent runs, and tool records.
+- Agent can inspect real scan data and prepare executable plans, but cannot execute directly or generate arbitrary shell operations. Existing controlled registries run only after confirmation.
+- Every execution is followed by a fresh scan and persisted real results. Invented, stale, or unconfirmed operation IDs are rejected.
+- Applications uses a real-icon grid with last-used time, size, Open, and confirmed Uninstall. Protected system apps are excluded.
+- Storage and services support compact ignored-item management that also removes capabilities from Agent context.
+- Removed hosted AI, Gateway, OAuth, old AI pages, old settings storage, and related examples; rewrote development documentation for the new architecture.
+- Added SQLite encryption/migration/provider tests, Agent plan-boundary tests, and a four-viewport UI smoke test for all five pages.
+
+### Installation
+
+Full scanning and cleanup currently support macOS. The local Intel x64 DMG is unsigned and unnotarized, so macOS may require manual approval under System Settings > Privacy & Security.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { InstalledApplication } from '../../shared/types'
-import { filterAndSortApplications } from './App'
+import { filterAndSortApplications } from './agent-ui/ApplicationsPage'
 
 function application(
   name: string,
@@ -48,17 +48,16 @@ describe('application inventory controls', () => {
       .toEqual(['Old'])
   })
 
-  it('filters unused and application locations while excluding protected system applications', () => {
+  it('filters recent and unused applications while excluding protected system applications', () => {
     expect(filterAndSortApplications(applications, '', 'unused', 'name').map((item) => item.name))
       .toEqual(['Old'])
-    expect(filterAndSortApplications(applications, '', 'shared', 'name').map((item) => item.name))
-      .toEqual(['Old', 'Recent', 'Unknown'])
-    expect(filterAndSortApplications(applications, '', 'user', 'name')).toEqual([])
+    expect(filterAndSortApplications(applications, '', 'recent', 'name').map((item) => item.name))
+      .toEqual(['Recent', 'Unknown'])
   })
 
-  it('sorts by oldest usage and keeps unknown dates at the end', () => {
-    expect(filterAndSortApplications(applications, '', 'all', 'last-used-oldest').map((item) => item.name))
-      .toEqual(['Old', 'Recent', 'Unknown'])
+  it('sorts by recent usage and keeps unknown dates at the end', () => {
+    expect(filterAndSortApplications(applications, '', 'all', 'recent').map((item) => item.name))
+      .toEqual(['Recent', 'Old', 'Unknown'])
     expect(filterAndSortApplications(applications, '', 'all', 'size').map((item) => item.name))
       .toEqual(['Old', 'Recent', 'Unknown'])
   })

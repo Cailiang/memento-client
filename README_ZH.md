@@ -1,100 +1,84 @@
-<div align="center">
+# Memento Agent
 
-# Memento
+Memento 是一款运行在 macOS 本机的系统维护 Agent。它把确定性的设备扫描、清理工具与用户自行配置的模型结合起来：模型可以读取结构化体检结果并准备具体计划，但只有用户明确确认后，Memento 才会执行已经注册并校验过的操作。
 
-### 谨慎、透明的 macOS 清理与启动诊断工具
+[English](README.md)
 
-[![Release](https://img.shields.io/github/v/release/Cailiang/memento-client?label=release)](https://github.com/Cailiang/memento-client/releases/latest)
-[![Build](https://github.com/Cailiang/memento-client/actions/workflows/release.yml/badge.svg)](https://github.com/Cailiang/memento-client/actions/workflows/release.yml)
-[![Platform](https://img.shields.io/badge/builds-macOS%20%7C%20Windows%20%7C%20Linux-59636e)](https://github.com/Cailiang/memento-client/releases)
-[![License](https://img.shields.io/github/license/Cailiang/memento-client)](LICENSE)
+## 产品功能
 
-[English](README.md) | 简体中文 | [更新记录](CHANGELOG.md)
+应用已经按照确认过的交互原型 [`../prototypes/memento-agent/index.html`](../prototypes/memento-agent/index.html) 从头重建，包含五个工作区：
 
-</div>
+- **Agent：** 用自然语言描述目标，查看处理计划，勾选步骤，确认执行并复检结果。
+- **电脑体检：** 直接查看存储空间、后台服务和终端启动问题，不为没有额外信息的项目打开冗余详情页。
+- **应用管理：** 使用带真实 Logo 的网格浏览可管理 APP，查看最后使用时间和大小，打开 APP，或确认后移到废纸篓。系统受保护应用不会显示。
+- **任务记录：** 查看保存在本机的 Agent 任务，并把可见记录导出为 JSON。
+- **设置：** 管理多个模型供应商、窗口行为、忽略列表、界面主题和语言。
 
-Memento 用来发现被遗忘的后台服务、占用空间较大的临时文件、重复或超过 3 个月未使用的应用，以及拖慢终端启动的配置。所有清理操作都必须来自本机扫描建立的白名单，并经过用户明确确认。只有当用户不清楚某个项目或担心处理影响时，才需要使用 AI。
+存储空间和后台服务可以从列表行的更多菜单加入忽略列表。忽略后，该项目会同时离开体检结果、可执行操作和 Agent 工具上下文，直到用户在设置中恢复检测。
 
-![Memento 概览](.artifacts/memento-overview.png)
+## 本地 Agent
 
-## 下载
+Memento 使用开源的 [Vercel AI SDK](https://github.com/vercel/ai) 和 `ToolLoopAgent`。应用不再依赖 Memento 服务端、Hosted 登录、AI Gateway 或软件方提供的请求密钥。
 
-请从 [GitHub Releases](https://github.com/Cailiang/memento-client/releases/latest) 下载最新版本。
+用户可以保存多个供应商并选择默认模型：
 
-| 平台 | 安装包 | 支持情况 |
-| --- | --- | --- |
-| macOS Intel | `Memento-*-x64.dmg` | 完整维护与诊断功能 |
-| macOS Apple 芯片 | `Memento-*-arm64.dmg` | 完整维护与诊断功能 |
-| Windows x64 | `Memento-*-x64.exe` | 桌面界面与 AI 设置预览 |
-| Linux x64 | `Memento-*-x86_64.AppImage` 或 `Memento-*-amd64.deb` | 桌面界面与 AI 设置预览 |
+- OpenAI 兼容接口
+- OpenAI
+- Anthropic
+- Google Gemini
 
-当前维护扫描引擎只支持 macOS。Windows 和 Linux 版本可以安全启动，但不会提供 macOS 清理操作；发布这些版本是为了在原生扫描能力开发期间验证跨平台桌面界面。
+每个配置包含名称、接口类型、服务地址、请求密钥和模型名称。“测试连接”会真实验证模型访问与工具调用能力，而不是只检查普通文本回复。
 
-macOS 安装包目前可能尚未完成 Apple 公证。如果系统阻止首次启动，请右键 Memento 并选择“打开”。
+## 执行边界
 
-## 主要功能
+模型不会获得通用 Shell 工具，也不能直接执行清理。
 
-- **后台服务：** 检查运行中和已停止的 LaunchAgent 以及运行中的 Homebrew 服务，分别提供停止服务、仅移除启动项，或将明确识别的关联目录移到废纸篓等选择。
-- **存储空间：** 查找 Xcode、Homebrew、npm、pnpm、Yarn、Gradle、CocoaPods 和应用产生的大体积临时文件，并为严格限制在本地白名单内的可重建数据提供永久清理。
-- **应用清理：** 检查重复应用副本和超过 3 个月未使用的应用。
-- **终端启动：** 测量无配置基线和完整启动耗时，定位同步初始化与 PATH 问题；对确定性问题提供确认后自动优化、配置备份与一键撤销。
-- **按需 AI 分析：** 用简短、日常的语言说明软件的实际用途，以及停止、移除启动项、删除或清理会不会带来问题；查看其他项目时分析会在后台继续。
+1. 确定性扫描器为本次设备快照注册操作 ID。
+2. Agent 只读工具返回精简的结构化发现和这些已注册 ID。
+3. 模型只能用它实际看到的 ID 调用 `prepare_action_plan`。
+4. 主进程会拒绝伪造、过期、空、超量或未确认的计划。
+5. 用户在确认弹窗中检查并确认选中的步骤。
+6. 现有清理注册表和终端修复注册表执行操作。
+7. Memento 重新体检，并保存每个操作的真实结果。
 
-![AI 服务分析](.artifacts/memento-service-ai-result.png)
+## 本地数据
 
-## 安全边界
+应用使用 Electron 自带的 `node:sqlite` 保存设置、模型供应商、Agent 任务和工具调用记录。API Key 使用 AES-256-GCM 加密；随机生成的 32 字节主密钥单独保存在权限为 `0600` 的文件中。
 
-- 扫描过程只读，不需要管理员权限。
-- 渲染层不能提交任意文件路径；操作只能使用本次扫描生成的临时 ID。
-- 可恢复的清理会把文件移到系统废纸篓，不会直接永久删除。
-- 存储清理只会在明确确认后永久删除本地白名单内的可重建目标，并在完成后检查原路径、重新扫描可用空间。
-- 受保护或高风险的数据只提供分析，不提供清理按钮。
-- 终端自动优化只运行内置本地规则，写入前检查 zsh 语法，绝不执行 AI 生成的命令。
-- AI 不能创建或执行清理目标，只能解释本地扫描已经识别的项目。
-- AI 报告采用字段白名单，不包含文件原文、账号密钥或不受限制的本机路径。
-
-## AI 配置
-
-“AI 设置”提供三种连接方式：
-
-- **Memento Server：** 本地开发默认连接 `http://127.0.0.1:8787`，可通过 `MEMENTO_GATEWAY_URL` 修改。
-- **本地 Ollama：** 固定连接 `http://127.0.0.1:11434`。
-- **自己的 API Key：** 连接兼容 Responses API 的服务，密钥保存在仅当前系统用户可读的 Memento 本地应用数据中，不请求访问钥匙串。
-
-终端问题、后台服务和存储项目都由用户主动选择 AI 分析。点击“问 AI”后会直接开始，多项分析可以并行在后台继续；完成结果会保留在任务面板中，方便返回原项目查看。
+只有 Electron 主进程在创建模型请求时会解密密钥。明文密钥不会返回 Renderer、写入 SQLite、放进 Agent 上下文或进入日志。这是一套刻意保持简单的本地加密方案，不以抵御已经能够完整读取用户应用数据目录与进程内存的攻击者为目标。
 
 ## 本地开发
 
-需要 Node.js 20 或更高版本及 npm。完整扫描和操作测试需要 macOS。
+环境要求：
+
+- 完整扫描、清理和 DMG 校验需要 macOS
+- Node.js 22 或更高版本
+- npm
 
 ```bash
 npm install
 npm run dev
 ```
 
-常用命令：
+常用验证命令：
 
 ```bash
 npm test
 npm run typecheck
-npm run scan:smoke
 npm run build
-npm run dist:mac
+npm run scan:smoke
+npm run dev:web -- --port 4174
+npm run ui:smoke -- http://127.0.0.1:4174
 ```
 
-`npm run dev:web` 会使用明确标注的演示数据打开界面。真实扫描和清理只会在 Electron 中启用。
+UI 冒烟测试会在 `1440x900`、`1024x768`、`820x1180` 和 `390x844` 四种视口检查全部五个页面与横向溢出，并覆盖 Agent 计划、确认弹窗、体检标签页、应用筛选和供应商编辑器。
 
-## 发布流程
+## 打包规则
 
-推送 `v*` 标签会触发 [.github/workflows/release.yml](.github/workflows/release.yml)。工作流会确认标签与 `package.json` 版本一致，构建 macOS x64/arm64、Windows x64 和 Linux x64 安装包，并使用双语 [Release 说明](RELEASE_NOTES.md) 创建 GitHub Release。
+```bash
+CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist:mac -- --x64
+```
 
-## 开发文档
+每次用户要求的代码或 UI 修改都必须升级补丁版本，同步更新 `CHANGELOG.md` 和 `RELEASE_NOTES.md`，完成全部验证，构建并挂载 Intel x64 DMG，确认安装包版本与架构，计算 SHA-256，最后提交源码。没有可用签名凭据时，本地安装包不会签名或公证。
 
-- [本地 Agent 开发设计（新方案）](docs/LOCAL_AGENT_DEVELOPMENT.md)
-- [AI 分析功能设计](docs/AI_ANALYSIS_DEVELOPMENT.md)
-- [AI Gateway 可运行示例](examples/ai-gateway-smoke/README.md)
-- [版本更新记录](CHANGELOG.md)
-
-## 开源协议
-
-Memento Client 使用 [MIT License](LICENSE)。Memento Server 独立维护，不属于这个开源仓库。
+实现细节见 [本地 Agent 开发文档](docs/LOCAL_AGENT_DEVELOPMENT.md)。

@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import type { AgentRunEvent } from '../shared/agent-types'
 import type { MementoApi, ScanProgress } from '../shared/types'
 
 const api: MementoApi = {
@@ -12,19 +13,23 @@ const api: MementoApi = {
   runTerminalFixes: (ids) => ipcRenderer.invoke('memento:run-terminal-fixes', ids),
   undoTerminalFixes: () => ipcRenderer.invoke('memento:undo-terminal-fixes'),
   revealCandidateLocation: (id) => ipcRenderer.invoke('memento:reveal-candidate-location', id),
-  getAiSettings: () => ipcRenderer.invoke('memento:ai:get-settings'),
-  updateAiSettings: (input) => ipcRenderer.invoke('memento:ai:update-settings', input),
-  testAiProvider: (providerId) => ipcRenderer.invoke('memento:ai:test-provider', providerId),
-  prepareTerminalAnalysis: (scanId) =>
-    ipcRenderer.invoke('memento:ai:prepare-terminal-analysis', scanId),
-  prepareCandidateAnalysis: (input) =>
-    ipcRenderer.invoke('memento:ai:prepare-candidate-analysis', input),
-  analyzeTerminal: (input) => ipcRenderer.invoke('memento:ai:analyze-terminal', input),
-  analyzeCandidate: (input) => ipcRenderer.invoke('memento:ai:analyze-candidate', input),
-  cancelAnalysis: (requestId) => ipcRenderer.invoke('memento:ai:cancel-analysis', requestId),
-  getHostedSession: () => ipcRenderer.invoke('memento:ai:get-hosted-session'),
-  startHostedLogin: () => ipcRenderer.invoke('memento:ai:start-hosted-login'),
-  logoutHosted: () => ipcRenderer.invoke('memento:ai:logout-hosted'),
+  listAgentProviders: () => ipcRenderer.invoke('memento:agent:providers:list'),
+  saveAgentProvider: (input) => ipcRenderer.invoke('memento:agent:providers:save', input),
+  deleteAgentProvider: (id) => ipcRenderer.invoke('memento:agent:providers:delete', id),
+  setDefaultAgentProvider: (id) => ipcRenderer.invoke('memento:agent:providers:set-default', id),
+  testAgentProvider: (input) => ipcRenderer.invoke('memento:agent:providers:test', input),
+  startAgentRun: (prompt) => ipcRenderer.invoke('memento:agent:runs:start', prompt),
+  cancelAgentRun: (runId) => ipcRenderer.invoke('memento:agent:runs:cancel', runId),
+  executeAgentPlan: (input) => ipcRenderer.invoke('memento:agent:plans:execute', input),
+  listAgentRuns: () => ipcRenderer.invoke('memento:agent:runs:list'),
+  getAgentRun: (runId) => ipcRenderer.invoke('memento:agent:runs:get', runId),
+  onAgentRunEvent: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, runEvent: AgentRunEvent): void => {
+      callback(runEvent)
+    }
+    ipcRenderer.on('memento:agent-run-event', listener)
+    return () => ipcRenderer.removeListener('memento:agent-run-event', listener)
+  },
   onScanProgress: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, progress: ScanProgress): void => {
       callback(progress)

@@ -1,6 +1,6 @@
 export type ScanSection = 'services' | 'storage' | 'applications' | 'terminal'
 
-import type { MementoAiApi } from './ai-types'
+import type { MementoAgentApi } from './agent-types'
 import type { MementoSettingsApi } from './app-settings'
 
 export type RiskLevel = 'safe' | 'review' | 'protected'
@@ -149,7 +149,7 @@ export interface TerminalFixRunResult {
   canUndo: boolean
 }
 
-export interface MementoApi extends MementoAiApi, MementoSettingsApi {
+export interface MementoApi extends MementoAgentApi, MementoSettingsApi {
   getVersion: () => Promise<string>
   scan: (language?: import('./app-settings').AppLanguage) => Promise<ScanResult>
   getApplicationIcon: (id: string) => Promise<string | null>

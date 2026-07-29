@@ -20,7 +20,7 @@ import type {
   ScanResult,
   TerminalFixRunResult
 } from '../shared/types'
-import type { UpdateAiSettingsInput } from '../shared/ai-types'
+import type { ExecuteAgentPlanInput, SaveAgentProviderInput } from '../shared/agent-types'
 import {
   DEFAULT_APP_SETTINGS,
   type AppLanguage,
@@ -28,9 +28,10 @@ import {
   type AppTheme,
   type UpdateAppSettingsInput
 } from '../shared/app-settings'
-import { AiService } from './ai/ai-service'
-import { toPublicAiError } from './ai/errors'
-import { AppSettingsStore } from './app-settings-store'
+import { AgentStore } from './agent/agent-store'
+import { LocalAgentRuntime } from './agent/local-agent-runtime'
+import { selectExecutablePlanItems } from './agent/plan-validation'
+import { providerErrorMessage, testProviderConnection } from './agent/provider-factory'
 import { runFullScan, type RegisteredAction } from './scanner'
 import { applyScanWhitelist } from './scan-whitelist'
 import { buildPrivilegedMoves, privilegedMoveArguments } from './privileged-cleanup'
@@ -59,8 +60,8 @@ let applicationIconQueue = Promise.resolve()
 let lastTerminalFixBackups = new Map<string, TerminalFixBackup>()
 let scanInProgress = false
 let currentScanResult: ScanResult | null = null
-let aiService: AiService | null = null
-let appSettingsStore: AppSettingsStore | null = null
+let agentStore: AgentStore | null = null
+let agentRuntime: LocalAgentRuntime | null = null
 let appSettings: AppSettings = { ...DEFAULT_APP_SETTINGS }
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -155,23 +156,6 @@ function themeBackground(theme: AppTheme): string {
     midnight: '#171918'
   }
   return backgrounds[theme]
-}
-
-function aiFailure(error: unknown): Error {
-  return new Error(`MEMENTO_AI_ERROR:${JSON.stringify(toPublicAiError(error))}`)
-}
-
-function registerAiHandler<T extends unknown[], R>(
-  channel: string,
-  handler: (...args: T) => Promise<R> | R
-): void {
-  ipcMain.handle(channel, async (_event, ...args: T) => {
-    try {
-      return await handler(...args)
-    } catch (error) {
-      throw aiFailure(error)
-    }
-  })
 }
 
 const PRIVILEGED_STAGE_SCRIPT = `
@@ -623,23 +607,66 @@ async function undoLastTerminalFixes(): Promise<ActionResult[]> {
   return results
 }
 
+async function executeActionBatch(ids: string[]): Promise<ActionResult[]> {
+  if (!Array.isArray(ids) || ids.some((id) => typeof id !== 'string' || id.length > 100)) {
+    throw new Error(mainText('操作请求无效', 'The action request is invalid.'))
+  }
+  const uniqueIds = [...new Set(ids)].slice(0, 100)
+  const results: ActionResult[] = []
+  for (const id of uniqueIds) {
+    const action = registeredActions.get(id)
+    if (!action) {
+      results.push({
+        id,
+        ok: false,
+        message: mainText('操作已过期，请重新扫描', 'This action has expired. Scan again.')
+      })
+      continue
+    }
+    try {
+      await executeRegisteredAction(action)
+      updateRegisteredActionsAfterExecution(action)
+      registeredActions.delete(id)
+      results.push({ id, ok: true, message: mainText('操作完成', 'Action completed') })
+    } catch (error) {
+      results.push({
+        id,
+        ok: false,
+        message: error instanceof Error ? error.message : mainText('操作失败', 'Action failed')
+      })
+    }
+  }
+  return results
+}
+
+async function performScan(
+  language: AppLanguage,
+  onProgress?: (progress: ScanProgress) => void
+): Promise<ScanResult> {
+  if (scanInProgress) throw new Error(mainText('扫描正在进行中', 'A scan is already in progress.'))
+  scanInProgress = true
+  try {
+    const scannedBundle = await runFullScan(onProgress ?? (() => undefined), language)
+    const bundle = applyScanWhitelist(
+      scannedBundle,
+      appSettings.serviceWhitelist,
+      appSettings.storageWhitelist
+    )
+    registeredActions = bundle.actions
+    registeredRevealTargets = bundle.revealTargets
+    registeredTerminalFixes = bundle.terminalFixes
+    currentScanResult = bundle.result
+    return bundle.result
+  } finally {
+    scanInProgress = false
+  }
+}
+
 app.whenReady().then(async () => {
-  const gatewayUrl = (
-    process.env['MEMENTO_GATEWAY_URL'] ||
-    'http://127.0.0.1:8787'
-  ).replace(/\/$/, '')
-  appSettingsStore = new AppSettingsStore(app.getPath('userData'))
-  appSettings = await appSettingsStore.get()
+  agentStore = new AgentStore(app.getPath('userData'))
+  agentRuntime = new LocalAgentRuntime(agentStore)
+  appSettings = agentStore.getAppSettings()
   applyWindowSettings()
-  aiService = new AiService(
-    app.getPath('userData'),
-    gatewayUrl,
-    app.getVersion(),
-    () => currentScanResult,
-    () => appSettings.language
-  )
-  void aiService.initializeDefaultConnection()
-  app.setAsDefaultProtocolClient('memento')
 
   ipcMain.handle('memento:get-version', () => app.getVersion())
   ipcMain.handle('memento:get-application-icon', async (_event, id: string) => {
@@ -672,8 +699,8 @@ app.whenReady().then(async () => {
     }
   })
   ipcMain.handle('memento:settings:get', () => appSettings)
-  ipcMain.handle('memento:settings:update', async (_event, input: UpdateAppSettingsInput) => {
-    appSettings = await appSettingsStore!.update(input)
+  ipcMain.handle('memento:settings:update', (_event, input: UpdateAppSettingsInput) => {
+    appSettings = agentStore!.updateAppSettings(input)
     applyWindowSettings()
     if (currentScanResult && ('serviceWhitelist' in input || 'storageWhitelist' in input)) {
       const filtered = applyScanWhitelist(
@@ -690,62 +717,49 @@ app.whenReady().then(async () => {
       registeredActions = filtered.actions
       registeredRevealTargets = filtered.revealTargets
       registeredTerminalFixes = filtered.terminalFixes
-      aiService?.invalidatePreviews()
     }
     return appSettings
   })
 
-  ipcMain.handle('memento:scan', async (event, language?: AppLanguage) => {
-    if (scanInProgress) throw new Error(mainText('扫描正在进行中', 'A scan is already in progress.'))
-    scanInProgress = true
+  ipcMain.handle('memento:scan', (event, language?: AppLanguage) =>
+    performScan(language ?? appSettings.language, (progress) => {
+      if (!event.sender.isDestroyed()) event.sender.send('memento:scan-progress', progress)
+    })
+  )
+
+  ipcMain.handle('memento:agent:providers:list', () => agentStore!.listProviders())
+  ipcMain.handle('memento:agent:providers:save', (_event, input: SaveAgentProviderInput) =>
+    agentStore!.saveProvider(input)
+  )
+  ipcMain.handle('memento:agent:providers:delete', (_event, id: string) => {
+    agentStore!.deleteProvider(id)
+  })
+  ipcMain.handle('memento:agent:providers:set-default', (_event, id: string) =>
+    agentStore!.setDefaultProvider(id)
+  )
+  ipcMain.handle('memento:agent:providers:test', async (_event, input: SaveAgentProviderInput) => {
+    const provider = agentStore!.resolvePrivateProviderInput(input)
     try {
-      const scannedBundle = await runFullScan((progress: ScanProgress) => {
-        if (!event.sender.isDestroyed()) event.sender.send('memento:scan-progress', progress)
-      }, language ?? appSettings.language)
-      const bundle = applyScanWhitelist(
-        scannedBundle,
-        appSettings.serviceWhitelist,
-        appSettings.storageWhitelist
-      )
-      registeredActions = bundle.actions
-      registeredRevealTargets = bundle.revealTargets
-      registeredTerminalFixes = bundle.terminalFixes
-      currentScanResult = bundle.result
-      aiService?.invalidatePreviews()
-      return bundle.result
-    } finally {
-      scanInProgress = false
+      const result = await testProviderConnection(provider)
+      if (input.id) agentStore!.markProviderConnection(input.id, 'connected')
+      return result
+    } catch (error) {
+      if (input.id) agentStore!.markProviderConnection(input.id, 'failed')
+      throw new Error(providerErrorMessage(error, provider.apiKey))
     }
   })
-
-  registerAiHandler('memento:ai:get-settings', () => aiService!.getSettings())
-  registerAiHandler('memento:ai:update-settings', (input: UpdateAiSettingsInput) =>
-    aiService!.updateSettings(input)
-  )
-  registerAiHandler('memento:ai:test-provider', (providerId: string) =>
-    aiService!.testProvider(providerId)
-  )
-  registerAiHandler('memento:ai:prepare-terminal-analysis', (scanId: string) =>
-    aiService!.prepareTerminalAnalysis(scanId)
-  )
-  registerAiHandler(
-    'memento:ai:prepare-candidate-analysis',
-    (input: { scanId: string; candidateId: string }) => aiService!.prepareCandidateAnalysis(input)
-  )
-  registerAiHandler(
-    'memento:ai:analyze-terminal',
-    (input: { previewId: string; providerId: string }) => aiService!.analyzeTerminal(input)
-  )
-  registerAiHandler(
-    'memento:ai:analyze-candidate',
-    (input: { previewId: string; providerId: string }) => aiService!.analyzeCandidate(input)
-  )
-  registerAiHandler('memento:ai:cancel-analysis', (requestId: string) => {
-    aiService!.cancelAnalysis(requestId)
+  ipcMain.handle('memento:agent:runs:list', () => agentStore!.listRuns())
+  ipcMain.handle('memento:agent:runs:get', (_event, runId: string) => agentStore!.getRun(runId))
+  ipcMain.handle('memento:agent:runs:start', (event, prompt: string) => {
+    if (!currentScanResult) throw new Error('请先完成一次电脑体检')
+    if (scanInProgress) throw new Error('电脑体检正在进行，请完成后再启动 Agent')
+    return agentRuntime!.start(prompt, currentScanResult, (agentEvent) => {
+      if (!event.sender.isDestroyed()) event.sender.send('memento:agent-run-event', agentEvent)
+    })
   })
-  registerAiHandler('memento:ai:get-hosted-session', () => aiService!.getHostedSession())
-  registerAiHandler('memento:ai:start-hosted-login', () => aiService!.startHostedLogin())
-  registerAiHandler('memento:ai:logout-hosted', () => aiService!.logoutHosted())
+  ipcMain.handle('memento:agent:runs:cancel', (_event, runId: string) => {
+    agentRuntime!.cancel(runId)
+  })
 
   ipcMain.handle('memento:reveal-candidate-location', async (_event, id: string) => {
     if (typeof id !== 'string' || id.length > 100) {
@@ -772,34 +786,61 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('memento:undo-terminal-fixes', () => undoLastTerminalFixes())
 
-  ipcMain.handle('memento:run-actions', async (_event, ids: string[]) => {
-    if (!Array.isArray(ids) || ids.some((id) => typeof id !== 'string' || id.length > 100)) {
-      throw new Error(mainText('操作请求无效', 'The action request is invalid.'))
-    }
-    const uniqueIds = [...new Set(ids)].slice(0, 100)
-    const results: ActionResult[] = []
-
-    for (const id of uniqueIds) {
-      const action = registeredActions.get(id)
-      if (!action) {
-        results.push({ id, ok: false, message: mainText('操作已过期，请重新扫描', 'This action has expired. Scan again.') })
-        continue
-      }
-      try {
-        await executeRegisteredAction(action)
-        updateRegisteredActionsAfterExecution(action)
-        registeredActions.delete(id)
-        results.push({ id, ok: true, message: mainText('操作完成', 'Action completed') })
-      } catch (error) {
-        results.push({
-          id,
-          ok: false,
-          message: error instanceof Error ? error.message : mainText('操作失败', 'Action failed')
+  ipcMain.handle('memento:agent:plans:execute', async (event, input: ExecuteAgentPlanInput) => {
+    const validated = selectExecutablePlanItems(
+      agentStore!.getRun(typeof input?.runId === 'string' ? input.runId : ''),
+      input
+    )
+    const { run, items: selected } = validated
+    const sendStatus = (status: 'executing' | 'verifying', message: string): void => {
+      agentStore!.updateRun(run.id, { status })
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('memento:agent-run-event', {
+          type: 'status',
+          runId: run.id,
+          status,
+          message
         })
       }
     }
-    return results
+
+    let results: ActionResult[] = []
+    try {
+      sendStatus('executing', '正在执行已确认的操作')
+      const actionResults = await executeActionBatch(
+        selected.filter((item) => item.kind === 'action').map((item) => item.id)
+      )
+      const terminalResult = await executeTerminalFixBatch(
+        selected.filter((item) => item.kind === 'terminal-fix').map((item) => item.id)
+      )
+      results = [...actionResults, ...terminalResult.results]
+      sendStatus('verifying', '正在重新体检并验证结果')
+      const scan = await performScan(appSettings.language, (progress) => {
+        if (!event.sender.isDestroyed()) event.sender.send('memento:scan-progress', progress)
+      })
+      const completed = agentStore!.updateRun(run.id, {
+        status: 'completed',
+        results,
+        error: results.some((result) => !result.ok) ? '部分操作未能完成' : null
+      })
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('memento:agent-run-event', { type: 'completed', run: completed })
+      }
+      return { run: completed, scan }
+    } catch (error) {
+      const failed = agentStore!.updateRun(run.id, {
+        status: 'failed',
+        results,
+        error: error instanceof Error ? error.message : '执行后复检失败'
+      })
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('memento:agent-run-event', { type: 'failed', run: failed })
+      }
+      throw error
+    }
   })
+
+  ipcMain.handle('memento:run-actions', (_event, ids: string[]) => executeActionBatch(ids))
 
   createWindow()
   app.on('activate', () => {
@@ -809,11 +850,8 @@ app.whenReady().then(async () => {
 
 app.on('before-quit', () => {
   isQuitting = true
-})
-
-app.on('open-url', (event, url) => {
-  event.preventDefault()
-  if (url.startsWith('memento://auth/')) void aiService?.completeHostedLogin(url)
+  agentStore?.close()
+  agentStore = null
 })
 
 app.on('window-all-closed', () => {

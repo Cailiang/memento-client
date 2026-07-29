@@ -1,0 +1,107 @@
+import { chromium } from 'playwright-core'
+import { existsSync, readdirSync } from 'node:fs'
+import { homedir } from 'node:os'
+import path from 'node:path'
+
+const baseUrl = process.argv[2] ?? 'http://127.0.0.1:4174'
+const pages = [
+  ['agent', null],
+  ['health', '电脑体检'],
+  ['apps', '应用管理'],
+  ['history', '任务记录'],
+  ['settings', '设置']
+]
+const viewports = [
+  ['1440x900', { width: 1440, height: 900 }],
+  ['1024x768', { width: 1024, height: 768 }],
+  ['820x1180', { width: 820, height: 1180 }],
+  ['390x844', { width: 390, height: 844 }]
+]
+
+function browserExecutable() {
+  const configured = chromium.executablePath()
+  if (existsSync(configured)) return configured
+  const cache = path.join(homedir(), 'Library', 'Caches', 'ms-playwright')
+  const versions = existsSync(cache)
+    ? readdirSync(cache).filter((name) => name.startsWith('chromium-')).sort().reverse()
+    : []
+  for (const version of versions) {
+    const candidate = path.join(
+      cache,
+      version,
+      'chrome-mac-x64',
+      'Google Chrome for Testing.app',
+      'Contents',
+      'MacOS',
+      'Google Chrome for Testing'
+    )
+    if (existsSync(candidate)) return candidate
+  }
+  return configured
+}
+
+const browser = await chromium.launch({
+  headless: true,
+  executablePath: browserExecutable()
+})
+const failures = []
+
+try {
+  for (const [viewportName, viewport] of viewports) {
+    for (const [pageName, navigationTitle] of pages) {
+      const page = await browser.newPage({ viewport })
+      await page.goto(baseUrl, { waitUntil: 'networkidle' })
+      if (navigationTitle) {
+        await page.locator(`.nav-button[title="${navigationTitle}"]`).click()
+        await page.waitForTimeout(220)
+      }
+      await page.screenshot({
+        path: `/tmp/memento-${viewportName}-${pageName}.png`,
+        fullPage: viewport.width <= 820
+      })
+      const overflow = await page.evaluate(() => ({
+        document: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        body: document.body.scrollWidth - document.body.clientWidth
+      }))
+      if (overflow.document > 1 || overflow.body > 1) {
+        failures.push(`${viewportName}/${pageName}: horizontal overflow ${JSON.stringify(overflow)}`)
+      }
+      await page.close()
+    }
+  }
+
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+  await page.goto(baseUrl, { waitUntil: 'networkidle' })
+  await page.locator('textarea[aria-label="输入任务"]').fill('检查可以安全清理的空间')
+  await page.locator('button[aria-label="发送"]').click()
+  await page.locator('.plan-panel.is-visible').waitFor({ timeout: 5_000 })
+  await page.locator('.plan-actions .primary-button').click()
+  await page.locator('[role="dialog"]').waitFor()
+  await page.keyboard.press('Escape')
+  await page.locator('[role="dialog"]').waitFor({ state: 'hidden' })
+
+  await page.locator('.nav-button[title="电脑体检"]').click()
+  for (const tab of ['存储空间', '后台服务', '终端诊断']) {
+    await page.getByRole('tab', { name: new RegExp(tab) }).click()
+  }
+  await page.locator('.nav-button[title="应用管理"]').click()
+  await page.locator('input[aria-label="搜索应用名称"]').fill('Visual Studio Code')
+  await page.locator('.app-card').first().waitFor()
+  await page.locator('.nav-button[title="设置"]').click()
+  await page.locator('button[aria-label="添加供应商"]').click()
+  await page.locator('#provider-name').fill('测试供应商')
+  await page.locator('#provider-url').fill('https://models.example.com/v1')
+  await page.locator('#provider-key').fill('test-key')
+  await page.locator('#provider-model').fill('test-model')
+  await page.getByRole('button', { name: '保存', exact: true }).click()
+  await page.getByText('测试供应商', { exact: true }).first().waitFor()
+  await page.close()
+} finally {
+  await browser.close()
+}
+
+if (failures.length) {
+  throw new Error(`UI smoke test failed:\n${failures.join('\n')}`)
+}
+
+console.log(`UI smoke test passed: ${viewports.length * pages.length} screenshots in /tmp`)
