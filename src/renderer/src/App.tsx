@@ -397,7 +397,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     const resolvedBaseUrl = parsed.pathname === '/'
       ? `${parsed.origin}${suffix}`
       : input.baseUrl.replace(/\/+$/, '')
-    return { models, resolvedBaseUrl }
+    return { models, resolvedBaseUrl, excludedModelCount: 0 }
   }, [])
 
   const saveProvider = async (input: SaveAgentProviderInput): Promise<AgentProvider> => {

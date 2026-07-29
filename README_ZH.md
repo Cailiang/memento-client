@@ -27,7 +27,7 @@ Memento 使用开源的 [Vercel AI SDK](https://github.com/vercel/ai) 和 `ToolL
 - Anthropic
 - Google Gemini
 
-每个配置包含名称、接口类型、服务地址、请求密钥和所选模型。地址和密钥可用后，Memento 会自动补全 API 基地址并获取模型列表；编辑已有配置时可以复用本地加密密钥。“测试连接”会真实验证模型访问与工具调用能力，而不是只检查普通文本回复。
+每个配置包含名称、接口类型、服务地址、请求密钥和所选模型。地址和密钥可用后，Memento 会自动补全 API 基地址并获取模型列表，图片、音频、实时、Embedding、审核等明显不适用于 Agent 的项目不会进入模型选择器；编辑已有配置时可以复用本地加密密钥。“测试连接”会真实验证模型访问与工具调用能力，而不是只检查普通文本回复。
 
 ## 执行边界
 
@@ -67,11 +67,12 @@ npm test
 npm run typecheck
 npm run build
 npm run scan:smoke
+npm run electron:smoke
 npm run dev:web -- --port 4174
 npm run ui:smoke -- http://127.0.0.1:4174
 ```
 
-UI 冒烟测试会在 `1440x900`、`1024x768`、`820x1180` 和 `390x844` 四种视口检查全部五个页面与横向溢出，并覆盖 Agent 计划、确认弹窗、体检标签页、应用筛选和供应商编辑器。
+UI 冒烟测试会在 `1440x900`、`1024x768`、`820x1180` 和 `390x844` 四种视口检查全部五个页面与横向溢出，并覆盖 Agent 计划、确认弹窗、体检标签页、应用筛选和供应商编辑器。真实 Electron 冒烟测试会另外验证生产 preload、真实应用列表和真实 Logo。
 
 ## 打包规则
 

@@ -8,6 +8,26 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.23 - 2026-07-29
+
+### English
+
+- Fixed an early preload DOM access that disabled the entire Electron bridge and made the production app silently show five demo applications without real icons.
+- Restored the complete manageable application inventory and lazy real-icon loading; the current-device Electron check now sees 62 non-system applications instead of demo data.
+- Added a production Electron smoke test that requires the preload API, real application cards, and a real application icon so browser-only UI checks cannot hide this regression again.
+- Filtered image, audio, realtime, embedding, moderation, and internal-only entries out of mixed OpenAI model catalogs while preferring provider capability metadata when available.
+- Model discovery now reports how many incompatible models were excluded; the provider editor explains the filtered Agent-ready result and still retains manual entry as a fallback.
+- Verified the supplied OpenAI endpoint directly: its `/v1/models` route is healthy, but its 20-entry catalog mixes 14 Agent-ready text models with 6 incompatible entries.
+
+### 简体中文
+
+- 修复 preload 在 DOM 创建前访问页面导致整个 Electron 桥接失效的问题；该回归会让生产应用静默退回 5 个演示 APP，并失去所有真实 Logo。
+- 恢复完整的可管理应用列表和真实 Logo 懒加载；当前设备的 Electron 检查从演示数据恢复为 62 个非系统应用。
+- 新增生产 Electron 冒烟测试，强制验证 preload API、真实应用卡片和真实应用 Logo，避免纯浏览器 UI 测试再次掩盖同类问题。
+- 对混合 OpenAI 模型目录过滤图片、音频、实时、Embedding、审核和内部专用模型；供应商提供能力元数据时优先使用元数据判断。
+- 模型发现会返回过滤数量，设置页明确显示 Agent 可用模型与不兼容模型数量，同时保留手动填写兜底。
+- 已直接验证用户提供的 OpenAI 入口：`/v1/models` 正常，但 20 项目录中混有 14 个 Agent 文本模型和 6 个不兼容项目。
+
 ## 0.6.22 - 2026-07-29
 
 ### English

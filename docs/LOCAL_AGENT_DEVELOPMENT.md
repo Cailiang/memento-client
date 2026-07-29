@@ -71,7 +71,7 @@ Changing only a provider's display name preserves its tested connection state. C
 
 Provider input is normalized and validated in the main process. URLs accept only HTTP or HTTPS. Root URLs receive the provider's conventional API prefix, so an OpenAI-compatible `https://code.tczor.cn` becomes `https://code.tczor.cn/v1`; pasted `/models`, `/responses`, `/chat/completions`, or `/messages` endpoints are reduced to their reusable API base.
 
-After a URL and credential are available, the Renderer debounces a typed model-discovery IPC call. The main process reuses an existing encrypted key when the field is blank, requests the provider's `/models` endpoint with the correct authentication scheme, parses and de-duplicates IDs, and returns both the models and resolved base URL. Requests time out after 15 seconds, errors are sanitized before crossing IPC, and the UI retains refresh plus manual-entry fallback states.
+After a URL and credential are available, the Renderer debounces a typed model-discovery IPC call. The main process reuses an existing encrypted key when the field is blank, requests the provider's `/models` endpoint with the correct authentication scheme, and de-duplicates IDs. Capability metadata is preferred when an endpoint supplies it; otherwise known image, audio, realtime, embedding, moderation, and internal-only model families are excluded by conservative ID rules. The response includes the resolved base URL and excluded count so the UI can explain why a mixed catalog contains fewer Agent-selectable models. Requests time out after 15 seconds, errors are sanitized before crossing IPC, and the UI retains refresh plus manual-entry fallback states.
 
 The connection test creates a short `ToolLoopAgent` run with a required `connection_probe` tool. Success therefore means the endpoint, key, model, response protocol, and tool calling all worked. A text-only response is a failed test.
 
@@ -136,6 +136,7 @@ The production Renderer consists of one shell and five prototype-aligned pages u
 - Layouts cover full sidebar, compact sidebar, bottom navigation, tablet, and phone widths.
 - `prefers-reduced-motion` reduces all non-essential transitions.
 - Application icons are requested lazily and only for target paths registered by the current scan.
+- Preload initialization must not touch the DOM before `DOMContentLoaded`; losing the preload API silently activates browser demo data instead of real device data.
 
 Web development mode uses deterministic demo scan data and an in-memory demo Provider so every page and dialog can be visually tested without touching the computer.
 
@@ -163,9 +164,10 @@ npm test
 npm run typecheck
 npm run build
 npm run scan:smoke
+npm run electron:smoke
 git diff --check
 ```
 
-With the web development server on port `4174`, run `npm run ui:smoke -- http://127.0.0.1:4174`. It captures all pages at four viewports and exercises critical interactions.
+With the web development server on port `4174`, run `npm run ui:smoke -- http://127.0.0.1:4174`. It captures all pages at four viewports and exercises critical interactions. The Electron smoke test launches the production output and requires the preload API, real application inventory, and at least one real application icon; this prevents browser demo data from masking a main/preload regression.
 
 Every change then requires a patch-version bump, changelog and release-note update, unsigned Intel x64 DMG build, mounted-image verification, bundled version and `x86_64` architecture check, SHA-256 calculation, and a source commit. This rule is also recorded in `AGENTS.md` so it survives future development sessions.

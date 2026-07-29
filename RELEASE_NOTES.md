@@ -1,17 +1,16 @@
-# Memento Agent 0.6.22
+# Memento Agent 0.6.23
 
 ## 简体中文
 
-`0.6.22` 修复首次启动、macOS 标题栏、应用卸载反馈和模型供应商配置问题，并与 `prototypes/memento-agent/index.html` 保持一致。
+`0.6.23` 修复应用管理误用演示数据和 OpenAI 混合模型列表问题，并与 `prototypes/memento-agent/index.html` 保持一致。
 
 ### 主要变化
 
-- 首次启动立即显示无虚假进度的品牌动效，不再出现长时间白屏。
-- Logo 和名称下移到 macOS 窗口控制按钮之外，顶部区域仍可拖动窗口。
-- 卸载 APP 时显示明确的执行中状态；成功后卡片动画退出，列表立即更新并在后台复检。
-- 填写服务地址和密钥后自动获取模型列表，用户直接选择模型，也可刷新或在接口不支持时手动填写。
-- 自动把 `https://code.tczor.cn` 等根地址补全为 `/v1` API 基地址，修复错误路由导致的连接超时。
-- 编辑已有配置时可复用本地加密密钥获取模型，所有超时和接口错误都会显示可操作且已脱敏的提示。
+- 修复启动阶段 preload 崩溃导致生产应用退回 5 个演示 APP 的问题，恢复当前设备 62 个可管理应用和真实 Logo。
+- 新增真实 Electron 冒烟测试，直接验证 preload、真实应用列表和真实 Logo，不再只依赖浏览器演示数据。
+- OpenAI 模型列表会过滤图片、音频、实时、Embedding、审核和内部专用模型，只显示适合 Agent 的候选项。
+- 设置页会显示可用模型数量和过滤数量；接口缺少能力元数据时仍使用保守规则，并保留手动填写兜底。
+- 已验证该自定义 OpenAI 入口服务正常；其 20 项原始目录中有 14 个 Agent 可用文本模型、6 个不兼容项目。
 
 ### 安装说明
 
@@ -19,16 +18,15 @@
 
 ## English
 
-`0.6.22` fixes first launch, macOS title-bar spacing, application uninstall feedback, and provider setup while staying aligned with `prototypes/memento-agent/index.html`.
+`0.6.23` fixes demo-data fallback in Application Management and mixed OpenAI model catalogs while staying aligned with `prototypes/memento-agent/index.html`.
 
 ### Highlights
 
-- Shows an immediate branded startup animation instead of a long blank window, without fake progress.
-- Keeps the sidebar brand clear of macOS traffic lights while retaining draggable window regions.
-- Shows an explicit uninstalling state, animates successful removal from the grid, and verifies it with a background scan.
-- Automatically fetches models after a URL and credential are available, with selection, refresh, error, and manual-entry states.
-- Resolves root URLs such as `https://code.tczor.cn` to their `/v1` API base before discovery and Agent requests.
-- Reuses encrypted credentials for existing providers and reports shorter, actionable, sanitized timeout and API errors.
+- Fixes a startup preload crash that made the production app fall back to five demo apps, restoring 62 manageable apps and real icons on the current device.
+- Adds a real Electron smoke test for the preload bridge, application inventory, and application icons instead of relying only on browser demo data.
+- Filters image, audio, realtime, embedding, moderation, and internal-only models out of OpenAI catalogs before they reach the Agent model picker.
+- Reports both Agent-ready and excluded model counts, prefers capability metadata, and retains manual entry when an endpoint is unusual.
+- Confirms the custom OpenAI endpoint is healthy; its raw 20-entry catalog contains 14 Agent-ready text models and 6 incompatible entries.
 
 ### Installation
 

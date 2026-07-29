@@ -35,7 +35,8 @@ describe('model provider configuration', () => {
 
     expect(result).toEqual({
       models: ['model-2', 'model-10'],
-      resolvedBaseUrl: 'https://code.tczor.cn/v1'
+      resolvedBaseUrl: 'https://code.tczor.cn/v1',
+      excludedModelCount: 0
     })
     const [url, request] = fetchProvider.mock.calls[0]
     expect(String(url)).toBe('https://code.tczor.cn/v1/models')
@@ -52,6 +53,38 @@ describe('model provider configuration', () => {
     expect(String(fetchProvider.mock.calls[0][0])).toBe(
       'https://code.tczor.cn/v1beta/models?key=secret-model-key'
     )
+  })
+
+  it('filters models that cannot run the text and tool-calling Agent', async () => {
+    const fetchProvider = vi.fn(async () => new Response(JSON.stringify({
+      data: [
+        { id: 'gpt-5.4', type: 'model' },
+        { id: 'gpt-5.3-codex-spark', type: 'model' },
+        { id: 'gpt-4o-audio-preview', type: 'model' },
+        { id: 'gpt-4o-realtime-preview', type: 'model' },
+        { id: 'gpt-image-1', type: 'model' },
+        { id: 'codex-auto-review', type: 'model' }
+      ]
+    }), { status: 200 }))
+
+    const result = await discoverProviderModels(discoveryInput('openai'), fetchProvider)
+
+    expect(result.models).toEqual(['gpt-5.3-codex-spark', 'gpt-5.4'])
+    expect(result.excludedModelCount).toBe(4)
+  })
+
+  it('uses provider capability metadata when it is available', async () => {
+    const fetchProvider = vi.fn(async () => new Response(JSON.stringify({
+      data: [
+        { id: 'chat-model', supported_endpoint_types: ['chat/completions'] },
+        { id: 'image-model-custom-name', supported_endpoint_types: ['images/generations'] }
+      ]
+    }), { status: 200 }))
+
+    const result = await discoverProviderModels(discoveryInput(), fetchProvider)
+
+    expect(result.models).toEqual(['chat-model'])
+    expect(result.excludedModelCount).toBe(1)
   })
 
   it('returns a clear error when model discovery times out', async () => {

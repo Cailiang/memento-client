@@ -16,7 +16,11 @@ const allowedBootThemes = new Set([
   'midnight'
 ])
 if (bootTheme && allowedBootThemes.has(bootTheme)) {
-  document.documentElement.dataset.theme = bootTheme
+  const applyBootTheme = (): void => {
+    if (document.documentElement) document.documentElement.dataset.theme = bootTheme
+  }
+  if (document.documentElement) applyBootTheme()
+  else window.addEventListener('DOMContentLoaded', applyBootTheme, { once: true })
 }
 
 const api: MementoApi = {

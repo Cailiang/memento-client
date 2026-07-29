@@ -1,6 +1,6 @@
 {
   "name": "memento",
-  "version": "0.6.22",
+  "version": "0.6.23",
   "private": true,
   "author": {
     "name": "Cailiang",
@@ -18,6 +18,7 @@
     "dist:linux": "npm run build && electron-builder --linux AppImage deb --publish never",
     "preview": "electron-vite preview",
     "scan:smoke": "vite-node scripts/smoke-scan.ts",
+    "electron:smoke": "node scripts/electron-smoke.mjs",
     "ui:smoke": "node scripts/visual-smoke.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json"

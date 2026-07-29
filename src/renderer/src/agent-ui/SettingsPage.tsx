@@ -123,8 +123,12 @@ export function SettingsPage({
       }))
       setModelState('ready')
       setModelMessage(text(
-        `已从 ${result.resolvedBaseUrl} 获取 ${result.models.length} 个模型`,
-        `${result.models.length} models found at ${result.resolvedBaseUrl}`
+        result.excludedModelCount
+          ? `已获取 ${result.models.length} 个 Agent 可用模型，过滤 ${result.excludedModelCount} 个不兼容模型`
+          : `已从 ${result.resolvedBaseUrl} 获取 ${result.models.length} 个模型`,
+        result.excludedModelCount
+          ? `${result.models.length} Agent models found; ${result.excludedModelCount} incompatible models filtered out`
+          : `${result.models.length} models found at ${result.resolvedBaseUrl}`
       ))
       setManualModel(false)
     } catch (error) {

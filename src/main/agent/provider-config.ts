@@ -54,22 +54,68 @@ export function normalizeProviderBaseUrl(type: AgentProviderType, value: string)
   return parsed.toString().replace(/\/+$/, '')
 }
 
-function parseModelIds(type: AgentProviderType, payload: unknown): string[] {
-  if (!payload || typeof payload !== 'object') return []
+const NON_AGENT_MODEL_PATTERNS = [
+  /(^|[-_.])(audio|realtime|transcribe|transcription)([-_.]|$)/,
+  /(^|[-_.])(image|dall-e)([-_.]|$)/,
+  /(^|[-_.])(embedding|embeddings|embed)([-_.]|$)/,
+  /(^|[-_.])(moderation|tts|speech|whisper)([-_.]|$)/,
+  /^codex-auto-review$/
+]
+
+function stringArray(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null
+  return value.filter((item): item is string => typeof item === 'string')
+}
+
+export function isAgentCapableModel(
+  type: AgentProviderType,
+  id: string,
+  metadata: Record<string, unknown>
+): boolean {
+  const normalizedId = id.toLowerCase()
+  if (NON_AGENT_MODEL_PATTERNS.some((pattern) => pattern.test(normalizedId))) return false
+
+  if (type === 'google') {
+    const methods = stringArray(metadata.supportedGenerationMethods)
+    if (methods?.length) {
+      return methods.some((method) =>
+        ['generatecontent', 'streamgeneratecontent'].includes(method.toLowerCase())
+      )
+    }
+  }
+
+  const endpoints = stringArray(metadata.supported_endpoint_types) ??
+    stringArray(metadata.supportedEndpoints)
+  if (endpoints?.length) {
+    return endpoints.some((endpoint) => /chat|response|message|generatecontent/i.test(endpoint))
+  }
+  return true
+}
+
+function parseModels(
+  type: AgentProviderType,
+  payload: unknown
+): { models: string[]; excludedModelCount: number } {
+  if (!payload || typeof payload !== 'object') return { models: [], excludedModelCount: 0 }
   const record = payload as Record<string, unknown>
   const entries = type === 'google' ? record.models : record.data
-  if (!Array.isArray(entries)) return []
-  const ids = entries.flatMap((entry) => {
+  if (!Array.isArray(entries)) return { models: [], excludedModelCount: 0 }
+  const discovered = entries.flatMap((entry) => {
     if (!entry || typeof entry !== 'object') return []
     const item = entry as Record<string, unknown>
     const value = type === 'google' ? item.name : item.id
     if (typeof value !== 'string' || !value.trim()) return []
     const id = type === 'google' ? value.replace(/^models\//, '') : value
-    return id.trim() ? [id.trim()] : []
+    return id.trim() ? [{ id: id.trim(), metadata: item }] : []
   })
-  return [...new Set(ids)].sort((left, right) =>
-    left.localeCompare(right, 'en', { numeric: true, sensitivity: 'base' })
-  )
+  const unique = [...new Map(discovered.map((model) => [model.id, model])).values()]
+  const models = unique
+    .filter((model) => isAgentCapableModel(type, model.id, model.metadata))
+    .map((model) => model.id)
+    .sort((left, right) =>
+      left.localeCompare(right, 'en', { numeric: true, sensitivity: 'base' })
+    )
+  return { models, excludedModelCount: unique.length - models.length }
 }
 
 function discoveryHeaders(input: PrivateModelDiscoveryInput): HeadersInit {
@@ -126,9 +172,9 @@ export async function discoverProviderModels(
     } catch {
       throw new Error('模型列表接口返回了无法识别的数据')
     }
-    const models = parseModelIds(input.type, payload)
+    const { models, excludedModelCount } = parseModels(input.type, payload)
     if (!models.length) throw new Error('服务已连接，但没有返回可用模型')
-    return { models, resolvedBaseUrl }
+    return { models, resolvedBaseUrl, excludedModelCount }
   } catch (error) {
     if (controller.signal.aborted) {
       throw new Error('获取模型列表超时，请检查服务地址或网络后重试')

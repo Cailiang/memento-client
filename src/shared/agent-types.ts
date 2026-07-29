@@ -41,6 +41,7 @@ export interface DiscoverAgentModelsInput {
 export interface AgentProviderModelsResult {
   models: string[]
   resolvedBaseUrl: string
+  excludedModelCount: number
 }
 
 export interface AgentProviderTestResult {

@@ -27,7 +27,7 @@ Users can save multiple providers and choose one default model:
 - Anthropic
 - Google Gemini
 
-Each configuration contains a name, API type, base URL, API key, and selected model. Once a URL and credential are available, Memento normalizes the API base and automatically fetches the model list. Existing encrypted credentials can be reused while editing. A separate connection test verifies model access and tool calling, not just plain text generation.
+Each configuration contains a name, API type, base URL, API key, and selected model. Once a URL and credential are available, Memento normalizes the API base and automatically fetches the model list. Image, audio, realtime, embedding, moderation, and other clearly incompatible entries are kept out of the Agent model picker. Existing encrypted credentials can be reused while editing. A separate connection test verifies model access and tool calling, not just plain text generation.
 
 ## Execution Boundary
 
@@ -67,11 +67,12 @@ npm test
 npm run typecheck
 npm run build
 npm run scan:smoke
+npm run electron:smoke
 npm run dev:web -- --port 4174
 npm run ui:smoke -- http://127.0.0.1:4174
 ```
 
-The visual smoke test exercises all five pages at `1440x900`, `1024x768`, `820x1180`, and `390x844`, checks horizontal overflow, and covers the Agent plan, confirmation dialog, health tabs, app filtering, and provider editor.
+The visual smoke test exercises all five pages at `1440x900`, `1024x768`, `820x1180`, and `390x844`, checks horizontal overflow, and covers the Agent plan, confirmation dialog, health tabs, app filtering, and provider editor. The Electron smoke test separately verifies the production preload, real application inventory, and real icons.
 
 ## Packaging
 
