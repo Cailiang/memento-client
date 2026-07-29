@@ -7,6 +7,7 @@ import type {
   AgentProviderConnectionState,
   AgentRunRecord,
   AgentRunStatus,
+  DiscoverAgentModelsInput,
   SaveAgentProviderInput
 } from '../../shared/agent-types'
 import {
@@ -16,6 +17,10 @@ import {
   type UpdateAppSettingsInput
 } from '../../shared/app-settings'
 import type { ActionResult } from '../../shared/types'
+import {
+  normalizeProviderBaseUrl,
+  type PrivateModelDiscoveryInput
+} from './provider-config'
 
 // Vite 5 does not yet recognize node:sqlite as a built-in during tests.
 const { DatabaseSync } = require('node:sqlite') as typeof import('node:sqlite')
@@ -77,29 +82,31 @@ function validateProviderInput(input: SaveAgentProviderInput): SaveAgentProvider
   const id = typeof input.id === 'string' ? input.id.trim() : undefined
   if (id && id.length > 100) throw new Error('模型供应商 ID 无效')
   const name = input.name.trim().slice(0, 80)
-  const baseUrl = input.baseUrl.trim().replace(/\/+$/, '').slice(0, 2048)
+  const baseUrl = input.baseUrl.trim().slice(0, 2048)
   const model = input.model.trim().slice(0, 200)
   if (!name || !baseUrl || !model || !PROVIDER_TYPES.has(input.type)) {
     throw new Error('供应商名称、接口类型、服务地址和模型不能为空')
-  }
-  let parsed: URL
-  try {
-    parsed = new URL(baseUrl)
-  } catch {
-    throw new Error('服务地址格式无效')
-  }
-  if (!['http:', 'https:'].includes(parsed.protocol)) {
-    throw new Error('服务地址只支持 HTTP 或 HTTPS')
-  }
-  if (parsed.username || parsed.password) {
-    throw new Error('服务地址不能包含用户名或密码')
   }
   return {
     id,
     name,
     type: input.type,
-    baseUrl,
+    baseUrl: normalizeProviderBaseUrl(input.type, baseUrl),
     model,
+    apiKey: input.apiKey?.trim()
+  }
+}
+
+function validateDiscoveryInput(input: DiscoverAgentModelsInput): Omit<PrivateModelDiscoveryInput, 'apiKey'> & { id?: string; apiKey?: string } {
+  const id = typeof input.id === 'string' ? input.id.trim() : undefined
+  if (id && id.length > 100) throw new Error('模型供应商 ID 无效')
+  if (!PROVIDER_TYPES.has(input.type) || typeof input.baseUrl !== 'string' || !input.baseUrl.trim()) {
+    throw new Error('请先填写有效的服务地址')
+  }
+  return {
+    id,
+    type: input.type,
+    baseUrl: normalizeProviderBaseUrl(input.type, input.baseUrl.slice(0, 2048)),
     apiKey: input.apiKey?.trim()
   }
 }
@@ -184,6 +191,18 @@ export class AgentStore {
       keyHint: this.keyHint(apiKey),
       createdAt: existing?.created_at ?? timestamp,
       updatedAt: timestamp
+    }
+  }
+
+  resolveModelDiscoveryInput(input: DiscoverAgentModelsInput): PrivateModelDiscoveryInput {
+    const normalized = validateDiscoveryInput(input)
+    const existing = normalized.id ? this.providerRow(normalized.id) : undefined
+    const apiKey = normalized.apiKey || (existing ? this.decryptKey(existing) : '')
+    if (!apiKey) throw new Error('请先填写请求密钥')
+    return {
+      type: normalized.type,
+      baseUrl: normalized.baseUrl,
+      apiKey
     }
   }
 

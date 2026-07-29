@@ -1,20 +1,17 @@
-# Memento Agent 0.6.21
+# Memento Agent 0.6.22
 
 ## 简体中文
 
-`0.6.21` 是 `agent` 分支第一次完整重建版本。它不再沿用旧 Renderer 和远端 AI Gateway，而是严格按照 `prototypes/memento-agent/index.html` 实现新的本地 Agent 产品。
+`0.6.22` 修复首次启动、macOS 标题栏、应用卸载反馈和模型供应商配置问题，并与 `prototypes/memento-agent/index.html` 保持一致。
 
 ### 主要变化
 
-- 从头实现 Agent、电脑体检、应用管理、任务记录和设置五个工作区，并覆盖桌面、窄侧边栏、平板与手机布局。
-- 引入 Vercel AI SDK `ToolLoopAgent`，支持 OpenAI 兼容、OpenAI、Anthropic 和 Google Gemini，可保存多个供应商并选择默认模型。
-- 使用 Electron 43 自带的 SQLite 保存供应商、加密密钥、应用设置、Agent 任务与工具记录。
-- Agent 能读取真实体检数据并准备可执行计划，但不能直接执行或生成任意 Shell 命令；用户确认后才会调用现有受控操作注册表。
-- 执行结束会重新体检并保存真实结果；伪造、过期或未确认的操作 ID 会被拒绝。
-- 应用管理以带真实 Logo 的网格展示可管理 APP、最后使用时间、大小、打开和卸载操作，系统受保护应用不会列出。
-- 存储空间和后台服务支持紧凑的忽略交互；忽略项会同时离开体检结果、执行注册表和 Agent 上下文。
-- 删除旧 Hosted AI、Gateway、OAuth、旧 AI 页面、旧配置存储与相关示例，全部开发文档已按新架构重写。
-- 新增 SQLite 加密/迁移/供应商测试、Agent 计划边界测试，以及覆盖五个页面和四种视口的 UI 冒烟脚本。
+- 首次启动立即显示无虚假进度的品牌动效，不再出现长时间白屏。
+- Logo 和名称下移到 macOS 窗口控制按钮之外，顶部区域仍可拖动窗口。
+- 卸载 APP 时显示明确的执行中状态；成功后卡片动画退出，列表立即更新并在后台复检。
+- 填写服务地址和密钥后自动获取模型列表，用户直接选择模型，也可刷新或在接口不支持时手动填写。
+- 自动把 `https://code.tczor.cn` 等根地址补全为 `/v1` API 基地址，修复错误路由导致的连接超时。
+- 编辑已有配置时可复用本地加密密钥获取模型，所有超时和接口错误都会显示可操作且已脱敏的提示。
 
 ### 安装说明
 
@@ -22,19 +19,16 @@
 
 ## English
 
-`0.6.21` is the first complete rebuild on the `agent` branch. It replaces the old Renderer and remote AI Gateway with the local Agent product defined by `prototypes/memento-agent/index.html`.
+`0.6.22` fixes first launch, macOS title-bar spacing, application uninstall feedback, and provider setup while staying aligned with `prototypes/memento-agent/index.html`.
 
 ### Highlights
 
-- Rebuilt Agent, Computer Health, Applications, Task History, and Settings for desktop, compact sidebar, tablet, and phone layouts.
-- Added Vercel AI SDK `ToolLoopAgent` with OpenAI-compatible, OpenAI, Anthropic, and Google Gemini providers, multiple saved configurations, and one default model.
-- Added Electron 43 built-in SQLite storage for providers, encrypted keys, app settings, Agent runs, and tool records.
-- Agent can inspect real scan data and prepare executable plans, but cannot execute directly or generate arbitrary shell operations. Existing controlled registries run only after confirmation.
-- Every execution is followed by a fresh scan and persisted real results. Invented, stale, or unconfirmed operation IDs are rejected.
-- Applications uses a real-icon grid with last-used time, size, Open, and confirmed Uninstall. Protected system apps are excluded.
-- Storage and services support compact ignored-item management that also removes capabilities from Agent context.
-- Removed hosted AI, Gateway, OAuth, old AI pages, old settings storage, and related examples; rewrote development documentation for the new architecture.
-- Added SQLite encryption/migration/provider tests, Agent plan-boundary tests, and a four-viewport UI smoke test for all five pages.
+- Shows an immediate branded startup animation instead of a long blank window, without fake progress.
+- Keeps the sidebar brand clear of macOS traffic lights while retaining draggable window regions.
+- Shows an explicit uninstalling state, animates successful removal from the grid, and verifies it with a background scan.
+- Automatically fetches models after a URL and credential are available, with selection, refresh, error, and manual-entry states.
+- Resolves root URLs such as `https://code.tczor.cn` to their `/v1` API base before discovery and Agent requests.
+- Reuses encrypted credentials for existing providers and reports shorter, actionable, sanitized timeout and API errors.
 
 ### Installation
 

@@ -69,7 +69,9 @@ Changing only a provider's display name preserves its tested connection state. C
 | `anthropic` | `createAnthropic` |
 | `google` | `createGoogleGenerativeAI` |
 
-Provider input is normalized and validated in the main process. URLs accept only HTTP or HTTPS. Existing keys may be left blank while editing, in which case the encrypted stored value is reused.
+Provider input is normalized and validated in the main process. URLs accept only HTTP or HTTPS. Root URLs receive the provider's conventional API prefix, so an OpenAI-compatible `https://code.tczor.cn` becomes `https://code.tczor.cn/v1`; pasted `/models`, `/responses`, `/chat/completions`, or `/messages` endpoints are reduced to their reusable API base.
+
+After a URL and credential are available, the Renderer debounces a typed model-discovery IPC call. The main process reuses an existing encrypted key when the field is blank, requests the provider's `/models` endpoint with the correct authentication scheme, parses and de-duplicates IDs, and returns both the models and resolved base URL. Requests time out after 15 seconds, errors are sanitized before crossing IPC, and the UI retains refresh plus manual-entry fallback states.
 
 The connection test creates a short `ToolLoopAgent` run with a required `connection_probe` tool. Success therefore means the endpoint, key, model, response protocol, and tool calling all worked. A text-only response is a failed test.
 

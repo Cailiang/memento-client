@@ -1,11 +1,13 @@
 import { CheckCircle2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
+  AgentProviderModelsResult,
   AgentPlanItem,
   AgentProvider,
   AgentProviderTestResult,
   AgentRunEvent,
   AgentRunRecord,
+  DiscoverAgentModelsInput,
   SaveAgentProviderInput
 } from '../../shared/agent-types'
 import {
@@ -78,6 +80,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
   const [planBusy, setPlanBusy] = useState(false)
   const [pendingUninstall, setPendingUninstall] = useState<InstalledApplication | null>(null)
   const [uninstallBusy, setUninstallBusy] = useState(false)
+  const [removingApplicationId, setRemovingApplicationId] = useState<string | null>(null)
   const [pendingIgnore, setPendingIgnore] = useState<ScanCandidate | null>(null)
   const [ignoreBusy, setIgnoreBusy] = useState(false)
   const [ignoredManagerOpen, setIgnoredManagerOpen] = useState(false)
@@ -346,22 +349,56 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
 
   const uninstallApplication = async (): Promise<void> => {
     if (!pendingUninstall?.action) return
+    const application = pendingUninstall
+    const actionId = pendingUninstall.action.id
     setUninstallBusy(true)
     try {
       const results = window.memento
-        ? await window.memento.runActions([pendingUninstall.action.id])
-        : [{ id: pendingUninstall.action.id, ok: true, message: '操作完成' }]
+        ? await window.memento.runActions([actionId])
+        : await new Promise<Array<{ id: string; ok: boolean; message: string }>>((resolve) => {
+            window.setTimeout(() => resolve([{
+              id: actionId,
+              ok: true,
+              message: '操作完成'
+            }]), 650)
+          })
       const failure = results.find((item) => !item.ok)
       if (failure) throw new Error(failure.message)
+      setRemovingApplicationId(application.id)
       setPendingUninstall(null)
-      await scanNow()
-      setToast(`${pendingUninstall.name} 已移到废纸篓`)
+      setToast(`${application.name} 已移到废纸篓`)
+      const exitDuration = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 20 : 420
+      await new Promise<void>((resolve) => window.setTimeout(resolve, exitDuration))
+      setResult((current) => current ? {
+        ...current,
+        applications: current.applications.filter((item) => item.id !== application.id)
+      } : current)
+      setRemovingApplicationId(null)
+      if (window.memento) void scanNow()
     } catch (error) {
       setToast(error instanceof Error ? error.message : '无法卸载应用')
     } finally {
       setUninstallBusy(false)
     }
   }
+
+  const discoverProviderModels = useCallback(async (
+    input: DiscoverAgentModelsInput
+  ): Promise<AgentProviderModelsResult> => {
+    if (window.memento) return window.memento.discoverAgentProviderModels(input)
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 520))
+    const models = input.type === 'anthropic'
+      ? ['claude-3-7-sonnet-latest', 'claude-sonnet-4-5']
+      : input.type === 'google'
+        ? ['gemini-2.5-flash', 'gemini-2.5-pro']
+        : ['deepseek-chat', 'deepseek-reasoner', 'gpt-4.1-mini']
+    const suffix = input.type === 'google' ? '/v1beta' : '/v1'
+    const parsed = new URL(input.baseUrl)
+    const resolvedBaseUrl = parsed.pathname === '/'
+      ? `${parsed.origin}${suffix}`
+      : input.baseUrl.replace(/\/+$/, '')
+    return { models, resolvedBaseUrl }
+  }, [])
 
   const saveProvider = async (input: SaveAgentProviderInput): Promise<AgentProvider> => {
     try {
@@ -450,9 +487,9 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     >
       {view === 'agent' && <AgentPage scan={result} run={activeRun} statusMessage={runStatusMessage} selectedPlanIds={selectedPlanIds} providerConfigured={Boolean(defaultProvider)} onSubmit={startAgentRun} onNewTask={() => { setActiveRun(null); activeRunId.current = null; setSelectedPlanIds(new Set()); setRunStatusMessage('') }} onOpenHistory={() => setView('history')} onOpenSettings={() => setView('settings')} onTogglePlanItem={(id) => setSelectedPlanIds((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next })} onExecutePlan={() => setPlanDialogOpen(true)} onDiscardPlan={discardPlan} />}
       {view === 'health' && <HealthPage result={result} settings={settings} scanBusy={scanBusy} progress={progress} onScan={() => void scanNow()} onAgentPrompt={startAgentRun} onIgnore={setPendingIgnore} onManageIgnored={openIgnoredManager} />}
-      {view === 'apps' && <ApplicationsPage applications={result?.applications ?? []} openingId={openingApplicationId} onOpen={(application) => void openApplication(application)} onUninstall={setPendingUninstall} onAgentPrompt={startAgentRun} />}
+      {view === 'apps' && <ApplicationsPage applications={result?.applications ?? []} openingId={openingApplicationId} removingId={removingApplicationId} onOpen={(application) => void openApplication(application)} onUninstall={setPendingUninstall} onAgentPrompt={startAgentRun} />}
       {view === 'history' && <HistoryPage runs={runs} onOpenRun={(run) => { setActiveRun(run); activeRunId.current = run.id; setSelectedPlanIds(new Set(run.plan.map((item) => item.id))); setView('agent') }} onToast={setToast} />}
-      {view === 'settings' && <SettingsPage settings={settings} providers={providers} onUpdateSettings={updateSettings} onSaveProvider={saveProvider} onTestProvider={testProvider} onDeleteProvider={deleteProvider} onSetDefaultProvider={setDefaultProvider} onManageIgnored={() => openIgnoredManager()} onToast={setToast} />}
+      {view === 'settings' && <SettingsPage settings={settings} providers={providers} onUpdateSettings={updateSettings} onDiscoverModels={discoverProviderModels} onSaveProvider={saveProvider} onTestProvider={testProvider} onDeleteProvider={deleteProvider} onSetDefaultProvider={setDefaultProvider} onManageIgnored={() => openIgnoredManager()} onToast={setToast} />}
 
       {planDialogOpen && <PlanConfirmDialog items={selectedPlan} busy={planBusy} onClose={() => setPlanDialogOpen(false)} onConfirm={() => void executePlan()} />}
       {pendingUninstall && <UninstallDialog application={pendingUninstall} busy={uninstallBusy} onClose={() => setPendingUninstall(null)} onConfirm={() => void uninstallApplication()} />}

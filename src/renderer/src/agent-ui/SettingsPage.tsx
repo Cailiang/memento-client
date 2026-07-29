@@ -7,11 +7,18 @@ import {
   LoaderCircle,
   Plus,
   PlugZap,
+  RefreshCw,
   Save,
   Trash2
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
-import type { AgentProvider, AgentProviderTestResult, SaveAgentProviderInput } from '../../../shared/agent-types'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type {
+  AgentProvider,
+  AgentProviderModelsResult,
+  AgentProviderTestResult,
+  DiscoverAgentModelsInput,
+  SaveAgentProviderInput
+} from '../../../shared/agent-types'
 import type { AppLanguage, AppSettings, AppTheme, UpdateAppSettingsInput } from '../../../shared/app-settings'
 import { useI18n } from '../i18n'
 
@@ -48,6 +55,7 @@ export function SettingsPage({
   settings,
   providers,
   onUpdateSettings,
+  onDiscoverModels,
   onSaveProvider,
   onTestProvider,
   onDeleteProvider,
@@ -58,6 +66,7 @@ export function SettingsPage({
   settings: AppSettings
   providers: AgentProvider[]
   onUpdateSettings: (input: UpdateAppSettingsInput) => Promise<void>
+  onDiscoverModels: (input: DiscoverAgentModelsInput) => Promise<AgentProviderModelsResult>
   onSaveProvider: (input: SaveAgentProviderInput) => Promise<AgentProvider>
   onTestProvider: (input: SaveAgentProviderInput) => Promise<AgentProviderTestResult>
   onDeleteProvider: (id: string) => Promise<void>
@@ -72,6 +81,12 @@ export function SettingsPage({
   const [secretVisible, setSecretVisible] = useState(false)
   const [busy, setBusy] = useState<'save' | 'test' | 'delete' | 'default' | null>(null)
   const [connectionMessage, setConnectionMessage] = useState<string | null>(null)
+  const [connectionOk, setConnectionOk] = useState<boolean | null>(null)
+  const [availableModels, setAvailableModels] = useState<string[]>([])
+  const [modelState, setModelState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
+  const [modelMessage, setModelMessage] = useState<string | null>(null)
+  const [manualModel, setManualModel] = useState(false)
+  const discoverySequence = useRef(0)
 
   useEffect(() => {
     if (!selected) {
@@ -87,12 +102,81 @@ export function SettingsPage({
       apiKey: ''
     })
     setConnectionMessage(null)
+    setConnectionOk(null)
+    setAvailableModels([])
+    setModelState('idle')
+    setModelMessage(null)
+    setManualModel(false)
   }, [providers, selected, selectedId])
+
+  const discoverModels = useCallback(async (input: DiscoverAgentModelsInput): Promise<void> => {
+    const sequence = ++discoverySequence.current
+    setModelState('loading')
+    setModelMessage(text('正在获取模型列表', 'Fetching available models'))
+    try {
+      const result = await onDiscoverModels(input)
+      if (sequence !== discoverySequence.current) return
+      setAvailableModels(result.models)
+      setDraft((current) => ({
+        ...current,
+        model: result.models.includes(current.model) ? current.model : result.models[0] ?? ''
+      }))
+      setModelState('ready')
+      setModelMessage(text(
+        `已从 ${result.resolvedBaseUrl} 获取 ${result.models.length} 个模型`,
+        `${result.models.length} models found at ${result.resolvedBaseUrl}`
+      ))
+      setManualModel(false)
+    } catch (error) {
+      if (sequence !== discoverySequence.current) return
+      setAvailableModels([])
+      setModelState('error')
+      setModelMessage(error instanceof Error ? error.message : text('无法获取模型列表', 'Could not fetch models'))
+    }
+  }, [onDiscoverModels, text])
+
+  const storedKeyAvailable = Boolean(selected && selected.id === draft.id && selected.keyPresent)
+  const discoveryReady = Boolean(draft.baseUrl.trim() && (draft.apiKey?.trim() || storedKeyAvailable))
+
+  useEffect(() => {
+    if (!discoveryReady) {
+      discoverySequence.current += 1
+      setAvailableModels([])
+      setModelState('idle')
+      setModelMessage(text('填写服务地址和请求密钥后自动获取', 'Enter the base URL and API key to fetch models'))
+      return
+    }
+    const timeout = window.setTimeout(() => {
+      void discoverModels({
+        id: draft.id,
+        type: draft.type,
+        baseUrl: draft.baseUrl,
+        apiKey: draft.apiKey
+      })
+    }, 750)
+    return () => {
+      window.clearTimeout(timeout)
+      discoverySequence.current += 1
+    }
+  }, [
+    discoverModels,
+    discoveryReady,
+    draft.apiKey,
+    draft.baseUrl,
+    draft.id,
+    draft.type,
+    text
+  ])
 
   const selectNew = (): void => {
     setSelectedId('new')
     setDraft(blankProvider())
     setConnectionMessage(null)
+    setConnectionOk(null)
+    setAvailableModels([])
+    setModelState('idle')
+    setModelMessage(null)
+    setManualModel(false)
     setSecretVisible(false)
   }
 
@@ -112,13 +196,16 @@ export function SettingsPage({
   const testConnection = async (): Promise<void> => {
     setBusy('test')
     setConnectionMessage(text('正在测试工具调用', 'Testing tool calling'))
+    setConnectionOk(null)
     try {
       const result = await onTestProvider(draft)
       setConnectionMessage(result.message)
+      setConnectionOk(result.ok)
       onToast(result.message)
     } catch (error) {
       const message = error instanceof Error ? error.message : text('连接测试失败', 'Connection test failed')
       setConnectionMessage(message)
+      setConnectionOk(false)
     } finally {
       setBusy(null)
     }
@@ -155,22 +242,28 @@ export function SettingsPage({
             <div className="provider-editor">
               <div className="provider-editor-header">
                 <div><strong>{draft.name || text('新供应商', 'New provider')}</strong><small>{text(...PROVIDER_LABELS[draft.type])}</small></div>
-                <span className={`risk-label ${connectionMessage || selected?.connectionState === 'failed' ? 'review' : selected?.connectionState === 'connected' ? 'safe' : ''}`}>{connectionMessage ?? (selected?.connectionState === 'connected' ? text('已连接', 'Connected') : selected?.connectionState === 'failed' ? text('测试失败', 'Test failed') : text('未测试', 'Not tested'))}</span>
+                <span className={`risk-label ${connectionOk === true || (!connectionMessage && selected?.connectionState === 'connected') ? 'safe' : connectionOk === false || (!connectionMessage && selected?.connectionState === 'failed') ? 'review' : ''}`}>{connectionMessage ?? (selected?.connectionState === 'connected' ? text('已连接', 'Connected') : selected?.connectionState === 'failed' ? text('测试失败', 'Test failed') : text('未测试', 'Not tested'))}</span>
               </div>
               <form className="provider-form" onSubmit={(event) => { event.preventDefault(); void save() }}>
                 <div className="field"><label htmlFor="provider-name">{text('名称', 'Name')}</label><input id="provider-name" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} autoComplete="off" /></div>
                 <div className="field"><label htmlFor="provider-type">{text('接口类型', 'API type')}</label><select id="provider-type" value={draft.type} onChange={(event) => { const type = event.target.value as AgentProvider['type']; setDraft({ ...draft, type, baseUrl: draft.baseUrl || PROVIDER_URLS[type] }) }}><option value="openai-compatible">OpenAI {text('兼容', 'compatible')}</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="google">Google Gemini</option></select></div>
                 <div className="field is-wide"><label htmlFor="provider-url">{text('服务地址', 'Base URL')}</label><input id="provider-url" type="url" value={draft.baseUrl} onChange={(event) => setDraft({ ...draft, baseUrl: event.target.value })} placeholder={draft.type === 'openai-compatible' ? 'https://api.example.com/v1' : PROVIDER_URLS[draft.type]} /></div>
                 <div className="field"><label htmlFor="provider-key">{text('请求密钥', 'API key')}</label><div className="secret-field"><input id="provider-key" type={secretVisible ? 'text' : 'password'} value={draft.apiKey ?? ''} onChange={(event) => setDraft({ ...draft, apiKey: event.target.value })} placeholder={selected?.keyHint ?? 'sk-...'} autoComplete="new-password" /><button type="button" onClick={() => setSecretVisible((value) => !value)} title={text('显示或隐藏密钥', 'Show or hide key')} aria-label={text('显示或隐藏密钥', 'Show or hide key')}>{secretVisible ? <EyeOff size={15} /> : <Eye size={15} />}</button></div></div>
-                <div className="field"><label htmlFor="provider-model">{text('模型', 'Model')}</label><input id="provider-model" value={draft.model} onChange={(event) => setDraft({ ...draft, model: event.target.value })} placeholder="model-name" /></div>
+                <div className="field model-field"><label htmlFor="provider-model">{text('模型', 'Model')}</label><div className="model-picker">
+                  {manualModel ? <input id="provider-model" value={draft.model} onChange={(event) => setDraft({ ...draft, model: event.target.value })} placeholder="model-name" autoComplete="off" /> : <select id="provider-model" value={draft.model} onChange={(event) => setDraft({ ...draft, model: event.target.value })} disabled={modelState === 'loading' || !availableModels.length}>
+                    {!availableModels.length && <option value={draft.model}>{draft.model || (modelState === 'loading' ? text('正在获取模型…', 'Fetching models…') : text('等待获取模型', 'Waiting for models'))}</option>}
+                    {availableModels.map((model) => <option key={model} value={model}>{model}</option>)}
+                  </select>}
+                  <button type="button" className="icon-button" onClick={() => void discoverModels({ id: draft.id, type: draft.type, baseUrl: draft.baseUrl, apiKey: draft.apiKey })} disabled={!discoveryReady || modelState === 'loading'} title={text('重新获取模型', 'Refresh models')} aria-label={text('重新获取模型', 'Refresh models')}><RefreshCw className={modelState === 'loading' ? 'spinner' : ''} size={14} /></button>
+                </div><div className={`field-help ${modelState === 'error' ? 'is-error' : ''}`} role={modelState === 'error' ? 'alert' : 'status'}>{modelState === 'loading' && <LoaderCircle className="spinner" size={11} />}<span>{modelMessage}</span>{modelState === 'error' && <button type="button" onClick={() => setManualModel(true)}>{text('手动填写', 'Enter manually')}</button>}</div></div>
                 <div className="provider-form-actions">
                   <div>
                     <button type="button" className="quiet-button" disabled={!selected || selected.isDefault || busy !== null} onClick={() => { if (!selected) return; setBusy('default'); void onSetDefaultProvider(selected.id).catch(() => undefined).finally(() => setBusy(null)) }}><CircleCheck size={15} />{selected?.isDefault ? text('当前默认', 'Current default') : text('设为默认', 'Set default')}</button>
                     <button type="button" className="icon-button" disabled={!selected || selected.isDefault || busy !== null} onClick={() => { if (!selected) return; setBusy('delete'); void onDeleteProvider(selected.id).then(() => { setSelectedId(providers.find((item) => item.id !== selected.id)?.id ?? 'new') }).catch(() => undefined).finally(() => setBusy(null)) }} title={text('删除供应商', 'Delete provider')} aria-label={text('删除供应商', 'Delete provider')}><Trash2 size={15} /></button>
                   </div>
                   <div>
-                    <button type="button" className="secondary-button" onClick={() => void testConnection()} disabled={busy !== null}>{busy === 'test' ? <LoaderCircle className="spinner" size={15} /> : <PlugZap size={15} />}{text('测试', 'Test')}</button>
-                    <button type="submit" className="primary-button" disabled={busy !== null}>{busy === 'save' ? <LoaderCircle className="spinner" size={15} /> : <Save size={15} />}{text('保存', 'Save')}</button>
+                    <button type="button" className="secondary-button" onClick={() => void testConnection()} disabled={busy !== null || modelState === 'loading' || !draft.model.trim()}>{busy === 'test' ? <LoaderCircle className="spinner" size={15} /> : <PlugZap size={15} />}{busy === 'test' ? text('测试中', 'Testing') : text('测试', 'Test')}</button>
+                    <button type="submit" className="primary-button" disabled={busy !== null || modelState === 'loading' || !draft.model.trim()}>{busy === 'save' ? <LoaderCircle className="spinner" size={15} /> : <Save size={15} />}{text('保存', 'Save')}</button>
                   </div>
                 </div>
               </form>

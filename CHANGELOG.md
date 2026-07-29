@@ -8,6 +8,28 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.22 - 2026-07-29
+
+### English
+
+- Replaced the first-launch blank surface with an immediate, theme-matched Memento boot animation that does not use fake progress.
+- Reserved a macOS title-bar safe area above the sidebar brand and added draggable regions so the logo and name no longer overlap the window controls.
+- Added a dedicated uninstalling state in the confirmation dialog, disabled repeated input, and animated the application card out of the grid before a background verification scan.
+- Added automatic model discovery after a provider URL and credential are available, including loading, retry, error, manual-entry fallback, and model selection states.
+- Normalized root and full endpoint URLs to provider API bases; `https://code.tczor.cn` now resolves to `https://code.tczor.cn/v1` for model discovery and Agent requests.
+- Reused encrypted stored credentials when refreshing an existing provider's models, shortened connection-test timeouts, and added actionable sanitized errors.
+- Extended provider and UI smoke coverage for URL normalization, model parsing, stored-key reuse, discovery timeout, uninstall feedback, and the inline boot surface.
+
+### 简体中文
+
+- 使用立即可见、配色一致且不伪造进度的 Memento 启动动画替代首次启动白屏。
+- 在侧栏品牌上方预留 macOS 标题栏安全区，并加入窗口拖动区域，Logo 和名称不再与关闭按钮重叠。
+- 卸载确认窗口新增明确的“正在卸载”状态并阻止重复操作；成功后应用卡片先退出网格，再在后台复检。
+- 用户填写供应商地址和密钥后会自动获取模型列表，提供加载、重试、错误提示、手动填写兜底和模型选择状态。
+- 根域名和完整接口地址会统一解析为模型 API 基地址；`https://code.tczor.cn` 现在会解析为 `https://code.tczor.cn/v1` 后再获取模型或发起 Agent 请求。
+- 编辑已有供应商时可复用加密保存的密钥刷新模型；连接测试超时更短，错误提示可操作且会清除敏感信息。
+- 补充地址归一化、模型解析、密钥复用、发现超时、卸载反馈和内联启动画面的测试与 UI 冒烟覆盖。
+
 ## 0.6.21 - 2026-07-29
 
 ### English

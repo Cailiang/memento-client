@@ -27,7 +27,7 @@ Users can save multiple providers and choose one default model:
 - Anthropic
 - Google Gemini
 
-Each configuration contains a name, API type, base URL, API key, and model name. A connection test verifies model access and tool calling, not just plain text generation.
+Each configuration contains a name, API type, base URL, API key, and selected model. Once a URL and credential are available, Memento normalizes the API base and automatically fetches the model list. Existing encrypted credentials can be reused while editing. A separate connection test verifies model access and tool calling, not just plain text generation.
 
 ## Execution Boundary
 

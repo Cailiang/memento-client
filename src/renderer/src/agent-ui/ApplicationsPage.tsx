@@ -77,12 +77,14 @@ function ApplicationIcon({ application }: { application: InstalledApplication })
 export function ApplicationsPage({
   applications,
   openingId,
+  removingId,
   onOpen,
   onUninstall,
   onAgentPrompt
 }: {
   applications: InstalledApplication[]
   openingId: string | null
+  removingId: string | null
   onOpen: (application: InstalledApplication) => void
   onUninstall: (application: InstalledApplication) => void
   onAgentPrompt: (prompt: string) => void
@@ -129,7 +131,7 @@ export function ApplicationsPage({
       {filtered.length ? (
         <div className="app-grid">
           {filtered.map((application) => (
-            <article className="app-card" key={application.id}>
+            <article className={`app-card ${removingId === application.id ? 'is-removing' : ''}`} key={application.id} aria-busy={removingId === application.id}>
               <ApplicationIcon application={application} />
               <div className="app-title"><strong title={application.name}>{application.name}</strong><small>{text(`版本 ${application.version || '未知'}`, `Version ${application.version || 'unknown'}`)}</small></div>
               <div className="app-meta">
@@ -137,13 +139,14 @@ export function ApplicationsPage({
                 <div><span>{text('大小', 'Size')}</span><strong>{formatBytes(application.sizeBytes)}</strong></div>
               </div>
               <div className="app-actions">
-                <button type="button" className="secondary-button" onClick={() => onOpen(application)} disabled={openingId === application.id}>
+                <button type="button" className="secondary-button" onClick={() => onOpen(application)} disabled={openingId === application.id || removingId === application.id}>
                   {openingId === application.id ? <LoaderCircle className="spinner" size={14} /> : <ExternalLink size={14} />}{text('打开', 'Open')}
                 </button>
-                <button type="button" className="secondary-button uninstall-app" onClick={() => onUninstall(application)}>
+                <button type="button" className="secondary-button uninstall-app" onClick={() => onUninstall(application)} disabled={removingId === application.id}>
                   <Trash2 size={14} />{text('卸载', 'Uninstall')}
                 </button>
               </div>
+              {removingId === application.id && <div className="app-removing-status" role="status"><LoaderCircle className="spinner" size={18} /><strong>{text('正在卸载', 'Uninstalling')}</strong></div>}
             </article>
           ))}
         </div>

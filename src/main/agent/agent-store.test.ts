@@ -60,6 +60,15 @@ describe('AgentStore', () => {
     database.close()
     expect(statSync(path.join(directory, 'agent-master.key')).mode & 0o777).toBe(0o600)
     expect(readFileSync(path.join(directory, 'agent-master.key'))).toHaveLength(32)
+    expect(store.resolveModelDiscoveryInput({
+      id: saved.id,
+      type: 'openai-compatible',
+      baseUrl: 'https://code.tczor.cn'
+    })).toEqual({
+      type: 'openai-compatible',
+      baseUrl: 'https://code.tczor.cn/v1',
+      apiKey: 'secret-key-123456'
+    })
     store.close()
   })
 

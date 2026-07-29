@@ -116,8 +116,9 @@ select:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 button:disabled { cursor: not-allowed; opacity: 0.55; }
 
 .app-shell { display: grid; width: 100%; height: 100dvh; grid-template-columns: 218px minmax(0, 1fr); }
-.sidebar { display: flex; min-width: 0; flex-direction: column; padding: 20px 14px 14px; border-right: 1px solid var(--line); background: var(--sidebar); }
-.brand { display: flex; min-height: 48px; align-items: center; gap: 11px; padding: 0 8px; }
+.sidebar { position: relative; display: flex; min-width: 0; flex-direction: column; padding: 48px 14px 14px; border-right: 1px solid var(--line); background: var(--sidebar); }
+.sidebar::before { position: absolute; top: 0; right: 0; left: 0; height: 42px; content: ""; -webkit-app-region: drag; }
+.brand { display: flex; min-height: 48px; align-items: center; gap: 11px; padding: 0 8px; -webkit-app-region: drag; }
 .brand-mark { display: grid; width: 34px; height: 34px; flex: 0 0 34px; place-items: center; border-radius: 7px; color: var(--accent-contrast); background: var(--accent); }
 .brand-copy { min-width: 0; }
 .brand-copy strong,
@@ -140,7 +141,12 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .provider-state small { margin-top: 2px; color: var(--text-tertiary); font-size: 9px; }
 
 .workspace { display: grid; min-width: 0; min-height: 0; grid-template-rows: 58px minmax(0, 1fr); }
-.topbar { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 20px; padding: 0 26px; border-bottom: 1px solid var(--line); background: var(--canvas); }
+.topbar { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 20px; padding: 0 26px; border-bottom: 1px solid var(--line); background: var(--canvas); -webkit-app-region: drag; }
+.topbar button,
+button,
+input,
+textarea,
+select { -webkit-app-region: no-drag; }
 .device-status { display: flex; min-width: 0; align-items: center; gap: 9px; }
 .device-status > span:first-child { display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid var(--line); border-radius: 6px; color: var(--text-secondary); background: var(--surface); }
 .device-status strong,
@@ -320,7 +326,9 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .search-field input { padding: 0 12px 0 36px; }
 .toolbar select { padding: 0 10px; }
 .app-grid { display: grid; grid-template-columns: repeat(5, minmax(150px, 1fr)); gap: 10px; }
-.app-card { display: grid; min-width: 0; min-height: 238px; grid-template-rows: 66px auto auto 36px; align-items: center; padding: 14px 13px 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); }
+.app-card { position: relative; display: grid; min-width: 0; min-height: 238px; grid-template-rows: 66px auto auto 36px; align-items: center; overflow: hidden; padding: 14px 13px 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); }
+.app-card.is-removing { pointer-events: none; animation: app-remove 420ms cubic-bezier(.4, 0, .2, 1) forwards; }
+@keyframes app-remove { 0% { opacity: 1; transform: scale(1); } 58% { opacity: 1; transform: scale(.975); } 100% { opacity: 0; transform: scale(.94) translateY(8px); } }
 .app-logo { display: grid; width: 56px; height: 56px; margin: 0 auto; place-items: center; overflow: hidden; border-radius: 12px; color: var(--text-tertiary); background: var(--surface-strong); }
 .app-logo img { width: 100%; height: 100%; object-fit: contain; }
 .app-title { min-width: 0; text-align: center; }
@@ -338,6 +346,8 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .app-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
 .app-actions button { min-width: 0; min-height: 34px; padding: 0 7px; font-size: 9px; }
 .uninstall-app:hover { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); }
+.app-removing-status { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 8px; color: var(--danger); background: color-mix(in srgb, var(--surface) 92%, transparent); font-size: 10px; }
+.app-removing-status strong { font-size: 10px; }
 .empty-filter { display: none; min-height: 220px; place-items: center; border-top: 1px solid var(--line); color: var(--text-tertiary); text-align: center; }
 .empty-filter.is-visible { display: grid; }
 .empty-filter strong { color: var(--text-secondary); font-size: 11px; }
@@ -390,6 +400,12 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .field label { display: block; margin-bottom: 5px; color: var(--text-secondary); font-size: 9px; font-weight: 650; }
 .field input,
 .field select { padding: 0 10px; }
+.model-picker { display: grid; grid-template-columns: minmax(0, 1fr) 34px; gap: 6px; }
+.model-picker .icon-button { min-height: 36px; }
+.field-help { display: flex; min-width: 0; min-height: 18px; align-items: center; gap: 5px; padding-top: 4px; color: var(--text-tertiary); font-size: 8px; line-height: 1.35; }
+.field-help span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.field-help.is-error { color: var(--danger); }
+.field-help button { flex: 0 0 auto; padding: 0; border: 0; color: currentColor; background: transparent; font-size: 8px; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
 .secret-field { position: relative; }
 .secret-field input { padding-right: 40px; }
 .secret-field button { position: absolute; top: 1px; right: 1px; width: 34px; height: 34px; padding: 0; border: 0; color: var(--text-tertiary); background: transparent; }
@@ -441,6 +457,13 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .dialog-header h2 { margin: 0; font-size: 16px; }
 .dialog-header p { margin: 6px 0 0; color: var(--text-tertiary); font-size: 10px; line-height: 1.5; }
 .dialog-body { padding: 8px 18px; }
+.uninstall-progress { display: grid; grid-template-columns: 44px minmax(0, 1fr); align-items: center; gap: 12px; padding: 18px; }
+.uninstall-progress-mark { position: relative; display: grid; width: 42px; height: 42px; place-items: center; border-radius: 7px; color: var(--danger); background: var(--danger-soft); }
+.uninstall-progress-mark::after { position: absolute; inset: -4px; border: 2px solid transparent; border-top-color: var(--danger); border-radius: 10px; content: ""; animation: spin 900ms linear infinite; }
+.uninstall-progress strong,
+.uninstall-progress small { display: block; }
+.uninstall-progress strong { font-size: 11px; }
+.uninstall-progress small { margin-top: 4px; color: var(--text-tertiary); font-size: 9px; line-height: 1.45; }
 .ignored-dialog { width: min(560px, 100%); }
 .ignored-tabs { display: flex; gap: 20px; padding: 0 18px; border-bottom: 1px solid var(--line); }
 .ignored-tab { min-height: 38px; padding: 0 1px; border: 0; border-bottom: 2px solid transparent; color: var(--text-tertiary); background: transparent; font-size: 10px; font-weight: 650; }
@@ -491,6 +514,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   body { min-height: 100dvh; }
   .app-shell { display: block; height: auto; min-height: 100dvh; }
   .sidebar { position: fixed; z-index: 20; right: 0; bottom: 0; left: 0; display: block; height: 64px; padding: 7px 8px; border-top: 1px solid var(--line-strong); border-right: 0; }
+  .sidebar::before { display: none; }
   .brand { display: none; }
   .nav-list { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px; margin: 0; }
   .nav-button { min-height: 48px; }

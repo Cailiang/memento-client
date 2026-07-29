@@ -20,7 +20,11 @@ import type {
   ScanResult,
   TerminalFixRunResult
 } from '../shared/types'
-import type { ExecuteAgentPlanInput, SaveAgentProviderInput } from '../shared/agent-types'
+import type {
+  DiscoverAgentModelsInput,
+  ExecuteAgentPlanInput,
+  SaveAgentProviderInput
+} from '../shared/agent-types'
 import {
   DEFAULT_APP_SETTINGS,
   type AppLanguage,
@@ -32,6 +36,7 @@ import { AgentStore } from './agent/agent-store'
 import { LocalAgentRuntime } from './agent/local-agent-runtime'
 import { selectExecutablePlanItems } from './agent/plan-validation'
 import { providerErrorMessage, testProviderConnection } from './agent/provider-factory'
+import { discoverProviderModels } from './agent/provider-config'
 import { runFullScan, type RegisteredAction } from './scanner'
 import { applyScanWhitelist } from './scan-whitelist'
 import { buildPrivilegedMoves, privilegedMoveArguments } from './privileged-cleanup'
@@ -334,6 +339,7 @@ function createWindow(): void {
     backgroundColor: themeBackground(appSettings.theme),
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
+      additionalArguments: [`--memento-theme=${appSettings.theme}`],
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true
@@ -728,6 +734,14 @@ app.whenReady().then(async () => {
   )
 
   ipcMain.handle('memento:agent:providers:list', () => agentStore!.listProviders())
+  ipcMain.handle('memento:agent:providers:models', async (_event, input: DiscoverAgentModelsInput) => {
+    const provider = agentStore!.resolveModelDiscoveryInput(input)
+    try {
+      return await discoverProviderModels(provider)
+    } catch (error) {
+      throw new Error(providerErrorMessage(error, provider.apiKey))
+    }
+  })
   ipcMain.handle('memento:agent:providers:save', (_event, input: SaveAgentProviderInput) =>
     agentStore!.saveProvider(input)
   )

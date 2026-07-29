@@ -2,6 +2,23 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type { AgentRunEvent } from '../shared/agent-types'
 import type { MementoApi, ScanProgress } from '../shared/types'
 
+const bootTheme = process.argv
+  .find((argument) => argument.startsWith('--memento-theme='))
+  ?.slice('--memento-theme='.length)
+const allowedBootThemes = new Set([
+  'porcelain',
+  'graphite',
+  'tiffany',
+  'klein',
+  'burgundy',
+  'mars',
+  'prussian',
+  'midnight'
+])
+if (bootTheme && allowedBootThemes.has(bootTheme)) {
+  document.documentElement.dataset.theme = bootTheme
+}
+
 const api: MementoApi = {
   getVersion: () => ipcRenderer.invoke('memento:get-version'),
   getAppSettings: () => ipcRenderer.invoke('memento:settings:get'),
@@ -14,6 +31,7 @@ const api: MementoApi = {
   undoTerminalFixes: () => ipcRenderer.invoke('memento:undo-terminal-fixes'),
   revealCandidateLocation: (id) => ipcRenderer.invoke('memento:reveal-candidate-location', id),
   listAgentProviders: () => ipcRenderer.invoke('memento:agent:providers:list'),
+  discoverAgentProviderModels: (input) => ipcRenderer.invoke('memento:agent:providers:models', input),
   saveAgentProvider: (input) => ipcRenderer.invoke('memento:agent:providers:save', input),
   deleteAgentProvider: (id) => ipcRenderer.invoke('memento:agent:providers:delete', id),
   setDefaultAgentProvider: (id) => ipcRenderer.invoke('memento:agent:providers:set-default', id),

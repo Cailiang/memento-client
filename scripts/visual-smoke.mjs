@@ -47,6 +47,11 @@ const browser = await chromium.launch({
 const failures = []
 
 try {
+  const indexHtml = await fetch(baseUrl).then((response) => response.text())
+  if (!indexHtml.includes('class="boot-screen"') || !indexHtml.includes('正在准备本地工作区')) {
+    failures.push('startup: inline boot screen is missing')
+  }
+
   for (const [viewportName, viewport] of viewports) {
     for (const [pageName, navigationTitle] of pages) {
       const page = await browser.newPage({ viewport })
@@ -86,13 +91,21 @@ try {
   }
   await page.locator('.nav-button[title="应用管理"]').click()
   await page.locator('input[aria-label="搜索应用名称"]').fill('Visual Studio Code')
-  await page.locator('.app-card').first().waitFor()
+  const applicationCard = page.locator('.app-card').first()
+  await applicationCard.waitFor()
+  await applicationCard.locator('.uninstall-app').click()
+  await page.locator('[role="dialog"] .danger-button').click()
+  await page.locator('.uninstall-progress').waitFor()
+  await page.screenshot({ path: '/tmp/memento-interaction-uninstall.png' })
+  await applicationCard.waitFor({ state: 'detached', timeout: 3_000 })
   await page.locator('.nav-button[title="设置"]').click()
   await page.locator('button[aria-label="添加供应商"]').click()
   await page.locator('#provider-name').fill('测试供应商')
-  await page.locator('#provider-url').fill('https://models.example.com/v1')
+  await page.locator('#provider-url').fill('https://code.tczor.cn')
   await page.locator('#provider-key').fill('test-key')
-  await page.locator('#provider-model').fill('test-model')
+  await page.locator('#provider-model').waitFor({ state: 'visible' })
+  await page.locator('#provider-model').selectOption('deepseek-chat', { timeout: 4_000 })
+  await page.screenshot({ path: '/tmp/memento-interaction-provider-models.png' })
   await page.getByRole('button', { name: '保存', exact: true }).click()
   await page.getByText('测试供应商', { exact: true }).first().waitFor()
   await page.close()

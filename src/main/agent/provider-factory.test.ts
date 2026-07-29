@@ -36,4 +36,9 @@ describe('Agent provider factory', () => {
     )
     expect(message).toBe('request failed for [REDACTED] with Bearer [REDACTED]')
   })
+
+  it('turns SDK timeout errors into an actionable message', () => {
+    expect(providerErrorMessage(new Error('request timed out after 20000ms'), 'secret'))
+      .toBe('连接模型超时，请检查服务地址、模型名称和网络后重试')
+  })
 })

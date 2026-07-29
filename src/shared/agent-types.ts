@@ -31,6 +31,18 @@ export interface SaveAgentProviderInput {
   apiKey?: string
 }
 
+export interface DiscoverAgentModelsInput {
+  id?: string
+  type: AgentProviderType
+  baseUrl: string
+  apiKey?: string
+}
+
+export interface AgentProviderModelsResult {
+  models: string[]
+  resolvedBaseUrl: string
+}
+
 export interface AgentProviderTestResult {
   ok: boolean
   message: string
@@ -105,6 +117,9 @@ export interface ExecuteAgentPlanResult {
 
 export interface MementoAgentApi {
   listAgentProviders: () => Promise<AgentProvider[]>
+  discoverAgentProviderModels: (
+    input: DiscoverAgentModelsInput
+  ) => Promise<AgentProviderModelsResult>
   saveAgentProvider: (input: SaveAgentProviderInput) => Promise<AgentProvider>
   deleteAgentProvider: (id: string) => Promise<void>
   setDefaultAgentProvider: (id: string) => Promise<AgentProvider[]>
