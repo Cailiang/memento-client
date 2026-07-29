@@ -16,6 +16,10 @@ try {
 
   const preloadReady = await page.evaluate(() => Boolean(window.memento?.scan))
   if (!preloadReady) throw new Error('preload API is unavailable')
+  const providers = await page.evaluate(() => window.memento?.listAgentProviders() ?? [])
+  if (providers.some((provider) => 'apiKey' in provider)) {
+    throw new Error('provider credentials unexpectedly crossed the preload boundary')
+  }
 
   await page.locator('.nav-button[title="应用管理"]').click()
   await page.locator('.app-card').first().waitFor({ timeout: 30_000 })
@@ -24,10 +28,16 @@ try {
   const result = await page.evaluate(() => ({
     applications: document.querySelectorAll('.app-card').length,
     loadedIcons: document.querySelectorAll('.app-logo img').length,
-    summary: document.querySelector('.page-heading p')?.textContent ?? ''
+    summary: document.querySelector('.page-command-summary')?.textContent ?? '',
+    visibleVersion: document.querySelector('.topbar-version')?.textContent ?? ''
   }))
+  result.importedCcSwitchProviders = providers.filter((provider) => provider.id.startsWith('cc-switch-')).length
   if (result.applications < 1 || result.loadedIcons < 1) {
     throw new Error(`application inventory did not render: ${JSON.stringify(result)}`)
+  }
+  const runtimeVersion = await page.evaluate(() => window.memento?.getVersion())
+  if (!runtimeVersion || result.visibleVersion !== `v${runtimeVersion}`) {
+    throw new Error(`visible version does not match runtime: ${JSON.stringify({ runtimeVersion, ...result })}`)
   }
   await page.locator('select[aria-label="筛选应用"]').selectOption('system')
   const appStore = page.locator('.app-card').filter({ hasText: 'App Store' }).first()

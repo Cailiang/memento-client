@@ -35,6 +35,7 @@ import {
   type UpdateAppSettingsInput
 } from '../shared/app-settings'
 import { AgentStore } from './agent/agent-store'
+import { findCcSwitchDatabase, readCcSwitchProviders } from './agent/cc-switch-import'
 import { LocalAgentRuntime } from './agent/local-agent-runtime'
 import { selectExecutablePlanItems } from './agent/plan-validation'
 import { providerErrorMessage, testProviderConnection } from './agent/provider-factory'
@@ -746,6 +747,10 @@ async function performScan(
 
 app.whenReady().then(async () => {
   agentStore = new AgentStore(app.getPath('userData'))
+  const ccSwitchDatabase = findCcSwitchDatabase(app.getPath('home'), app.getPath('appData'))
+  if (ccSwitchDatabase) {
+    agentStore.syncCcSwitchProviders(readCcSwitchProviders(ccSwitchDatabase))
+  }
   agentRuntime = new LocalAgentRuntime(agentStore)
   appSettings = agentStore.getAppSettings()
   applyWindowSettings()

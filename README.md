@@ -29,6 +29,8 @@ Users can save multiple providers and choose one default model:
 
 Each configuration contains a name, API type, base URL, API key, and selected model. Once a URL and credential are available, Memento normalizes the API base and automatically fetches the model list. Image, audio, realtime, embedding, moderation, and other clearly incompatible entries are kept out of the Agent model picker. Existing encrypted credentials can be reused while editing. A separate connection test verifies model access and tool calling, not just plain text generation.
 
+On startup, Memento also detects the local CC Switch database at `~/.cc-switch/cc-switch.db` or its configured custom directory. Usable Claude, Codex, and Gemini entries are imported idempotently and mapped by API format. Credential-free placeholders are skipped. The CC Switch database is opened read-only; imported credentials stay in the main process and are re-encrypted in Memento's own provider store.
+
 Conversation IDs, focused entities, and pending plans are persisted locally. Follow-ups such as “this service” resolve to the latest exact focus instead of starting another unrelated inventory. Per-application analysis includes its exact Bundle ID, path, executable, background-only role, and registered URL schemes. The application language controls all Agent-visible text; switching language refreshes the scan snapshot before another run.
 
 ## Execution Boundary
@@ -75,7 +77,7 @@ npm run dev:web -- --port 4174
 npm run ui:smoke -- http://127.0.0.1:4174
 ```
 
-The visual smoke test exercises all five pages at `1440x900`, `1024x768`, `820x1180`, and `390x844`, checks horizontal overflow, and covers the Agent progress state, structured results, history deletion, application filtering and ignoring, English-only output, plans, confirmation, health tabs, and provider editing. The Electron smoke test separately verifies the production preload, real application inventory, localized names, protected system apps, and real icons.
+The visual smoke test exercises all five pages at `1440x900`, `1024x768`, `820x1180`, and `390x844`, checks horizontal overflow, and covers the visible build version, compact page controls, Agent progress state, structured results, history deletion, application filtering and ignoring, English-only output, plans, confirmation, health tabs, and provider editing. The Electron smoke test separately verifies the production preload, real application inventory, localized names, protected system apps, and real icons.
 
 ## Packaging
 

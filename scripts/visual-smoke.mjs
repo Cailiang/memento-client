@@ -1,9 +1,10 @@
 import { chromium } from 'playwright-core'
-import { existsSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
 
 const baseUrl = process.argv[2] ?? 'http://127.0.0.1:4174'
+const expectedVersion = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version
 const pages = [
   ['agent', null],
   ['health', '电脑体检'],
@@ -70,6 +71,13 @@ try {
       }))
       if (overflow.document > 1 || overflow.body > 1) {
         failures.push(`${viewportName}/${pageName}: horizontal overflow ${JSON.stringify(overflow)}`)
+      }
+      const visibleVersion = await page.locator('.topbar-version').textContent()
+      if (visibleVersion !== `v${expectedVersion}`) {
+        failures.push(`${viewportName}/${pageName}: wrong visible version ${JSON.stringify(visibleVersion)}`)
+      }
+      if (pageName !== 'agent' && await page.locator('.page-heading').count()) {
+        failures.push(`${viewportName}/${pageName}: redundant page heading is still rendered`)
       }
       await page.close()
     }

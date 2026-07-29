@@ -29,10 +29,10 @@ export function HistoryPage({
 
   return (
     <section className="page content-page is-active">
-      <header className="page-heading">
-        <div><h1>{text('任务记录', 'Task history')}</h1><p>{text('每次分析、工具调用和执行结果都会保存在本机。', 'Analyses, tool calls, and results are stored locally.')}</p></div>
-        <div className="page-heading-actions"><button type="button" className="secondary-button" onClick={exportRuns} disabled={!runs.length}><Download size={16} />{text('导出', 'Export')}</button></div>
-      </header>
+      <div className="page-command-bar">
+        <span className="page-command-summary">{text(`共 ${runs.length} 条本机任务记录`, `${runs.length} local task records`)}</span>
+        <div className="page-command-actions"><button type="button" className="secondary-button" onClick={exportRuns} disabled={!runs.length}><Download size={16} />{text('导出', 'Export')}</button></div>
+      </div>
 
       {runs.length ? (
         <div className="history-table">

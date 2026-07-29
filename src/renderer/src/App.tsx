@@ -228,6 +228,7 @@ function demoPlanItemFromPresentation(
 }
 
 function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSettings['language']) => void }): React.JSX.Element {
+  const [appVersion, setAppVersion] = useState(__MEMENTO_VERSION__)
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS)
   const [providers, setProviders] = useState<AgentProvider[]>([])
   const [runs, setRuns] = useState<AgentRunRecord[]>([])
@@ -330,9 +331,11 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     started.current = true
     void (async () => {
       try {
-        const initialSettings = window.memento
-          ? await window.memento.getAppSettings()
-          : DEFAULT_APP_SETTINGS
+        const [initialSettings, initialVersion] = await Promise.all([
+          window.memento ? window.memento.getAppSettings() : Promise.resolve(DEFAULT_APP_SETTINGS),
+          window.memento ? window.memento.getVersion() : Promise.resolve(__MEMENTO_VERSION__)
+        ])
+        setAppVersion(initialVersion)
         setSettings(initialSettings)
         onLanguageChange(initialSettings.language)
         document.documentElement.dataset.theme = initialSettings.theme
@@ -804,6 +807,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       provider={defaultProvider}
       healthCount={healthCount}
       applicationCount={result?.applications.length ?? 0}
+      appVersion={appVersion}
       hostname={result?.system.hostname ?? ''}
       osVersion={result?.system.osVersion ?? ''}
       scanBusy={scanBusy}

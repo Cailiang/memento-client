@@ -98,6 +98,45 @@ describe('AgentStore', () => {
     store.close()
   })
 
+  it('imports CC Switch providers idempotently and de-duplicates matching manual providers', () => {
+    const directory = temporaryDirectory()
+    const store = new AgentStore(directory)
+    store.saveProvider(providerInput('Existing provider', 'same-secret'))
+    const imported = store.syncCcSwitchProviders([
+      {
+        id: 'cc-switch-claude-source',
+        name: 'Duplicate external provider',
+        type: 'openai-compatible',
+        baseUrl: 'https://models.example.com/v1',
+        model: 'agent-model',
+        apiKey: 'same-secret',
+        isCurrent: true
+      },
+      {
+        id: 'cc-switch-codex-source',
+        name: 'CC Switch provider',
+        type: 'openai',
+        baseUrl: 'https://codex.example.com',
+        model: 'gpt-test',
+        apiKey: 'external-secret',
+        isCurrent: false
+      }
+    ])
+    expect(imported).toBe(1)
+    expect(store.listProviders()).toHaveLength(2)
+    expect(store.getPrivateProvider('cc-switch-codex-source').apiKey).toBe('external-secret')
+    expect(store.syncCcSwitchProviders([{
+      id: 'cc-switch-codex-source',
+      name: 'CC Switch provider',
+      type: 'openai',
+      baseUrl: 'https://codex.example.com',
+      model: 'gpt-test',
+      apiKey: 'external-secret',
+      isCurrent: false
+    }])).toBe(0)
+    store.close()
+  })
+
   it('migrates legacy settings and persists runs in SQLite', () => {
     const directory = temporaryDirectory()
     writeFileSync(path.join(directory, 'app-settings.json'), JSON.stringify({

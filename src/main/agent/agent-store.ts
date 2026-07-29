@@ -24,6 +24,7 @@ import {
   normalizeProviderBaseUrl,
   type PrivateModelDiscoveryInput
 } from './provider-config'
+import type { CcSwitchProviderCandidate } from './cc-switch-import'
 
 // Vite 5 does not yet recognize node:sqlite as a built-in during tests.
 const { DatabaseSync } = require('node:sqlite') as typeof import('node:sqlite')
@@ -313,6 +314,36 @@ export class AgentStore {
       provider.updatedAt
     )
     return this.publicProvider(this.providerRow(provider.id)!)
+  }
+
+  syncCcSwitchProviders(inputs: CcSwitchProviderCandidate[]): number {
+    let imported = 0
+    for (const input of inputs) {
+      try {
+        const normalized = validateProviderInput(input, this.getAppSettings().language)
+        const existing = this.providerRow(input.id)
+        if (existing &&
+          existing.name === normalized.name &&
+          existing.type === normalized.type &&
+          existing.base_url === normalized.baseUrl &&
+          existing.model === normalized.model &&
+          this.decryptKey(existing) === normalized.apiKey) {
+          continue
+        }
+        if (!existing) {
+          const duplicates = this.database.prepare(`
+            SELECT * FROM ai_providers
+            WHERE type = ? AND base_url = ? AND model = ?
+          `).all(normalized.type, normalized.baseUrl, normalized.model) as unknown as ProviderRow[]
+          if (duplicates.some((row) => this.decryptKey(row) === normalized.apiKey)) continue
+        }
+        this.saveProvider(normalized)
+        imported += 1
+      } catch {
+        // One malformed external row must not block Memento startup or other imports.
+      }
+    }
+    return imported
   }
 
   deleteProvider(id: string): void {

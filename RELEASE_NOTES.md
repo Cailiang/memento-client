@@ -1,18 +1,18 @@
-# Memento Agent 0.6.27
+# Memento Agent 0.6.28
 
 ## 简体中文
 
-`0.6.27` 改进了 Agent 等待体验，并补齐任务记录与应用管理中的直接操作。
+`0.6.28` 自动接入本机 CC Switch 供应商，并提高常用页面的可读性与信息密度。
 
 ### 主要变化
 
-- Agent 回答时显示从低位开始、缓慢推进的动画进度条、真实阶段和已用时间；结果返回前不会显示 100%。
-- 任务记录新增删除入口和确认弹窗，同时删除本机 SQLite 中对应的对话结果与工具调用记录。
-- 应用管理现在展示 `/Applications`、`~/Applications` 和 `/System/Applications` 中的应用；App Store 等系统应用可以打开和询问 Agent，但不能卸载。
-- 应用可以手动忽略，忽略后会离开应用列表、体检建议、可执行操作和 Agent 上下文，并可在设置中恢复。
-- 每个应用新增“问 Agent”入口。分析会携带精确 Bundle ID、路径、版本、最后使用记录、可执行文件、后台组件标记和 URL 协议，适合判断驱动、安全组件或 URL Handler 的用途及卸载影响。
-- 迅雷等把中文名放在根 `InfoPlist.strings` 的应用现在会显示官方中文名称；Spotlight 没有记录时显示“无使用记录”。
-- 新增真实 App Store 保护、迅雷中文名、Claude Code URL Handler 元数据、应用忽略、历史删除和 Agent 低位进度测试。
+- 启动时自动检测 `~/.cc-switch/cc-switch.db` 及 CC Switch 自定义配置目录，并导入可用的 Claude、Codex 和 Gemini 供应商。
+- 导入会识别 Anthropic、OpenAI Chat、OpenAI Responses 和 Gemini API 格式；无密钥占位配置会跳过，重复启动或相同手工配置不会重复添加。
+- CC Switch 数据库只读打开。密钥只在 Electron 主进程读取，并立即使用 Memento 既有 AES-256-GCM 方案重新加密保存。
+- 顶部工具栏新增持续可见的版本号，本版本显示为 `v0.6.28`。
+- 电脑体检、应用管理和任务记录改用紧凑状态/操作栏；设置页直接进入实际设置内容，不再重复显示大标题和说明。
+- Agent 回复、分析进度、结构化结果、电脑体检条目、应用卡片、任务记录和设置表单文字已整体提高到更易读的字号。
+- 新增 CC Switch 三类配置、自定义路径、TOML 解析、去重、加密以及四视口紧凑布局测试。
 
 ### 安装说明
 
@@ -20,17 +20,17 @@
 
 ## English
 
-`0.6.27` improves the Agent waiting experience and adds direct task-history and application-management controls.
+`0.6.28` automatically imports local CC Switch providers and improves readability across the primary work areas.
 
 ### Highlights
 
-- Agent responses now show an animated progress bar that starts low, advances gradually through actual run phases, reports elapsed time, and never reaches 100% before results arrive.
-- Task History adds confirmed deletion, including the corresponding locally stored conversation results and tool-call records.
-- Application Management now includes apps from `/Applications`, `~/Applications`, and `/System/Applications`. Protected apps such as App Store can be opened and analyzed but not uninstalled.
-- Applications can be ignored. Ignored apps leave the inventory, health findings, registered operations, and Agent context until restored in Settings.
-- Every application has Ask Agent. The exact Bundle ID, path, version, usage record, executable, background-only role, and URL schemes support precise driver, security-component, helper, and uninstall-impact analysis.
-- Apps such as Thunder now use official localized names from root `InfoPlist.strings`; missing Spotlight dates display “No usage record.”
-- Added real App Store protection, localized Thunder, Claude Code URL Handler metadata, application ignore, history deletion, and low-start Agent progress coverage.
+- Memento detects `~/.cc-switch/cc-switch.db` and CC Switch's custom configuration directory at startup, then imports usable Claude, Codex, and Gemini providers.
+- Import maps Anthropic, OpenAI Chat, OpenAI Responses, and Gemini API formats. Credential-free placeholders are skipped, and repeated startup or matching manual providers do not create duplicates.
+- The CC Switch database is opened read-only. Credentials are read only in the Electron main process and immediately re-encrypted with Memento's existing AES-256-GCM storage.
+- The persistent top toolbar now shows the exact build version, `v0.6.28` for this release.
+- Computer Health, Applications, and Task History use compact status/action rows; Settings opens directly into useful controls without a redundant title block.
+- Agent responses, progress, structured results, health findings, application cards, task history, and settings forms now use more readable text sizes.
+- Added coverage for all three CC Switch formats, custom paths, TOML parsing, de-duplication, encryption, and compact four-viewport layouts.
 
 ### Installation
 

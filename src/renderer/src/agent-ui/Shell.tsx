@@ -19,6 +19,7 @@ export function Shell({
   provider,
   healthCount,
   applicationCount,
+  appVersion,
   hostname,
   osVersion,
   scanBusy,
@@ -30,6 +31,7 @@ export function Shell({
   provider: AgentProvider | null
   healthCount: number
   applicationCount: number
+  appVersion: string
   hostname: string
   osVersion: string
   scanBusy: boolean
@@ -111,6 +113,7 @@ export function Shell({
             <span className="topbar-clock">{new Intl.DateTimeFormat('zh-CN', {
               month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
             }).format(new Date())}</span>
+            <span className="topbar-version" title={text('当前版本', 'Current version')}>v{appVersion}</span>
             <button type="button" className="secondary-button" onClick={onQuickScan} disabled={scanBusy}>
               <ScanLine size={16} className={scanBusy ? 'spinner' : ''} />
               <span>{scanBusy ? text('体检中', 'Scanning') : text('快速体检', 'Quick scan')}</span>

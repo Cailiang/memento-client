@@ -8,6 +8,28 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.28 - 2026-07-29
+
+### English
+
+- Added read-only automatic import of usable Claude, Codex, and Gemini providers from the local CC Switch SQLite database, including its custom configuration-directory override.
+- Mapped CC Switch API formats to the matching Vercel AI SDK provider, parsed Codex TOML with a real parser, skipped credential-free placeholders, and de-duplicated both repeated imports and matching manual configurations.
+- Kept imported credentials inside the Electron main process and immediately re-encrypted them with Memento's existing AES-256-GCM storage before exposing only masked provider metadata to the Renderer.
+- Added the package version to the persistent top toolbar so desktop and mobile layouts identify the exact build being tested.
+- Replaced redundant large headings on Computer Health, Applications, Task History, and Settings with compact status/action rows or direct content.
+- Increased Agent response, progress, structured-result, health, application, history, and settings text sizes while retaining the compact utility layout across four responsive viewports.
+- Added CC Switch database, provider mapping, custom-path, encryption, de-duplication, build-version, and compact-layout regression coverage.
+
+### 简体中文
+
+- 新增对本机 CC Switch SQLite 的只读自动导入，支持其自定义配置目录，并同步可用的 Claude、Codex 和 Gemini 供应商。
+- 按 CC Switch 的 API 格式映射到对应 Vercel AI SDK 供应商，使用正式 TOML 解析器读取 Codex 配置，跳过无密钥占位项，并对重复启动和相同手工配置去重。
+- 导入密钥始终留在 Electron 主进程，并立即使用 Memento 既有 AES-256-GCM 方案重新加密；Renderer 仍只接收掩码后的供应商信息。
+- 顶部工具栏持续显示软件版本号，桌面与移动布局都能确认正在测试的准确版本。
+- 电脑体检、应用管理、任务记录和设置移除重复的大标题区，改为紧凑状态/操作栏或直接进入内容。
+- 提高 Agent 回复、进度、结构化结果、体检、应用、任务记录和设置文字字号，同时保持四种响应式视口下的紧凑工具界面。
+- 新增 CC Switch 数据库、供应商映射、自定义路径、加密、去重、构建版本和紧凑布局回归覆盖。
+
 ## 0.6.27 - 2026-07-29
 
 ### English

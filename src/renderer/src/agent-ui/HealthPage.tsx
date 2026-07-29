@@ -123,11 +123,11 @@ export function HealthPage({
 
   return (
     <section className="page content-page is-active">
-      <header className="page-heading">
-        <div><h1>{text('电脑体检', 'Computer health')}</h1><p>{result
+      <div className="page-command-bar">
+        <span className="page-command-summary">{result
           ? text(`最后检查于 ${formatDateTime(result.completedAt, language)}，${findingCount} 项内容值得处理。`, `Last checked ${formatDateTime(result.completedAt, language)}. ${findingCount} items need attention.`)
-          : text('尚未完成体检。', 'No health scan yet.')}</p></div>
-        <div className="page-heading-actions">
+          : text('尚未完成体检', 'No health scan yet')}</span>
+        <div className="page-command-actions">
           <button type="button" className="secondary-button" onClick={() => onAgentPrompt(text('全面检查电脑状态并准备处理计划', 'Inspect the computer and prepare a plan'))}>
             <Sparkles size={16} />{text('交给 Agent', 'Ask Agent')}
           </button>
@@ -136,7 +136,7 @@ export function HealthPage({
             {scanBusy ? text('体检中', 'Scanning') : text('重新体检', 'Scan again')}
           </button>
         </div>
-      </header>
+      </div>
 
       {scanBusy && progress && (
         <div className="scan-status" role="status" aria-live="polite">

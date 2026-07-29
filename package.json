@@ -1,6 +1,6 @@
 {
   "name": "memento",
-  "version": "0.6.27",
+  "version": "0.6.28",
   "private": true,
   "author": {
     "name": "Cailiang",
@@ -32,6 +32,7 @@
     "lucide-react": "^0.468.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "smol-toml": "^1.7.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {

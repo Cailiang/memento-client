@@ -226,11 +226,9 @@ export function SettingsPage({
 
   return (
     <section className="page content-page is-active">
-      <header className="page-heading"><div><h1>{text('设置', 'Settings')}</h1><p>{text('管理模型、窗口与外观。', 'Manage models, windows, and appearance.')}</p></div></header>
-
       <div className="settings-layout">
         <section className="settings-section provider-settings-section">
-          <div className="settings-label"><h2>{text('模型供应商', 'Model providers')}</h2><p>{text('可保存多个供应商，并选择 Agent 默认使用的模型。', 'Save multiple providers and choose the default model.')}</p></div>
+          <div className="settings-label"><h2>{text('模型供应商', 'Model providers')}</h2><p>{text('可保存多个供应商；检测到本地 CC Switch 后会自动同步可用配置。', 'Save multiple providers. Available local CC Switch configurations are synchronized automatically.')}</p></div>
           <div className="provider-manager">
             <aside className="provider-list-pane" aria-label={text('已配置供应商', 'Configured providers')}>
               <div className="provider-list-header"><span>{text(`${providers.length} 个配置`, `${providers.length} configured`)}</span><button type="button" className="icon-button" onClick={selectNew} title={text('添加供应商', 'Add provider')} aria-label={text('添加供应商', 'Add provider')}><Plus size={15} /></button></div>
@@ -238,7 +236,7 @@ export function SettingsPage({
                 {providers.map((provider) => (
                   <button key={provider.id} type="button" className={`provider-item ${selectedId === provider.id ? 'is-active' : ''}`} onClick={() => setSelectedId(provider.id)} aria-pressed={selectedId === provider.id}>
                     <span className="provider-mark">{provider.name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase()}</span>
-                    <span><strong>{provider.name}</strong><small>{provider.model}</small></span>
+                    <span><strong>{provider.name}</strong><small>{provider.model}{provider.id.startsWith('cc-switch-') ? ' · CC Switch' : ''}</small></span>
                     {provider.isDefault && <span className="default-chip">{text('默认', 'Default')}</span>}
                   </button>
                 ))}
