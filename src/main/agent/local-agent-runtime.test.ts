@@ -61,6 +61,9 @@ describe('LocalAgentRuntime boundaries', () => {
     expect(availablePlanItems(scan).map((item) => item.id)).toEqual([
       'candidate-1', 'app-action', 'terminal-fix'
     ])
+    expect(inferPromptFocus('分析 com.example.editor 是否可以卸载', scan)).toEqual([{
+      kind: 'applications', id: 'app-1', name: 'Editor'
+    }])
   })
 
   it('keeps the exact service focus and pending plan in follow-up context', () => {

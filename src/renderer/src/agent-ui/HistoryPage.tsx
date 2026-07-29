@@ -1,4 +1,4 @@
-import { ChevronRight, Download, History } from 'lucide-react'
+import { ChevronRight, Download, History, Trash2 } from 'lucide-react'
 import type { AgentRunRecord } from '../../../shared/agent-types'
 import { useI18n } from '../i18n'
 import { formatBytes, formatDateTime, runStatusLabel } from './utils'
@@ -6,10 +6,12 @@ import { formatBytes, formatDateTime, runStatusLabel } from './utils'
 export function HistoryPage({
   runs,
   onOpenRun,
+  onDeleteRun,
   onToast
 }: {
   runs: AgentRunRecord[]
   onOpenRun: (run: AgentRunRecord) => void
+  onDeleteRun: (run: AgentRunRecord) => void
   onToast: (message: string) => void
 }): React.JSX.Element {
   const { language, text } = useI18n()
@@ -38,17 +40,22 @@ export function HistoryPage({
           {runs.map((run) => {
             const reclaimed = run.plan.reduce((sum, item) => sum + item.estimatedBytes, 0)
             return (
-              <button type="button" className="history-row" key={run.id} onClick={() => onOpenRun(run)}>
-                <span className="history-title"><strong>{run.prompt}</strong><small>{text(`${run.plan.length} 个计划步骤 · ${run.providerName} ${run.model}`, `${run.plan.length} plan steps · ${run.providerName} ${run.model}`)}</small></span>
-                <span><span className={`risk-label ${run.status === 'completed' ? 'safe' : run.status === 'failed' ? 'danger' : 'review'}`}>{runStatusLabel(run.status, language)}</span></span>
-                <span>{formatDateTime(run.createdAt, language)}</span>
-                <span>{run.results.length
-                  ? text(`${run.results.filter((item) => item.ok).length} 项完成`, `${run.results.filter((item) => item.ok).length} completed`)
-                  : reclaimed
-                    ? formatBytes(reclaimed)
-                    : text('只读分析', 'Read-only')}</span>
-                <span><ChevronRight size={15} /></span>
-              </button>
+              <div className="history-entry" key={run.id}>
+                <button type="button" className="history-row" onClick={() => onOpenRun(run)}>
+                  <span className="history-title"><strong>{run.prompt}</strong><small>{text(`${run.plan.length} 个计划步骤 · ${run.providerName} ${run.model}`, `${run.plan.length} plan steps · ${run.providerName} ${run.model}`)}</small></span>
+                  <span><span className={`risk-label ${run.status === 'completed' ? 'safe' : run.status === 'failed' ? 'danger' : 'review'}`}>{runStatusLabel(run.status, language)}</span></span>
+                  <span>{formatDateTime(run.createdAt, language)}</span>
+                  <span>{run.results.length
+                    ? text(`${run.results.filter((item) => item.ok).length} 项完成`, `${run.results.filter((item) => item.ok).length} completed`)
+                    : reclaimed
+                      ? formatBytes(reclaimed)
+                      : text('只读分析', 'Read-only')}</span>
+                  <span><ChevronRight size={15} /></span>
+                </button>
+                <button type="button" className="icon-button history-delete" onClick={() => onDeleteRun(run)} title={text('删除记录', 'Delete history')} aria-label={text(`删除“${run.prompt}”记录`, `Delete history for "${run.prompt}"`)}>
+                  <Trash2 size={14} />
+                </button>
+              </div>
             )
           })}
         </div>

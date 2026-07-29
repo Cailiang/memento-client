@@ -285,6 +285,61 @@ export const demoResult: ScanResult = {
         consequence: '应用本体会移到废纸篓，其文稿、数据和偏好设置会保留。',
         reversible: true
       }
+    },
+    {
+      id: 'demo-inventory-thunder',
+      name: '迅雷',
+      version: '5.80.5',
+      bundleId: 'com.xunlei.Thunder',
+      location: '/Applications/Thunder.app',
+      sizeBytes: 691 * MB,
+      lastUsedAt: '2026-07-24T12:06:00.000Z',
+      scope: 'shared',
+      executable: 'Thunder',
+      urlSchemes: ['thunder', 'ed2k', 'magnet'],
+      unused: false,
+      action: {
+        id: 'demo-app-thunder',
+        kind: 'trash',
+        label: '卸载',
+        consequence: '应用本体会移到废纸篓，其文稿、数据和偏好设置会保留。',
+        reversible: true
+      }
+    },
+    {
+      id: 'demo-inventory-claude-handler',
+      name: 'Claude Code URL Handler',
+      version: '1.0',
+      bundleId: 'com.anthropic.claude-code-url-handler',
+      location: '~/Applications/Claude Code URL Handler.app',
+      sizeBytes: 1.2 * MB,
+      lastUsedAt: null,
+      scope: 'user',
+      backgroundOnly: true,
+      executable: 'claude',
+      urlSchemes: ['claude-cli'],
+      unused: false,
+      action: {
+        id: 'demo-app-claude-handler',
+        kind: 'trash',
+        label: '卸载',
+        consequence: '应用本体会移到废纸篓，其文稿、数据和偏好设置会保留。',
+        reversible: true
+      }
+    },
+    {
+      id: 'demo-inventory-app-store',
+      name: 'App Store',
+      version: '3.0',
+      bundleId: 'com.apple.AppStore',
+      location: '/System/Applications/App Store.app',
+      sizeBytes: 45 * MB,
+      lastUsedAt: '2026-07-29T01:00:00.000Z',
+      scope: 'system',
+      executable: 'App Store',
+      urlSchemes: ['itms-apps', 'macappstore'],
+      unused: false,
+      protectedReason: 'macOS 系统应用'
     }
   ],
   terminal: {
@@ -386,7 +441,7 @@ export async function runDemoScan(
   }
 }
 
-function localizedDemoResult(language: AppLanguage): ScanResult {
+export function localizedDemoResult(language: AppLanguage): ScanResult {
   if (language === 'zh-CN') return demoResult
 
   const candidateCopy: Record<string, Pick<ScanCandidate, 'name' | 'description' | 'status' | 'evidence'> & { subtitle?: string }> = {

@@ -10,9 +10,9 @@ export function formatBytes(bytes: number): string {
 }
 
 export function relativeDate(value: string | null, language: AppLanguage): string {
-  if (!value) return language === 'zh-CN' ? '未知' : 'Unknown'
+  if (!value) return language === 'zh-CN' ? '无使用记录' : 'No usage record'
   const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return language === 'zh-CN' ? '未知' : 'Unknown'
+  if (Number.isNaN(date.getTime())) return language === 'zh-CN' ? '无使用记录' : 'No usage record'
   const days = Math.max(0, Math.floor((Date.now() - date.getTime()) / 86_400_000))
   if (language === 'zh-CN') {
     if (days === 0) return '今天'

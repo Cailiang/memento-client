@@ -1058,6 +1058,9 @@ interface ApplicationMetadata {
   version: string
   sizeBytes: number
   lastUsedAt: Date | null
+  backgroundOnly: boolean
+  executable: string | null
+  urlSchemes: string[]
 }
 
 interface ApplicationScan {
@@ -1067,7 +1070,8 @@ interface ApplicationScan {
 
 const APPLICATION_ROOTS = [
   '/Applications',
-  path.join(HOME, 'Applications')
+  path.join(HOME, 'Applications'),
+  '/System/Applications'
 ]
 
 export function plistApplicationName(info: Record<string, unknown>): string | null {
@@ -1087,7 +1091,10 @@ export function applicationNamePlistPaths(target: string, language: AppLanguage)
         path.join(resources, directory, 'InfoPlist.strings')
       )
     : []
-  return [...localized, path.join(target, 'Contents', 'Info.plist')]
+  const developmentLocalization = language === 'zh-CN'
+    ? [path.join(resources, 'InfoPlist.strings')]
+    : []
+  return [...localized, ...developmentLocalization, path.join(target, 'Contents', 'Info.plist')]
 }
 
 async function readPlist(target: string): Promise<Record<string, unknown> | null> {
@@ -1100,6 +1107,26 @@ async function readPlist(target: string): Promise<Record<string, unknown> | null
       : null
   } catch {
     return null
+  }
+}
+
+export function applicationPlistCapabilities(info: Record<string, unknown> | null): {
+  backgroundOnly: boolean
+  executable: string | null
+  urlSchemes: string[]
+} {
+  const urlTypes = Array.isArray(info?.CFBundleURLTypes) ? info.CFBundleURLTypes : []
+  const urlSchemes = urlTypes.flatMap((value) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return []
+    const schemes = (value as Record<string, unknown>).CFBundleURLSchemes
+    return Array.isArray(schemes)
+      ? schemes.filter((scheme): scheme is string => typeof scheme === 'string')
+      : []
+  }).map((scheme) => scheme.trim()).filter(Boolean)
+  return {
+    backgroundOnly: info?.LSBackgroundOnly === true,
+    executable: typeof info?.CFBundleExecutable === 'string' ? info.CFBundleExecutable : null,
+    urlSchemes: [...new Set(urlSchemes)].slice(0, 20)
   }
 }
 
@@ -1147,6 +1174,7 @@ async function findApplications(root: string, depth = 2): Promise<string[]> {
 
 async function inspectApplication(target: string, language: AppLanguage): Promise<ApplicationMetadata | null> {
   const namePromise = resolveApplicationName(target, language)
+  const infoPromise = readPlist(path.join(target, 'Contents', 'Info.plist'))
   try {
     const { stdout } = await run('/usr/bin/mdls', [
       '-name',
@@ -1164,19 +1192,21 @@ async function inspectApplication(target: string, language: AppLanguage): Promis
     const sizeValue = parseMetadataValue(stdout, 'kMDItemLogicalSize') ??
       parseMetadataValue(stdout, 'kMDItemFSSize')
     const dateValue = parseMetadataValue(stdout, 'kMDItemLastUsedDate')
+    const info = await infoPromise
     return {
       target,
       name: await namePromise,
-      bundleId: parseMetadataValue(stdout, 'kMDItemCFBundleIdentifier'),
-      version: parseMetadataValue(stdout, 'kMDItemVersion') ?? t(language, '未知版本', 'Unknown version'),
+      bundleId: parseMetadataValue(stdout, 'kMDItemCFBundleIdentifier') ??
+        (typeof info?.CFBundleIdentifier === 'string' ? info.CFBundleIdentifier : null),
+      version: parseMetadataValue(stdout, 'kMDItemVersion') ??
+        (typeof info?.CFBundleShortVersionString === 'string' ? info.CFBundleShortVersionString : t(language, '未知版本', 'Unknown version')),
       sizeBytes: Number.parseInt(sizeValue ?? '0', 10) || 0,
-      lastUsedAt: dateValue ? new Date(dateValue) : null
+      lastUsedAt: dateValue ? new Date(dateValue) : null,
+      ...applicationPlistCapabilities(info)
     }
   } catch {
-    try {
-      const infoPath = path.join(target, 'Contents', 'Info.plist')
-      const { stdout } = await run('/usr/bin/plutil', ['-convert', 'json', '-o', '-', infoPath])
-      const info = JSON.parse(stdout) as Record<string, unknown>
+    const info = await infoPromise
+    if (info) {
       return {
         target,
         name: await namePromise,
@@ -1185,17 +1215,18 @@ async function inspectApplication(target: string, language: AppLanguage): Promis
           ? info.CFBundleShortVersionString
           : t(language, '未知版本', 'Unknown version'),
         sizeBytes: await getPathSize(target),
-        lastUsedAt: null
+        lastUsedAt: null,
+        ...applicationPlistCapabilities(info)
       }
-    } catch {
-      return {
-        target,
-        name: await namePromise,
-        bundleId: null,
-        version: t(language, '未知版本', 'Unknown version'),
-        sizeBytes: 0,
-        lastUsedAt: null
-      }
+    }
+    return {
+      target,
+      name: await namePromise,
+      bundleId: null,
+      version: t(language, '未知版本', 'Unknown version'),
+      sizeBytes: 0,
+      lastUsedAt: null,
+      ...applicationPlistCapabilities(null)
     }
   }
 }
@@ -1209,25 +1240,28 @@ async function scanApplications(
   const appPaths = discovered.flat()
   const inspected = await mapLimit([...new Set(appPaths)], 8, (target) => inspectApplication(target, language))
   const applications = inspected.filter((item): item is ApplicationMetadata => item !== null)
-  const manageableApplications = applications.filter(
-    (application) =>
-      applicationScope(application.target) !== 'system' &&
-      application.bundleId !== 'com.fcl.memento'
+  const inventoryApplications = applications.filter(
+    (application) => application.bundleId !== 'com.fcl.memento'
+  )
+  const manageableApplications = inventoryApplications.filter(
+    (application) => applicationScope(application.target) !== 'system'
   )
   const candidatePaths = new Set<string>()
   const candidates: ScanCandidate[] = []
 
-  const inventory = manageableApplications.map((application): InstalledApplication => {
+  const inventory = inventoryApplications.map((application): InstalledApplication => {
     const id = randomUUID()
     const scope = applicationScope(application.target)
-    const action: CandidateOperation = {
-      id: randomUUID(),
-      kind: 'trash',
-      label: t(language, '卸载', 'Uninstall'),
-      consequence: t(language, '应用本体会移到废纸篓，其文稿、数据和偏好设置会保留。', 'The app bundle will move to the Trash. Its documents, data, and preferences remain.'),
-      reversible: true
-    }
-    actions.set(action.id, { kind: 'trash', target: application.target })
+    const action: CandidateOperation | undefined = scope === 'system'
+      ? undefined
+      : {
+          id: randomUUID(),
+          kind: 'trash',
+          label: t(language, '卸载', 'Uninstall'),
+          consequence: t(language, '应用本体会移到废纸篓，其文稿、数据和偏好设置会保留。', 'The app bundle will move to the Trash. Its documents, data, and preferences remain.'),
+          reversible: true
+        }
+    if (action) actions.set(action.id, { kind: 'trash', target: application.target })
     revealTargets.set(id, application.target)
     return {
       id,
@@ -1240,7 +1274,13 @@ async function scanApplications(
         ? application.lastUsedAt.toISOString()
         : null,
       scope,
+      backgroundOnly: application.backgroundOnly,
+      executable: application.executable,
+      urlSchemes: application.urlSchemes,
       unused: isApplicationUnused(application.lastUsedAt),
+      protectedReason: scope === 'system'
+        ? t(language, 'macOS 系统应用', 'macOS system application')
+        : undefined,
       action
     }
   })

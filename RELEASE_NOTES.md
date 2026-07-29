@@ -1,18 +1,18 @@
-# Memento Agent 0.6.26
+# Memento Agent 0.6.27
 
 ## 简体中文
 
-`0.6.26` 修复 Agent 丢失上下文的问题，并把纯文本诊断升级为与应用功能直接联动的结构化结果。
+`0.6.27` 改进了 Agent 等待体验，并补齐任务记录与应用管理中的直接操作。
 
 ### 主要变化
 
-- 同一对话会在 SQLite 中保存会话 ID、最近焦点实体和待确认计划；“这个服务”“该应用”“it”等后续指代会继续使用上一轮的精确对象。
-- 指代上一轮对象时，检查工具只向模型返回该焦点实体，避免再次列出 nginx、数据库等无关服务。
-- Agent 通过 `present_results` 返回受校验的结构化数据，不渲染模型生成的 HTML，避免 XSS、虚构按钮和未经注册的操作。
-- 应用诊断使用带 Logo 的紧凑网格，显示最后使用时间和大小，并可直接打开或加入卸载确认计划；存储、后台服务和终端结果可直接加入右侧计划。
-- 结果按钮只能引用当前扫描注册的操作 ID；清理、停止、移除、卸载和终端修复仍必须由用户确认后执行。
-- 应用语言设为 English 后，Agent 提示词、状态、摘要、结果标题、计划、错误和供应商测试均使用英文；切换语言会重新体检，避免复用旧语言数据。
-- 新增 Cisco 服务连续指代、上下文持久化、非法操作拒绝、英文错误和多视口结构化结果测试。
+- Agent 回答时显示从低位开始、缓慢推进的动画进度条、真实阶段和已用时间；结果返回前不会显示 100%。
+- 任务记录新增删除入口和确认弹窗，同时删除本机 SQLite 中对应的对话结果与工具调用记录。
+- 应用管理现在展示 `/Applications`、`~/Applications` 和 `/System/Applications` 中的应用；App Store 等系统应用可以打开和询问 Agent，但不能卸载。
+- 应用可以手动忽略，忽略后会离开应用列表、体检建议、可执行操作和 Agent 上下文，并可在设置中恢复。
+- 每个应用新增“问 Agent”入口。分析会携带精确 Bundle ID、路径、版本、最后使用记录、可执行文件、后台组件标记和 URL 协议，适合判断驱动、安全组件或 URL Handler 的用途及卸载影响。
+- 迅雷等把中文名放在根 `InfoPlist.strings` 的应用现在会显示官方中文名称；Spotlight 没有记录时显示“无使用记录”。
+- 新增真实 App Store 保护、迅雷中文名、Claude Code URL Handler 元数据、应用忽略、历史删除和 Agent 低位进度测试。
 
 ### 安装说明
 
@@ -20,17 +20,17 @@
 
 ## English
 
-`0.6.26` fixes lost Agent context and replaces text-heavy diagnostics with structured results connected to Memento's native capabilities.
+`0.6.27` improves the Agent waiting experience and adds direct task-history and application-management controls.
 
 ### Highlights
 
-- Conversations persist a thread ID, focused entities, and pending plans in SQLite, so follow-ups such as “this service,” “that app,” or “it” retain the exact previous target.
-- Referential follow-ups restrict inspection output to the focused entity instead of exposing unrelated services to the model again.
-- The Agent uses a validated `present_results` contract. Memento renders trusted React components and never executes or injects model-generated HTML.
-- Application findings use a compact logo grid with last-used time, size, Open, and Add to plan. Storage, service, and terminal findings expose their registered actions inline.
-- Interactive controls can reference only operation IDs registered by the current scan. Cleanup, stop, remove, uninstall, and terminal actions still require explicit confirmation.
-- English mode now controls Agent instructions, statuses, summaries, result titles, plans, errors, and provider tests. Changing language triggers a fresh localized scan.
-- Added regression coverage for Cisco service follow-ups, context persistence, invalid operation rejection, English output, and structured results across desktop and mobile viewports.
+- Agent responses now show an animated progress bar that starts low, advances gradually through actual run phases, reports elapsed time, and never reaches 100% before results arrive.
+- Task History adds confirmed deletion, including the corresponding locally stored conversation results and tool-call records.
+- Application Management now includes apps from `/Applications`, `~/Applications`, and `/System/Applications`. Protected apps such as App Store can be opened and analyzed but not uninstalled.
+- Applications can be ignored. Ignored apps leave the inventory, health findings, registered operations, and Agent context until restored in Settings.
+- Every application has Ask Agent. The exact Bundle ID, path, version, usage record, executable, background-only role, and URL schemes support precise driver, security-component, helper, and uninstall-impact analysis.
+- Apps such as Thunder now use official localized names from root `InfoPlist.strings`; missing Spotlight dates display “No usage record.”
+- Added real App Store protection, localized Thunder, Claude Code URL Handler metadata, application ignore, history deletion, and low-start Agent progress coverage.
 
 ### Installation
 

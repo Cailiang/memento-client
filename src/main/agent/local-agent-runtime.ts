@@ -127,7 +127,13 @@ function applicationResult(application: InstalledApplication): AgentResultItem {
     id: application.id,
     name: application.name,
     version: application.version,
+    bundleId: application.bundleId,
     location: application.location,
+    scope: application.scope,
+    protectedReason: application.protectedReason,
+    backgroundOnly: application.backgroundOnly,
+    executable: application.executable,
+    urlSchemes: application.urlSchemes,
     sizeBytes: application.sizeBytes,
     lastUsedAt: application.lastUsedAt,
     unused: application.unused,
@@ -189,7 +195,10 @@ export function inferPromptFocus(prompt: string, scan: ScanResult): AgentFocus[]
   const matches: AgentResultItem[] = []
   for (const item of resultRegistry(scan).values()) {
     const searchable = [item.id, itemName(item)]
-    if (item.kind === 'applications') searchable.push(item.location)
+    if (item.kind === 'applications') {
+      searchable.push(item.location)
+      if (item.bundleId) searchable.push(item.bundleId)
+    }
     if (searchable.some((value) => value.length >= 4 && query.includes(value.toLocaleLowerCase()))) {
       matches.push(item)
     }
@@ -227,6 +236,11 @@ function compactApplication(application: InstalledApplication): Record<string, u
     bundleId: application.bundleId,
     version: application.version,
     location: application.location,
+    scope: application.scope,
+    protectedReason: application.protectedReason,
+    backgroundOnly: application.backgroundOnly,
+    executable: application.executable,
+    urlSchemes: application.urlSchemes,
     sizeBytes: application.sizeBytes,
     lastUsedAt: application.lastUsedAt,
     unusedForThreeMonths: application.unused,

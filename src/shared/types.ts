@@ -55,6 +55,9 @@ export interface InstalledApplication {
   sizeBytes: number
   lastUsedAt: string | null
   scope: ApplicationScope
+  backgroundOnly?: boolean
+  executable?: string | null
+  urlSchemes?: string[]
   unused: boolean
   protectedReason?: string
   action?: CandidateOperation

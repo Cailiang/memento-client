@@ -121,10 +121,12 @@ describe('AgentStore', () => {
     })
     store.logToolCall(created.id, 'inspect_storage', {}, [])
     expect(store.listRuns()).toEqual([completed])
+    store.deleteRun(created.id)
+    expect(store.listRuns()).toEqual([])
 
     const database = new DatabaseSync(path.join(directory, 'memento.sqlite'))
     expect(database.prepare('PRAGMA user_version').get()).toEqual({ user_version: 2 })
-    expect(database.prepare('SELECT COUNT(*) AS count FROM tool_calls').get()).toEqual({ count: 1 })
+    expect(database.prepare('SELECT COUNT(*) AS count FROM tool_calls').get()).toEqual({ count: 0 })
     database.close()
     store.close()
   })

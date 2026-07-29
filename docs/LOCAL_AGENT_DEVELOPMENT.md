@@ -104,6 +104,8 @@ Inspection output includes stable finding IDs and is compact enough for model co
 
 Every tool input and output is stored in `tool_calls`. API keys, raw file contents, and unrestricted filesystem access remain excluded. Runs are limited to twelve steps, 1,400 output tokens, and a two-minute timeout.
 
+Application inspection covers `/Applications`, `~/Applications`, and `/System/Applications`. User and shared applications receive registered Trash operations; system applications remain read-only. The scanner resolves Simplified Chinese names from localized and development-region `InfoPlist.strings`, and exposes Bundle ID, executable, `LSBackgroundOnly`, and registered URL schemes so a per-app Agent request can distinguish ordinary apps, drivers, security helpers, and URL handlers from verified local metadata. Spotlight remains the source of last-used dates; a missing value is shown as no usage record and is never classified as unused.
+
 The application language is authoritative rather than the language of the latest user prompt. English mode requires all user-visible Agent text in English even if the user writes Chinese. Main-process statuses, fallback responses, plan copy, validation errors, and provider-test results use the same setting. Changing language revokes the old scan snapshot and immediately performs a localized scan.
 
 ## 6. Plan and Execution Security
@@ -128,12 +130,14 @@ After execution, Memento performs a fresh scan. Per-operation success or failure
 
 ## 7. Ignored Items
 
-Storage entries use their validated location as the ignored identity; background services use their service name. The main process applies ignored items after every scan and removes matching entries from:
+Storage entries use their validated location as the ignored identity; background services use their service name; applications prefer Bundle ID and fall back to their validated path. The main process applies ignored items after every scan and removes matching entries from:
 
 - visible scan candidates;
 - registered cleanup actions;
 - registered reveal targets;
 - Agent inspection context.
+
+Application ignore also removes the inventory row and any application finding that references its uninstall operation. Protected system apps have no uninstall operation but can still be hidden and restored.
 
 The Renderer also removes a newly ignored row immediately. Restoring detection updates SQLite and triggers a fresh scan.
 
@@ -144,10 +148,12 @@ The production Renderer consists of one shell and five prototype-aligned pages u
 - Dialogs trap focus, close with Escape when idle, restore previous focus, and block backdrop closing during execution.
 - Async buttons disable repeated submission and show a spinner.
 - Dynamic scan and Agent states use live regions.
+- Agent waits use a phase-aware estimated progress surface. It starts below 25%, advances asymptotically to a status-specific cap, reports elapsed time, and reaches completion only when the actual result replaces it.
 - Layouts cover full sidebar, compact sidebar, bottom navigation, tablet, and phone widths.
 - `prefers-reduced-motion` reduces all non-essential transitions.
 - Application icons are requested lazily and only for target paths registered by the current scan.
 - Conversation turns remain visible together, while SQLite keeps their compact focus and pending-plan context available to subsequent runs.
+- Task-history deletion is confirmed in the Renderer and handled in the main process. Deleting `agent_runs` cascades to `tool_calls`; active runs are rejected, and completed system changes are not undone.
 - Structured application results use a logo grid with last-used time and size; storage, service, and terminal results use compact rows. Their buttons reference only registered application or operation IDs.
 - Model text is rendered as text. The Renderer never uses `dangerouslySetInnerHTML` or model-generated HTML.
 - Preload initialization must not touch the DOM before `DOMContentLoaded`; losing the preload API silently activates browser demo data instead of real device data.

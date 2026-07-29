@@ -51,6 +51,66 @@ function runIsBusy(run: AgentRunRecord | null): boolean {
   return Boolean(run && ['preparing', 'analyzing', 'plan-ready', 'executing', 'verifying'].includes(run.status))
 }
 
+function AgentProgress({
+  run,
+  statusMessage
+}: {
+  run: AgentRunRecord
+  statusMessage: string
+}): React.JSX.Element {
+  const { text } = useI18n()
+  const phase = run.status === 'preparing'
+    ? 0
+    : run.status === 'analyzing'
+      ? 1
+      : run.status === 'executing'
+        ? 2
+        : 3
+  const ranges: Record<AgentRunRecord['status'], [number, number]> = {
+    preparing: [8, 20],
+    analyzing: [22, 87],
+    'plan-ready': [88, 94],
+    'awaiting-confirmation': [100, 100],
+    executing: [12, 80],
+    verifying: [82, 96],
+    completed: [100, 100],
+    cancelled: [100, 100],
+    failed: [100, 100]
+  }
+  const [progress, setProgress] = useState(ranges[run.status][0])
+  const [elapsedSeconds, setElapsedSeconds] = useState(0)
+
+  useEffect(() => {
+    const [start, cap] = ranges[run.status]
+    setProgress(start)
+    setElapsedSeconds(0)
+    const timer = window.setInterval(() => {
+      setElapsedSeconds((current) => current + 1)
+      setProgress((current) => Math.min(cap, current + Math.max(0.35, (cap - current) * 0.035)))
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [run.id, run.status])
+
+  const roundedProgress = Math.round(progress)
+  const stages = [
+    text('读取', 'Read'),
+    text('分析', 'Analyze'),
+    text('核对', 'Review'),
+    text('整理', 'Compose')
+  ]
+  return (
+    <div className="activity-block agent-progress" role="status" aria-live="polite">
+      <div className="agent-progress-head">
+        <span className="agent-progress-mark"><Sparkles size={16} /></span>
+        <span className="agent-progress-copy"><strong>{statusMessage || runStatusLabel(run.status, run.language)}</strong><small>{elapsedSeconds < 2 ? text('Agent 正在建立分析上下文', 'Agent is building analysis context') : text(`已用 ${elapsedSeconds} 秒`, `${elapsedSeconds}s elapsed`)}</small></span>
+        <span className="agent-progress-value">{roundedProgress}%</span>
+      </div>
+      <div className="agent-progress-track" role="progressbar" aria-label={text('Agent 分析进度', 'Agent analysis progress')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={roundedProgress}><span style={{ width: `${roundedProgress}%` }} /></div>
+      <div className="agent-progress-stages">{stages.map((stage, index) => <span className={index <= phase ? 'is-active' : ''} key={stage}><i />{stage}</span>)}</div>
+    </div>
+  )
+}
+
 export function AgentPage({
   scan,
   run,
@@ -173,10 +233,11 @@ export function AgentPage({
                 <div className="message assistant">
                   <span className="message-avatar"><Sparkles size={16} /></span>
                   <div className="message-body">
-                    {(runBusy || conversationRun.status === 'failed' || conversationRun.status === 'cancelled') && (
+                    {runBusy && <AgentProgress run={conversationRun} statusMessage={statusMessage} />}
+                    {(conversationRun.status === 'failed' || conversationRun.status === 'cancelled') && (
                       <div className="activity-block">
-                        <div className={`activity-row ${runBusy ? 'is-running' : 'is-done'}`}>
-                          <span className="activity-icon">{runBusy ? <LoaderCircle className="spinner" size={13} /> : <CircleCheck size={13} />}</span>
+                        <div className="activity-row is-done">
+                          <span className="activity-icon">{conversationRun.status === 'failed' ? <X size={13} /> : <CircleCheck size={13} />}</span>
                           <span>{isActive && statusMessage ? statusMessage : runStatusLabel(conversationRun.status, language)}</span>
                           <small>{runStatusLabel(conversationRun.status, language)}</small>
                         </div>

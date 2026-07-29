@@ -731,7 +731,8 @@ async function performScan(
     const bundle = applyScanWhitelist(
       scannedBundle,
       appSettings.serviceWhitelist,
-      appSettings.storageWhitelist
+      appSettings.storageWhitelist,
+      appSettings.applicationWhitelist
     )
     registeredActions = bundle.actions
     registeredRevealTargets = bundle.revealTargets
@@ -761,9 +762,7 @@ app.whenReady().then(async () => {
     if (typeof id !== 'string' || id.length > 100) {
       throw new Error(mainText('应用入口无效，请重新扫描', 'The application is invalid. Scan again.'))
     }
-    const application = currentScanResult?.applications.find(
-      (item) => item.id === id && item.scope !== 'system' && !item.protectedReason && item.action
-    )
+    const application = currentScanResult?.applications.find((item) => item.id === id)
     const target = application ? registeredRevealTargets.get(id) : null
     if (
       !application ||
@@ -791,7 +790,11 @@ app.whenReady().then(async () => {
       registeredTerminalFixes = new Map()
       applicationIconCache.clear()
     }
-    if (currentScanResult && ('serviceWhitelist' in input || 'storageWhitelist' in input)) {
+    if (currentScanResult && (
+      'serviceWhitelist' in input ||
+      'storageWhitelist' in input ||
+      'applicationWhitelist' in input
+    )) {
       const filtered = applyScanWhitelist(
         {
           result: currentScanResult,
@@ -800,7 +803,8 @@ app.whenReady().then(async () => {
           terminalFixes: registeredTerminalFixes
         },
         appSettings.serviceWhitelist,
-        appSettings.storageWhitelist
+        appSettings.storageWhitelist,
+        appSettings.applicationWhitelist
       )
       currentScanResult = filtered.result
       registeredActions = filtered.actions
@@ -847,6 +851,13 @@ app.whenReady().then(async () => {
   })
   ipcMain.handle('memento:agent:runs:list', () => agentStore!.listRuns())
   ipcMain.handle('memento:agent:runs:get', (_event, runId: string) => agentStore!.getRun(runId))
+  ipcMain.handle('memento:agent:runs:delete', (_event, runId: string) => {
+    const run = agentStore!.getRun(typeof runId === 'string' ? runId : '')
+    if (run && ['preparing', 'analyzing', 'plan-ready', 'executing', 'verifying'].includes(run.status)) {
+      throw new Error(mainText('任务仍在运行，完成后才能删除记录', 'The task is still running. Delete it after it finishes.'))
+    }
+    agentStore!.deleteRun(runId)
+  })
   ipcMain.handle('memento:agent:runs:start', (event, input: StartAgentRunInput) => {
     if (!currentScanResult) {
       throw new Error(mainText('请先完成一次电脑体检', 'Complete a computer health scan first.'))

@@ -1,5 +1,6 @@
 import {
   Archive,
+  AppWindow,
   CheckCircle2,
   Eye,
   EyeOff,
@@ -10,8 +11,11 @@ import {
   X
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import type { AgentPlanItem } from '../../../shared/agent-types'
-import { candidateWhitelistValue } from '../../../shared/app-settings'
+import type { AgentPlanItem, AgentRunRecord } from '../../../shared/agent-types'
+import {
+  applicationWhitelistValue,
+  candidateWhitelistValue
+} from '../../../shared/app-settings'
 import type { InstalledApplication, ScanCandidate } from '../../../shared/types'
 import { useI18n } from '../i18n'
 import { formatBytes } from './utils'
@@ -127,29 +131,70 @@ export function IgnoreConfirmDialog({
   )
 }
 
+export function ApplicationIgnoreConfirmDialog({
+  application,
+  busy,
+  onClose,
+  onConfirm
+}: {
+  application: InstalledApplication
+  busy: boolean
+  onClose: () => void
+  onConfirm: () => void
+}): React.JSX.Element {
+  const { text } = useI18n()
+  const identity = applicationWhitelistValue(application)
+  return (
+    <DialogFrame title={text(`忽略 ${application.name}？`, `Ignore ${application.name}?`)} description={text('不会卸载此应用，后续应用管理、体检建议和 Agent 都会跳过它。', 'The app is not uninstalled. Application Management, health recommendations, and Agent will skip it.')} busy={busy} onClose={onClose} actions={<><button type="button" className="secondary-button" onClick={onClose} disabled={busy}>{text('取消', 'Cancel')}</button><button type="button" className="primary-button" onClick={onConfirm} disabled={busy}>{busy ? <LoaderCircle className="spinner" size={15} /> : <EyeOff size={15} />}{text('确认忽略', 'Ignore application')}</button></>}>
+      <div className="dialog-body"><div className="confirm-row"><span><AppWindow size={13} /></span><div><strong>{application.name}</strong><small>{identity}</small></div><span className="risk-label safe">{text('可恢复', 'Restorable')}</span></div></div>
+    </DialogFrame>
+  )
+}
+
+export function DeleteHistoryDialog({
+  run,
+  busy,
+  onClose,
+  onConfirm
+}: {
+  run: AgentRunRecord
+  busy: boolean
+  onClose: () => void
+  onConfirm: () => void
+}): React.JSX.Element {
+  const { text } = useI18n()
+  return (
+    <DialogFrame title={text('删除任务记录？', 'Delete task history?')} description={text('这会删除本机保存的对话、分析结果和工具调用记录，无法恢复。', 'This permanently deletes the locally stored conversation, analysis results, and tool-call records.')} busy={busy} onClose={onClose} actions={<><button type="button" className="secondary-button" onClick={onClose} disabled={busy}>{text('取消', 'Cancel')}</button><button type="button" className="danger-button" onClick={onConfirm} disabled={busy}>{busy ? <LoaderCircle className="spinner" size={15} /> : <Trash2 size={15} />}{busy ? text('正在删除', 'Deleting') : text('删除记录', 'Delete history')}</button></>}>
+      <div className="dialog-body"><div className="confirm-row"><span><Archive size={13} /></span><div><strong>{run.prompt}</strong><small>{text('只删除历史数据，不会撤销已经完成的操作', 'Completed system changes are not undone')}</small></div><span className="risk-label review">{text('不可恢复', 'Permanent')}</span></div></div>
+    </DialogFrame>
+  )
+}
+
 export function IgnoredItemsDialog({
   initialKind,
   serviceValues,
   storageValues,
+  applicationValues,
   busyValue,
   onRestore,
   onClose
 }: {
-  initialKind: 'storage' | 'services'
+  initialKind: 'storage' | 'services' | 'applications'
   serviceValues: string[]
   storageValues: string[]
+  applicationValues: string[]
   busyValue: string | null
-  onRestore: (kind: 'services' | 'storage', value: string) => void
+  onRestore: (kind: 'services' | 'storage' | 'applications', value: string) => void
   onClose: () => void
 }): React.JSX.Element {
   const { text } = useI18n()
-  const [kind, setKind] = useState<'storage' | 'services'>(initialKind)
-  const values = kind === 'storage' ? storageValues : serviceValues
+  const [kind, setKind] = useState<'storage' | 'services' | 'applications'>(initialKind)
+  const values = kind === 'storage' ? storageValues : kind === 'services' ? serviceValues : applicationValues
   return (
     <DialogFrame wide title={text('忽略列表', 'Ignored items')} description={text('这些项目不会出现在体检建议中，Agent 也无法处理。', 'These items stay out of health recommendations and cannot be changed by Agent.')} busy={busyValue !== null} onClose={onClose} actions={<button type="button" className="secondary-button" onClick={onClose} disabled={busyValue !== null}>{text('完成', 'Done')}</button>}>
-      <div className="ignored-tabs" role="tablist" aria-label={text('忽略项目类型', 'Ignored item type')}><button type="button" role="tab" aria-selected={kind === 'storage'} className={`ignored-tab ${kind === 'storage' ? 'is-active' : ''}`} onClick={() => setKind('storage')}>{text('存储空间', 'Storage')} <span>{storageValues.length}</span></button><button type="button" role="tab" aria-selected={kind === 'services'} className={`ignored-tab ${kind === 'services' ? 'is-active' : ''}`} onClick={() => setKind('services')}>{text('后台服务', 'Services')} <span>{serviceValues.length}</span></button></div>
+      <div className="ignored-tabs" role="tablist" aria-label={text('忽略项目类型', 'Ignored item type')}><button type="button" role="tab" aria-selected={kind === 'storage'} className={`ignored-tab ${kind === 'storage' ? 'is-active' : ''}`} onClick={() => setKind('storage')}>{text('存储空间', 'Storage')} <span>{storageValues.length}</span></button><button type="button" role="tab" aria-selected={kind === 'services'} className={`ignored-tab ${kind === 'services' ? 'is-active' : ''}`} onClick={() => setKind('services')}>{text('后台服务', 'Services')} <span>{serviceValues.length}</span></button><button type="button" role="tab" aria-selected={kind === 'applications'} className={`ignored-tab ${kind === 'applications' ? 'is-active' : ''}`} onClick={() => setKind('applications')}>{text('应用', 'Applications')} <span>{applicationValues.length}</span></button></div>
       <div className="ignored-list">
-        {values.length ? values.map((value) => <div className="ignored-row" key={value}><span>{kind === 'storage' ? <Archive size={14} /> : <RadioTower size={14} />}</span><div><strong>{kind === 'storage' ? value.split('/').filter(Boolean).at(-1) ?? value : value}</strong><small>{value}</small></div><button type="button" className="quiet-button" onClick={() => onRestore(kind, value)} disabled={busyValue !== null}>{busyValue === value ? <LoaderCircle className="spinner" size={14} /> : <Eye size={14} />}{text('恢复检测', 'Restore')}</button></div>) : <div className="ignored-empty"><div><CheckCircle2 size={18} /><span>{kind === 'storage' ? text('没有忽略的存储项目', 'No ignored storage') : text('没有忽略的后台服务', 'No ignored services')}</span></div></div>}
+        {values.length ? values.map((value) => <div className="ignored-row" key={value}><span>{kind === 'storage' ? <Archive size={14} /> : kind === 'services' ? <RadioTower size={14} /> : <AppWindow size={14} />}</span><div><strong>{kind === 'storage' ? value.split('/').filter(Boolean).at(-1) ?? value : kind === 'applications' ? value.split('.').at(-1) ?? value : value}</strong><small>{value}</small></div><button type="button" className="quiet-button" onClick={() => onRestore(kind, value)} disabled={busyValue !== null}>{busyValue === value ? <LoaderCircle className="spinner" size={14} /> : <Eye size={14} />}{text('恢复检测', 'Restore')}</button></div>) : <div className="ignored-empty"><div><CheckCircle2 size={18} /><span>{kind === 'storage' ? text('没有忽略的存储项目', 'No ignored storage') : kind === 'services' ? text('没有忽略的后台服务', 'No ignored services') : text('没有忽略的应用', 'No ignored applications')}</span></div></div>}
       </div>
     </DialogFrame>
   )

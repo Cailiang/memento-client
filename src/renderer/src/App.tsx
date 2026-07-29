@@ -13,6 +13,7 @@ import type {
 } from '../../shared/agent-types'
 import {
   candidateWhitelistValue,
+  applicationWhitelistValue,
   DEFAULT_APP_SETTINGS,
   type AppSettings,
   type UpdateAppSettingsInput
@@ -21,6 +22,8 @@ import type { InstalledApplication, ScanCandidate, ScanProgress, ScanResult } fr
 import { AgentPage } from './agent-ui/AgentPage'
 import { ApplicationsPage } from './agent-ui/ApplicationsPage'
 import {
+  ApplicationIgnoreConfirmDialog,
+  DeleteHistoryDialog,
   IgnoreConfirmDialog,
   IgnoredItemsDialog,
   PlanConfirmDialog,
@@ -30,7 +33,7 @@ import { HealthPage } from './agent-ui/HealthPage'
 import { HistoryPage } from './agent-ui/HistoryPage'
 import { SettingsPage } from './agent-ui/SettingsPage'
 import { type AgentViewKey, Shell } from './agent-ui/Shell'
-import { demoResult } from './demo'
+import { localizedDemoResult } from './demo'
 import { I18nProvider } from './i18n'
 
 const DEMO_PROVIDER: AgentProvider = {
@@ -102,12 +105,25 @@ function demoPresentation(
   const applicationTask = /应用|app|残留|unused/i.test(prompt)
   const serviceTask = /服务|service|启动项|process/i.test(prompt)
   if (applicationTask) {
-    const applications = scan.applications.filter((item) => item.unused).slice(0, 6).map((item) => ({
+    const normalizedPrompt = prompt.toLocaleLowerCase()
+    const directApplication = scan.applications.find((item) => (
+      normalizedPrompt.includes(item.name.toLocaleLowerCase()) ||
+      Boolean(item.bundleId && normalizedPrompt.includes(item.bundleId.toLocaleLowerCase()))
+    ))
+    const applications = (directApplication
+      ? [directApplication]
+      : scan.applications.filter((item) => item.unused).slice(0, 6)).map((item) => ({
       kind: 'applications' as const,
       id: item.id,
       name: item.name,
       version: item.version,
+      bundleId: item.bundleId,
       location: item.location,
+      scope: item.scope,
+      protectedReason: item.protectedReason,
+      backgroundOnly: item.backgroundOnly,
+      executable: item.executable,
+      urlSchemes: item.urlSchemes,
       sizeBytes: item.sizeBytes,
       lastUsedAt: item.lastUsedAt,
       unused: item.unused,
@@ -123,11 +139,17 @@ function demoPresentation(
     }))
     return {
       summary: language === 'en-US'
-        ? 'I found applications that have not been used for three months. You can open one to review it or add its uninstall action to the confirmation plan.'
-        : '我找到了超过 3 个月未使用的应用。你可以先打开核对，或把卸载操作加入右侧确认计划。',
+        ? directApplication
+          ? `I found the exact application ${directApplication.name}. Its verified local metadata and available actions are shown below.`
+          : 'I found applications that have not been used for three months. You can open one to review it or add its uninstall action to the confirmation plan.'
+        : directApplication
+          ? `已定位到 ${directApplication.name}，下面展示它经过核对的本机信息和可用操作。`
+          : '我找到了超过 3 个月未使用的应用。你可以先打开核对，或把卸载操作加入右侧确认计划。',
       sections: [{
         kind: 'applications',
-        title: language === 'en-US' ? 'Unused applications' : '长期未使用的应用',
+        title: directApplication
+          ? language === 'en-US' ? 'Application analysis' : '应用分析'
+          : language === 'en-US' ? 'Unused applications' : '长期未使用的应用',
         items: applications
       }]
     }
@@ -222,12 +244,15 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
   const [uninstallBusy, setUninstallBusy] = useState(false)
   const [removingApplicationId, setRemovingApplicationId] = useState<string | null>(null)
   const [pendingIgnore, setPendingIgnore] = useState<ScanCandidate | null>(null)
+  const [pendingApplicationIgnore, setPendingApplicationIgnore] = useState<InstalledApplication | null>(null)
   const [ignoreBusy, setIgnoreBusy] = useState(false)
   const [ignoredManagerOpen, setIgnoredManagerOpen] = useState(false)
-  const [ignoredManagerKind, setIgnoredManagerKind] = useState<'storage' | 'services'>('storage')
+  const [ignoredManagerKind, setIgnoredManagerKind] = useState<'storage' | 'services' | 'applications'>('storage')
   const [restoreBusyValue, setRestoreBusyValue] = useState<string | null>(null)
   const [openingApplicationId, setOpeningApplicationId] = useState<string | null>(null)
   const [addingOperationId, setAddingOperationId] = useState<string | null>(null)
+  const [pendingHistoryDelete, setPendingHistoryDelete] = useState<AgentRunRecord | null>(null)
+  const [historyDeleteBusy, setHistoryDeleteBusy] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const started = useRef(false)
   const activeRunId = useRef<string | null>(null)
@@ -259,7 +284,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     setScanBusy(true)
     try {
       const language = languageOverride ?? settings.language
-      const next = window.memento ? await window.memento.scan(language) : demoResult
+      const next = window.memento ? await window.memento.scan(language) : localizedDemoResult(language)
       setResult(next)
       return next
     } catch (error) {
@@ -315,7 +340,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
         setScanBusy(true)
         const initialResult = window.memento
           ? await window.memento.scan(initialSettings.language)
-          : demoResult
+          : localizedDemoResult(initialSettings.language)
         setResult(initialResult)
       } catch (error) {
         setToast(error instanceof Error ? error.message : 'Memento 初始化失败')
@@ -345,7 +370,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     }
   }
 
-  const startAgentRun = (prompt: string): void => {
+  const startAgentRun = (prompt: string, isolated = false): void => {
     const uiText = (chinese: string, english: string): string => (
       settings.language === 'en-US' ? english : chinese
     )
@@ -366,7 +391,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       const timestamp = new Date().toISOString()
       const run: AgentRunRecord = {
         id: crypto.randomUUID(),
-        conversationId: activeRun?.conversationId ?? crypto.randomUUID(),
+        conversationId: isolated ? crypto.randomUUID() : activeRun?.conversationId ?? crypto.randomUUID(),
         language: settings.language,
         prompt,
         status: 'analyzing',
@@ -405,7 +430,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
 
     void window.memento.startAgentRun({
       prompt,
-      conversationId: activeRun?.conversationId
+      conversationId: isolated ? undefined : activeRun?.conversationId
     }).then((run) => {
       activeRunId.current = run.id
       setActiveRun(run)
@@ -508,9 +533,38 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     }
   }
 
-  const openIgnoredManager = (kind: 'storage' | 'services' = 'storage'): void => {
+  const openIgnoredManager = (kind: 'storage' | 'services' | 'applications' = 'storage'): void => {
     setIgnoredManagerKind(kind)
     setIgnoredManagerOpen(true)
+  }
+
+  const confirmApplicationIgnore = async (): Promise<void> => {
+    if (!pendingApplicationIgnore) return
+    const application = pendingApplicationIgnore
+    const value = applicationWhitelistValue(application)
+    setIgnoreBusy(true)
+    try {
+      await updateSettings({
+        applicationWhitelist: [...settings.applicationWhitelist, value]
+      })
+      setResult((current) => current ? {
+        ...current,
+        applications: current.applications.filter((item) => item.id !== application.id),
+        candidates: current.candidates.filter((candidate) => !(
+          candidate.section === 'applications' &&
+          (candidate.operations ?? []).some((operation) => operation.id === application.action?.id)
+        ))
+      } : current)
+      setToast(appText(
+        `${application.name} 已加入忽略列表`,
+        `${application.name} was added to Ignored items.`
+      ))
+      setPendingApplicationIgnore(null)
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : appText('无法更新忽略列表', 'Could not update Ignored items.'))
+    } finally {
+      setIgnoreBusy(false)
+    }
   }
 
   const confirmIgnore = async (): Promise<void> => {
@@ -538,12 +592,14 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     }
   }
 
-  const restoreIgnored = async (kind: 'services' | 'storage', value: string): Promise<void> => {
+  const restoreIgnored = async (kind: 'services' | 'storage' | 'applications', value: string): Promise<void> => {
     setRestoreBusyValue(value)
     try {
       await updateSettings(kind === 'services'
         ? { serviceWhitelist: settings.serviceWhitelist.filter((item) => item !== value) }
-        : { storageWhitelist: settings.storageWhitelist.filter((item) => item !== value) })
+        : kind === 'storage'
+          ? { storageWhitelist: settings.storageWhitelist.filter((item) => item !== value) }
+          : { applicationWhitelist: settings.applicationWhitelist.filter((item) => item !== value) })
       await scanNow()
       setToast(appText('已恢复检测', 'Detection restored.'))
     } catch (error) {
@@ -562,6 +618,28 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       setToast(error instanceof Error ? error.message : appText('无法打开应用', 'Could not open the application.'))
     } finally {
       setOpeningApplicationId(null)
+    }
+  }
+
+  const deleteHistoryRun = async (): Promise<void> => {
+    if (!pendingHistoryDelete) return
+    const run = pendingHistoryDelete
+    setHistoryDeleteBusy(true)
+    try {
+      if (window.memento) await window.memento.deleteAgentRun(run.id)
+      setRuns((current) => current.filter((item) => item.id !== run.id))
+      if (activeRun?.id === run.id) {
+        setActiveRun(null)
+        activeRunId.current = null
+        setSelectedPlanIds(new Set())
+        setRunStatusMessage('')
+      }
+      setPendingHistoryDelete(null)
+      setToast(appText('任务记录已删除', 'Task history deleted.'))
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : appText('无法删除任务记录', 'Could not delete task history.'))
+    } finally {
+      setHistoryDeleteBusy(false)
     }
   }
 
@@ -734,14 +812,16 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     >
       {view === 'agent' && <AgentPage scan={result} run={activeRun} conversationRuns={conversationRuns} statusMessage={runStatusMessage} selectedPlanIds={selectedPlanIds} providerConfigured={Boolean(defaultProvider)} addingOperationId={addingOperationId} openingApplicationId={openingApplicationId} onSubmit={startAgentRun} onNewTask={() => { setActiveRun(null); activeRunId.current = null; setSelectedPlanIds(new Set()); setRunStatusMessage('') }} onOpenHistory={() => setView('history')} onOpenSettings={() => setView('settings')} onOpenApplication={openAgentApplication} onAddPlanItem={(id) => void addAgentPlanItem(id)} onTogglePlanItem={(id) => setSelectedPlanIds((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next })} onExecutePlan={() => setPlanDialogOpen(true)} onDiscardPlan={discardPlan} />}
       {view === 'health' && <HealthPage result={result} settings={settings} scanBusy={scanBusy} progress={progress} onScan={() => void scanNow()} onAgentPrompt={startAgentRun} onIgnore={setPendingIgnore} onManageIgnored={openIgnoredManager} />}
-      {view === 'apps' && <ApplicationsPage applications={result?.applications ?? []} openingId={openingApplicationId} removingId={removingApplicationId} onOpen={(application) => void openApplication(application)} onUninstall={setPendingUninstall} onAgentPrompt={startAgentRun} />}
-      {view === 'history' && <HistoryPage runs={runs} onOpenRun={(run) => { setActiveRun(run); activeRunId.current = run.id; setSelectedPlanIds(new Set(run.plan.map((item) => item.id))); setView('agent') }} onToast={setToast} />}
+      {view === 'apps' && <ApplicationsPage applications={result?.applications ?? []} openingId={openingApplicationId} removingId={removingApplicationId} onOpen={(application) => void openApplication(application)} onUninstall={setPendingUninstall} onIgnore={setPendingApplicationIgnore} onAgentPrompt={(prompt) => startAgentRun(prompt, true)} />}
+      {view === 'history' && <HistoryPage runs={runs} onOpenRun={(run) => { setActiveRun(run); activeRunId.current = run.id; setSelectedPlanIds(new Set(run.plan.map((item) => item.id))); setView('agent') }} onDeleteRun={setPendingHistoryDelete} onToast={setToast} />}
       {view === 'settings' && <SettingsPage settings={settings} providers={providers} onUpdateSettings={updateSettings} onDiscoverModels={discoverProviderModels} onSaveProvider={saveProvider} onTestProvider={testProvider} onDeleteProvider={deleteProvider} onSetDefaultProvider={setDefaultProvider} onManageIgnored={() => openIgnoredManager()} onToast={setToast} />}
 
       {planDialogOpen && <PlanConfirmDialog items={selectedPlan} busy={planBusy} onClose={() => setPlanDialogOpen(false)} onConfirm={() => void executePlan()} />}
       {pendingUninstall && <UninstallDialog application={pendingUninstall} busy={uninstallBusy} onClose={() => setPendingUninstall(null)} onConfirm={() => void uninstallApplication()} />}
       {pendingIgnore && <IgnoreConfirmDialog candidate={pendingIgnore} busy={ignoreBusy} onClose={() => setPendingIgnore(null)} onConfirm={() => void confirmIgnore()} />}
-      {ignoredManagerOpen && <IgnoredItemsDialog initialKind={ignoredManagerKind} serviceValues={settings.serviceWhitelist} storageValues={settings.storageWhitelist} busyValue={restoreBusyValue} onRestore={(kind, value) => void restoreIgnored(kind, value)} onClose={() => setIgnoredManagerOpen(false)} />}
+      {pendingApplicationIgnore && <ApplicationIgnoreConfirmDialog application={pendingApplicationIgnore} busy={ignoreBusy} onClose={() => setPendingApplicationIgnore(null)} onConfirm={() => void confirmApplicationIgnore()} />}
+      {ignoredManagerOpen && <IgnoredItemsDialog initialKind={ignoredManagerKind} serviceValues={settings.serviceWhitelist} storageValues={settings.storageWhitelist} applicationValues={settings.applicationWhitelist} busyValue={restoreBusyValue} onRestore={(kind, value) => void restoreIgnored(kind, value)} onClose={() => setIgnoredManagerOpen(false)} />}
+      {pendingHistoryDelete && <DeleteHistoryDialog run={pendingHistoryDelete} busy={historyDeleteBusy} onClose={() => setPendingHistoryDelete(null)} onConfirm={() => void deleteHistoryRun()} />}
       {toast && <div className="toast is-visible" role="status"><CheckCircle2 size={16} /><span>{toast}</span></div>}
     </Shell>
   )

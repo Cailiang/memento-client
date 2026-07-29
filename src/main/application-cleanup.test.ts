@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import {
   APPLICATION_UNUSED_DAYS,
+  applicationPlistCapabilities,
   applicationNamePlistPaths,
   applicationScope,
   isApplicationUnused,
@@ -34,6 +35,7 @@ describe('application cleanup threshold', () => {
       path.join(target, 'Contents', 'Resources', 'zh-Hans.lproj', 'InfoPlist.strings'),
       path.join(target, 'Contents', 'Resources', 'zh_CN.lproj', 'InfoPlist.strings'),
       path.join(target, 'Contents', 'Resources', 'zh.lproj', 'InfoPlist.strings'),
+      path.join(target, 'Contents', 'Resources', 'InfoPlist.strings'),
       path.join(target, 'Contents', 'Info.plist')
     ])
     expect(plistApplicationName({ CFBundleDisplayName: '飞书', CFBundleName: 'Lark' })).toBe('飞书')
@@ -43,5 +45,17 @@ describe('application cleanup threshold', () => {
     expect(plistApplicationName({ CFBundleDisplayName: '$(PRODUCT_NAME)', CFBundleName: 'Visual Studio Code' }))
       .toBe('Visual Studio Code')
     expect(plistApplicationName({ CFBundleName: '' })).toBeNull()
+  })
+
+  it('extracts background helper and URL-handler capabilities for Agent analysis', () => {
+    expect(applicationPlistCapabilities({
+      CFBundleExecutable: 'claude',
+      LSBackgroundOnly: true,
+      CFBundleURLTypes: [{ CFBundleURLSchemes: ['claude-cli', 'claude-cli'] }]
+    })).toEqual({
+      backgroundOnly: true,
+      executable: 'claude',
+      urlSchemes: ['claude-cli']
+    })
   })
 })

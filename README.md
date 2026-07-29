@@ -10,11 +10,11 @@ The application is rebuilt around the approved interactive prototype at [`../pro
 
 - **Agent:** ask for a goal in plain language, continue with context-aware follow-ups, act from structured module results, review the plan, confirm, execute, and verify.
 - **Computer health:** inspect storage, background services, and terminal startup without opening redundant detail pages.
-- **Applications:** browse manageable apps in a logo grid, see the last-used time and size, open an app, or move it to Trash after confirmation. Protected system apps are excluded.
-- **Task history:** reopen local Agent runs and export their visible records as JSON.
+- **Applications:** browse user and read-only system apps in a real-logo grid, see usage and bundle metadata, ask Agent about one exact app, open it, ignore it, or move an uninstallable app to Trash after confirmation.
+- **Task history:** reopen, export, or permanently delete local Agent runs and their tool-call records.
 - **Settings:** manage multiple model providers, window behavior, ignored items, color theme, and language.
 
-Storage and background-service findings can be ignored from their row menu. Ignored items are removed from scan results, registered operations, and the data exposed to Agent tools until detection is restored in Settings.
+Storage, background-service, and application findings can be ignored. Ignored items are removed from scan results, registered operations, and the data exposed to Agent tools until detection is restored in Settings.
 
 ## Local Agent
 
@@ -29,7 +29,7 @@ Users can save multiple providers and choose one default model:
 
 Each configuration contains a name, API type, base URL, API key, and selected model. Once a URL and credential are available, Memento normalizes the API base and automatically fetches the model list. Image, audio, realtime, embedding, moderation, and other clearly incompatible entries are kept out of the Agent model picker. Existing encrypted credentials can be reused while editing. A separate connection test verifies model access and tool calling, not just plain text generation.
 
-Conversation IDs, focused entities, and pending plans are persisted locally. Follow-ups such as “this service” resolve to the latest exact focus instead of starting another unrelated inventory. The application language controls all Agent-visible text; switching language refreshes the scan snapshot before another run.
+Conversation IDs, focused entities, and pending plans are persisted locally. Follow-ups such as “this service” resolve to the latest exact focus instead of starting another unrelated inventory. Per-application analysis includes its exact Bundle ID, path, executable, background-only role, and registered URL schemes. The application language controls all Agent-visible text; switching language refreshes the scan snapshot before another run.
 
 ## Execution Boundary
 
@@ -75,7 +75,7 @@ npm run dev:web -- --port 4174
 npm run ui:smoke -- http://127.0.0.1:4174
 ```
 
-The visual smoke test exercises all five pages at `1440x900`, `1024x768`, `820x1180`, and `390x844`, checks horizontal overflow, and covers structured Agent results, English-only output, plans, confirmation, health tabs, app filtering, and provider editing. The Electron smoke test separately verifies the production preload, real application inventory, and real icons.
+The visual smoke test exercises all five pages at `1440x900`, `1024x768`, `820x1180`, and `390x844`, checks horizontal overflow, and covers the Agent progress state, structured results, history deletion, application filtering and ignoring, English-only output, plans, confirmation, health tabs, and provider editing. The Electron smoke test separately verifies the production preload, real application inventory, localized names, protected system apps, and real icons.
 
 ## Packaging
 

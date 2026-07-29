@@ -29,6 +29,18 @@ try {
   if (result.applications < 1 || result.loadedIcons < 1) {
     throw new Error(`application inventory did not render: ${JSON.stringify(result)}`)
   }
+  await page.locator('select[aria-label="筛选应用"]').selectOption('system')
+  const appStore = page.locator('.app-card').filter({ hasText: 'App Store' }).first()
+  await appStore.waitFor({ timeout: 20_000 })
+  if (await appStore.locator('.uninstall-app').count()) {
+    throw new Error('protected App Store unexpectedly exposes uninstall')
+  }
+  await page.locator('select[aria-label="筛选应用"]').selectOption('all')
+  await page.locator('input[aria-label="搜索应用名称"]').fill('com.xunlei.Thunder')
+  const thunderName = await page.locator('.app-card .app-title strong').first().textContent()
+  if (thunderName !== '迅雷') {
+    throw new Error(`localized Thunder name was not loaded: ${JSON.stringify(thunderName)}`)
+  }
   console.log(`Electron smoke test passed: ${JSON.stringify(result)}`)
 } finally {
   await electronApp?.close().catch(() => undefined)

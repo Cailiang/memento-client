@@ -16,6 +16,7 @@ export interface AppSettings {
   closeToTray: boolean
   serviceWhitelist: string[]
   storageWhitelist: string[]
+  applicationWhitelist: string[]
 }
 
 export type UpdateAppSettingsInput = Partial<AppSettings>
@@ -31,7 +32,8 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   launchAtLogin: false,
   closeToTray: false,
   serviceWhitelist: [],
-  storageWhitelist: []
+  storageWhitelist: [],
+  applicationWhitelist: []
 }
 
 const APP_LANGUAGES = new Set<AppLanguage>(['zh-CN', 'en-US'])
@@ -63,6 +65,10 @@ export function normalizeStorageWhitelist(value: unknown): string[] {
   return normalizeWhitelist(value, 1024)
 }
 
+export function normalizeApplicationWhitelist(value: unknown): string[] {
+  return normalizeWhitelist(value, 1024)
+}
+
 export function normalizeAppSettings(value: unknown): AppSettings {
   if (!value || typeof value !== 'object') return { ...DEFAULT_APP_SETTINGS }
   const candidate = value as Partial<AppSettings>
@@ -76,7 +82,8 @@ export function normalizeAppSettings(value: unknown): AppSettings {
     launchAtLogin: candidate.launchAtLogin === true,
     closeToTray: candidate.closeToTray === true,
     serviceWhitelist: normalizeServiceWhitelist(candidate.serviceWhitelist),
-    storageWhitelist: normalizeStorageWhitelist(candidate.storageWhitelist)
+    storageWhitelist: normalizeStorageWhitelist(candidate.storageWhitelist),
+    applicationWhitelist: normalizeApplicationWhitelist(candidate.applicationWhitelist)
   }
 }
 
@@ -104,6 +111,20 @@ export function isStorageWhitelisted(
   return candidate.section === 'storage' && storageWhitelist.includes(
     candidate.location ?? candidate.name
   )
+}
+
+export function applicationWhitelistValue(application: {
+  bundleId: string | null
+  location: string
+}): string {
+  return application.bundleId?.trim() || application.location
+}
+
+export function isApplicationWhitelisted(
+  application: { bundleId: string | null; location: string },
+  applicationWhitelist: readonly string[]
+): boolean {
+  return applicationWhitelist.includes(applicationWhitelistValue(application))
 }
 
 export function isCandidateWhitelisted(

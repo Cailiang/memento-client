@@ -105,7 +105,13 @@ export interface AgentApplicationResultItem {
   id: string
   name: string
   version: string
+  bundleId?: string | null
   location: string
+  scope?: 'user' | 'shared' | 'system'
+  protectedReason?: string
+  backgroundOnly?: boolean
+  executable?: string | null
+  urlSchemes?: string[]
   sizeBytes: number
   lastUsedAt: string | null
   unused: boolean
@@ -216,5 +222,6 @@ export interface MementoAgentApi {
   executeAgentPlan: (input: ExecuteAgentPlanInput) => Promise<ExecuteAgentPlanResult>
   listAgentRuns: () => Promise<AgentRunRecord[]>
   getAgentRun: (runId: string) => Promise<AgentRunRecord | null>
+  deleteAgentRun: (runId: string) => Promise<void>
   onAgentRunEvent: (callback: (event: AgentRunEvent) => void) => () => void
 }

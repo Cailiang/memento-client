@@ -288,7 +288,7 @@ export function SettingsPage({
 
         <section className="settings-section">
           <div className="settings-label"><h2>{text('忽略列表', 'Ignored items')}</h2><p>{text('电脑体检和 Agent 都不会处理这些项目。', 'Health checks and Agent skip these items.')}</p></div>
-          <div className="ignored-setting-summary"><div><strong>{text(`已忽略 ${settings.storageWhitelist.length + settings.serviceWhitelist.length} 项`, `${settings.storageWhitelist.length + settings.serviceWhitelist.length} ignored`)}</strong><small>{text(`存储空间 ${settings.storageWhitelist.length} 项 · 后台服务 ${settings.serviceWhitelist.length} 项`, `${settings.storageWhitelist.length} storage · ${settings.serviceWhitelist.length} services`)}</small></div><button type="button" className="secondary-button" onClick={onManageIgnored}><ListFilter size={15} />{text('管理', 'Manage')}</button></div>
+          <div className="ignored-setting-summary"><div><strong>{text(`已忽略 ${settings.storageWhitelist.length + settings.serviceWhitelist.length + settings.applicationWhitelist.length} 项`, `${settings.storageWhitelist.length + settings.serviceWhitelist.length + settings.applicationWhitelist.length} ignored`)}</strong><small>{text(`存储空间 ${settings.storageWhitelist.length} 项 · 后台服务 ${settings.serviceWhitelist.length} 项 · 应用 ${settings.applicationWhitelist.length} 项`, `${settings.storageWhitelist.length} storage · ${settings.serviceWhitelist.length} services · ${settings.applicationWhitelist.length} applications`)}</small></div><button type="button" className="secondary-button" onClick={onManageIgnored}><ListFilter size={15} />{text('管理', 'Manage')}</button></div>
         </section>
 
         <section className="settings-section">

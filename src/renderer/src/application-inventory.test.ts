@@ -48,17 +48,19 @@ describe('application inventory controls', () => {
       .toEqual(['Old'])
   })
 
-  it('filters recent and unused applications while excluding protected system applications', () => {
+  it('filters recent, unused, and read-only system applications', () => {
     expect(filterAndSortApplications(applications, '', 'unused', 'name').map((item) => item.name))
       .toEqual(['Old'])
     expect(filterAndSortApplications(applications, '', 'recent', 'name').map((item) => item.name))
-      .toEqual(['Recent', 'Unknown'])
+      .toEqual(['Recent', 'Safari', 'Unknown'])
+    expect(filterAndSortApplications(applications, '', 'system', 'name').map((item) => item.name))
+      .toEqual(['Safari'])
   })
 
   it('sorts by recent usage and keeps unknown dates at the end', () => {
     expect(filterAndSortApplications(applications, '', 'all', 'recent').map((item) => item.name))
-      .toEqual(['Recent', 'Old', 'Unknown'])
+      .toEqual(['Recent', 'Safari', 'Old', 'Unknown'])
     expect(filterAndSortApplications(applications, '', 'all', 'size').map((item) => item.name))
-      .toEqual(['Old', 'Recent', 'Unknown'])
+      .toEqual(['Old', 'Recent', 'Unknown', 'Safari'])
   })
 })

@@ -8,6 +8,28 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.27 - 2026-07-29
+
+### English
+
+- Replaced the single Agent spinner with a compact animated progress surface that starts below 25%, advances gradually through real run phases, reports elapsed time, and never reaches completion before a result arrives.
+- Added confirmed task-history deletion backed by SQLite; deleting a run also removes its related tool-call records through the existing foreign-key cascade.
+- Expanded Application Management to include read-only apps from `/System/Applications`, including App Store, while keeping uninstall unavailable for macOS-protected bundles.
+- Added application ignored items to Settings and enforced them across the visible inventory, application findings, registered actions, reveal targets, and Agent inspection context.
+- Added a per-application Ask Agent action with exact name, Bundle ID, version, path, last-used record, executable, background-only role, and URL schemes for precise purpose and uninstall-impact analysis.
+- Added root `InfoPlist.strings` name resolution so apps such as Thunder use their official Simplified Chinese display name; unknown Spotlight dates now read “No usage record” instead of implying a scan failure.
+- Expanded unit, browser, and real-Electron smoke coverage for low-start progress, task deletion, application ignoring, localized Thunder naming, App Store protection, and helper metadata.
+
+### 简体中文
+
+- 使用紧凑的动画进度界面替代单一 Agent 转圈：从 25% 以下开始，按真实任务阶段缓慢推进，显示已用时间，并在结果返回前不会假装完成。
+- 新增带确认的任务记录删除；SQLite 删除任务后会通过既有外键级联同步清除对应工具调用记录。
+- 应用管理新增 `/System/Applications` 只读应用，包括 App Store；macOS 受保护应用仍不会提供卸载操作。
+- 忽略列表新增应用分类，并同时约束可见应用、应用建议、已注册操作、定位目标和 Agent 检查上下文。
+- 每张应用卡片新增“问 Agent”，携带精确名称、Bundle ID、版本、路径、最后使用记录、可执行文件、后台组件标记和 URL 协议，用于分析用途与卸载影响。
+- 新增根目录 `InfoPlist.strings` 名称解析，迅雷等应用会显示官方简体中文名；Spotlight 没有日期时改为“无使用记录”，不再让人误以为扫描失败。
+- 扩展单元、浏览器和真实 Electron 冒烟测试，覆盖低位起步进度、历史删除、应用忽略、迅雷中文名、App Store 保护和辅助组件元数据。
+
 ## 0.6.26 - 2026-07-29
 
 ### English

@@ -91,10 +91,16 @@ export function AgentResults({
                     <ApplicationIcon application={item} />
                     <div className="agent-result-copy">
                       <strong title={item.name}>{item.name}</strong>
-                      <small>{text(
-                        `${relativeDate(item.lastUsedAt, language)}使用 · ${formatBytes(item.sizeBytes)}`,
-                        `Used ${relativeDate(item.lastUsedAt, language).toLocaleLowerCase()} · ${formatBytes(item.sizeBytes)}`
-                      )}</small>
+                      <small>{item.protectedReason
+                        ? `${item.protectedReason} · ${formatBytes(item.sizeBytes)}`
+                        : item.backgroundOnly
+                          ? text(`后台组件${item.urlSchemes?.length ? ` · ${item.urlSchemes.join(', ')}` : ''} · ${formatBytes(item.sizeBytes)}`, `Background helper${item.urlSchemes?.length ? ` · ${item.urlSchemes.join(', ')}` : ''} · ${formatBytes(item.sizeBytes)}`)
+                        : item.lastUsedAt
+                          ? text(
+                              `${relativeDate(item.lastUsedAt, language)}使用 · ${formatBytes(item.sizeBytes)}`,
+                              `Used ${relativeDate(item.lastUsedAt, language).toLocaleLowerCase()} · ${formatBytes(item.sizeBytes)}`
+                            )
+                          : text(`无使用记录 · ${formatBytes(item.sizeBytes)}`, `No usage record · ${formatBytes(item.sizeBytes)}`)}</small>
                     </div>
                     <div className="agent-result-actions">
                       <button
