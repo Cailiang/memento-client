@@ -1,6 +1,6 @@
 {
   "name": "memento",
-  "version": "0.6.31",
+  "version": "0.6.32",
   "private": true,
   "author": {
     "name": "Cailiang",
@@ -20,6 +20,8 @@
     "scan:smoke": "vite-node scripts/smoke-scan.ts",
     "electron:smoke": "node scripts/electron-smoke.mjs",
     "ui:smoke": "node scripts/visual-smoke.mjs",
+    "audit": "npm audit --registry=https://registry.npmjs.org",
+    "audit:runtime": "npm audit --omit=dev --registry=https://registry.npmjs.org",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
@@ -42,14 +44,17 @@
     "@types/node": "^24.13.3",
     "@types/react": "^19.0.3",
     "@types/react-dom": "^19.0.2",
-    "@vitejs/plugin-react": "^4.3.4",
+    "@vitejs/plugin-react": "^5.2.0",
     "electron": "^43.2.0",
-    "electron-builder": "^25.1.8",
-    "electron-vite": "^2.3.0",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
     "playwright-core": "^1.61.1",
     "typescript": "^5.7.2",
-    "vite": "^5.4.11",
-    "vitest": "^2.1.8"
+    "vite": "^7.3.6",
+    "vitest": "^3.2.7"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   },
   "build": {
     "appId": "com.fcl.memento",

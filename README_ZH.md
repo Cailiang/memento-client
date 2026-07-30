@@ -61,7 +61,7 @@ Agent 正文通过受限的 Markdown 管线渲染标题、粗体、列表、代�
 环境要求：
 
 - 完整扫描、清理和 DMG 校验需要 macOS
-- Node.js 22 或更高版本
+- Node.js 22.12 或更高版本
 - npm
 
 ```bash
@@ -79,9 +79,12 @@ npm run scan:smoke
 npm run electron:smoke
 npm run dev:web -- --port 4174
 npm run ui:smoke -- http://127.0.0.1:4174
+npm run audit:runtime
 ```
 
 UI 冒烟测试会在 `1440x900`、`1024x768`、`820x1180` 和 `390x844` 四种视口检查全部五个页面与横向溢出，并覆盖可见构建版本、紧凑页面控件、Agent 等待进度、结构化结果、历史删除、应用筛选与忽略、全英文输出、计划确认、体检标签页和供应商编辑器。真实 Electron 冒烟测试会另外验证生产 preload、真实应用列表、本地化名称、受保护系统应用和真实 Logo。
+
+当前正式支持的构建工具链为 Vite 7、electron-vite 5 和 electron-builder 26。`npm run audit:runtime` 只检查随 Memento 发布的依赖，`npm run audit` 还会报告上游工具继承的开发与打包依赖。
 
 ## 打包规则
 

@@ -61,7 +61,7 @@ The key is decrypted only in the Electron main process when a provider request i
 Requirements:
 
 - macOS for full scanning, cleanup, and DMG verification
-- Node.js 22 or later
+- Node.js 22.12 or later
 - npm
 
 ```bash
@@ -79,9 +79,12 @@ npm run scan:smoke
 npm run electron:smoke
 npm run dev:web -- --port 4174
 npm run ui:smoke -- http://127.0.0.1:4174
+npm run audit:runtime
 ```
 
 The visual smoke test exercises all five pages at `1440x900`, `1024x768`, `820x1180`, and `390x844`, checks horizontal overflow, and covers the visible build version, compact page controls, Agent progress state, structured results, history deletion, application filtering and ignoring, English-only output, plans, confirmation, health tabs, and provider editing. The Electron smoke test separately verifies the production preload, real application inventory, localized names, protected system apps, and real icons.
+
+The current supported build chain is Vite 7, electron-vite 5, and electron-builder 26. `npm run audit:runtime` checks dependencies shipped with Memento, while `npm run audit` also reports development and packaging dependencies inherited from upstream tools.
 
 ## Packaging
 

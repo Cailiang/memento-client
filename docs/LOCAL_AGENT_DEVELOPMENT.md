@@ -187,6 +187,8 @@ Do not add `run_shell`, model-generated filesystem paths, model-generated servic
 
 ## 10. Verification and Release
 
+Development requires Node.js 22.12 or newer. The supported frontend and packaging chain is Vite 7.3.6, electron-vite 5.0.0, electron-builder 26.15.3, `@vitejs/plugin-react` 5.2.0, and Vitest 3.2.7. Vite 8 is intentionally deferred until electron-vite declares stable support for it.
+
 Run:
 
 ```bash
@@ -195,9 +197,12 @@ npm run typecheck
 npm run build
 npm run scan:smoke
 npm run electron:smoke
+npm run audit:runtime
 git diff --check
 ```
 
 With the web development server on port `4174`, run `npm run ui:smoke -- http://127.0.0.1:4174`. It captures all pages at four viewports and exercises structured Agent results, application-result grids, English-only Agent output, plan confirmation, health tabs, application filtering, and provider editing. The Electron smoke test launches the production output and requires the preload API, real application inventory, and at least one real application icon; this prevents browser demo data from masking a main/preload regression.
+
+Use `npm run audit:runtime` as the release boundary because it audits dependencies shipped inside the application. Use `npm run audit` to inspect the complete development tree. At 0.6.32 the runtime audit has zero findings; the full audit has 16 high-severity findings inherited from the latest stable electron-builder's ASAR, universal-binary, Windows-installer, and legacy file-matching dependencies. The previous chain had 33 findings including 2 critical findings. npm's proposed downgrade to electron-builder 25 restores those critical findings, and broad overrides cross incompatible CommonJS/ESM and package APIs, so the remaining upstream build-only advisories are tracked rather than forcibly replaced.
 
 Every change then requires a patch-version bump, changelog and release-note update, unsigned Intel x64 DMG build, mounted-image verification, bundled version and `x86_64` architecture check, SHA-256 calculation, and a source commit. This rule is also recorded in `AGENTS.md` so it survives future development sessions.

@@ -1,16 +1,16 @@
-# Memento Agent 0.6.31
+# Memento Agent 0.6.32
 
 ## 简体中文
 
-`0.6.31` 精简顶部信息，并让更新检查与外部供应商导入更符合用户预期。
+`0.6.32` 完成构建工具链的跨主版本安全升级，同时保持现有应用功能和安装包兼容。
 
 ### 主要变化
 
-- 顶部右侧不再显示时钟、重复版本、快捷体检和设置按钮；版本号移到 Memento 名称下方。
-- 启动后及每小时自动检查 GitHub 最新稳定版本，发现新版本时显示系统通知和应用内提醒；设置中也可立即检查。
-- CC Switch 只在首次自动读取一次，完成状态保存在 SQLite；用户删除导入项后不会在下次启动时重新出现。
-- 设置新增“重新导入 CC Switch”，需要时可主动读取，并反馈检测到及新增或更新的配置数量。
-- 模型供应商的长错误不再挤在状态标签中；失败地址和服务响应会完整换行显示、可选中复制，并隐藏密钥查询参数。
+- Vite 5 升级至 7.3.6，electron-vite 2 升级至 5.0.0，electron-builder 25 升级至 26.15.3。
+- React Vite 插件升级至 5.2.0，Vitest 升级至 3.2.7；Node.js 开发要求调整为 22.12 或更高版本。
+- 随应用发布的运行时依赖安全审计为 0；完整开发依赖审计由 33 项降至 16 项，且不再包含严重问题。
+- 剩余审计项均来自 electron-builder 最新稳定版的上游打包依赖，没有通过高风险强制覆盖来破坏跨平台打包兼容性。
+- 单元测试、生产构建、设备扫描、真实 Electron 启动和四种视口 UI 测试均已通过。
 
 ### 安装说明
 
@@ -18,15 +18,15 @@
 
 ## English
 
-`0.6.31` removes redundant toolbar information and makes update checks and external provider imports predictable.
+`0.6.32` completes the cross-major security upgrade of the build toolchain while preserving existing application and packaging behavior.
 
 ### Highlights
 
-- The clock, duplicate version badge, Quick Scan, and Settings actions were removed from the upper-right toolbar; the build version now sits below the Memento name.
-- Memento checks the latest stable GitHub release after startup and every hour, shows native and in-app notifications for updates, and supports a manual Settings check.
-- CC Switch is imported automatically only once and records completion in SQLite, so user-deleted imports no longer return on the next launch.
-- Settings now provides an explicit Re-import CC Switch action and reports detected and added-or-updated counts.
-- Long provider errors now render in wrapping, selectable alerts with the failed endpoint and server response while credential query parameters stay hidden.
+- Vite 5 is upgraded to 7.3.6, electron-vite 2 to 5.0.0, and electron-builder 25 to 26.15.3.
+- React's Vite plugin is upgraded to 5.2.0 and Vitest to 3.2.7; development now requires Node.js 22.12 or newer.
+- The shipped runtime dependency audit is clean. The full development audit is reduced from 33 findings to 16 and no longer contains critical findings.
+- The remaining findings are inherited from the latest stable electron-builder packaging dependencies; risky cross-major overrides were not used because they would compromise cross-platform packaging compatibility.
+- Unit tests, production builds, device scanning, real Electron startup, and all four UI viewports pass on the upgraded chain.
 
 ### Installation
 

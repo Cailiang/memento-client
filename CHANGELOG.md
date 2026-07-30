@@ -8,6 +8,24 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.32 - 2026-07-30
+
+### English
+
+- Upgraded the supported build chain from Vite 5 to Vite 7.3.6, electron-vite 2 to 5.0.0, electron-builder 25 to 26.15.3, React's Vite plugin 4 to 5.2.0, and Vitest 2 to 3.2.7.
+- Raised the development requirement to Node.js 22.12 or newer to satisfy the current packaging toolchain and recorded the same constraint in package metadata.
+- Added repeatable full and runtime-only npm audit commands. The shipped dependency audit is clean; the full development audit dropped from 33 findings, including 2 critical, to 16 high-severity findings inherited from electron-builder's latest stable packaging dependencies.
+- Verified that unit tests, type checking, production main/preload/Renderer builds, device scanning, real Electron startup, and the four-viewport UI suite remain compatible with the upgraded toolchain.
+- Updated the interactive HTML prototype, product documentation, development notes, and release documentation for version 0.6.32.
+
+### 简体中文
+
+- 构建工具链从 Vite 5 升级至 Vite 7.3.6、electron-vite 2 升级至 5.0.0、electron-builder 25 升级至 26.15.3、React Vite 插件 4 升级至 5.2.0、Vitest 2 升级至 3.2.7。
+- 本地开发环境提高到 Node.js 22.12 或更高版本，以满足当前打包工具链要求，并在包元数据中记录同一约束。
+- 新增可重复执行的完整审计与仅运行时依赖审计命令。随应用发布的运行时依赖审计为 0；完整开发依赖审计从 33 项（含 2 项严重问题）降至 16 项高危问题，剩余项均继承自 electron-builder 最新稳定版的打包依赖。
+- 已验证单元测试、类型检查、主进程/preload/Renderer 生产构建、设备扫描、真实 Electron 启动和四视口 UI 测试均兼容升级后的工具链。
+- 同步更新 0.6.32 交互 HTML 原型、产品文档、开发说明和发布记录。
+
 ## 0.6.31 - 2026-07-30
 
 ### English
