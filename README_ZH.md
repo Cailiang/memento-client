@@ -1,6 +1,8 @@
 # Memento Agent
 
-Memento 是一款运行在 macOS 本机的系统维护 Agent。它把确定性的设备扫描、清理工具与用户自行配置的模型结合起来：模型可以读取结构化体检结果并准备具体计划，但只有用户明确确认后，Memento 才会执行已经注册并校验过的操作。
+[![Release](https://github.com/Cailiang/memento-client/actions/workflows/release.yml/badge.svg)](https://github.com/Cailiang/memento-client/actions/workflows/release.yml)
+
+Memento 是一款本地桌面系统维护 Agent。它把确定性的设备扫描、清理工具与用户自行配置的模型结合起来：模型可以读取结构化体检结果并准备具体计划，但只有用户明确确认后，Memento 才会执行已经注册并校验过的操作。完整扫描和清理目前以 macOS 为目标；GitHub Actions 同时生成 Windows 与 Linux 安装包用于可移植性验证。
 
 [English](README.md)
 
@@ -95,10 +97,22 @@ UI 冒烟测试会在 `1440x900`、`1024x768`、`820x1180` 和 `390x844` 四种�
 
 ## 打包规则
 
+推送与项目版本一致的 `v*` 标签后，仓库的 `Release` GitHub Actions 工作流会生成公开安装包：
+
+| 平台 | 架构 | 安装包 |
+| --- | --- | --- |
+| macOS | Intel x64、Apple Silicon arm64 | DMG |
+| Windows | x64、arm64 | NSIS EXE |
+| Linux | x64、arm64 | AppImage、DEB |
+
+发布任务会创建双语 GitHub Release，上传全部 8 个安装文件并附带 `SHA256SUMS.txt`。手动运行 workflow 会构建相同矩阵并保留临时 Actions Artifacts，但不会创建公开 Release。完整规则见[发布流程](docs/RELEASING.md)。
+
+本地仍必须构建 Intel macOS 包用于源码追溯：
+
 ```bash
 CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist:mac -- --x64
 ```
 
-每次用户要求的代码或 UI 修改都必须升级补丁版本，同步更新 `CHANGELOG.md` 和 `RELEASE_NOTES.md`，完成全部验证，构建并挂载 Intel x64 DMG，确认安装包版本与架构，计算 SHA-256，最后提交源码。没有可用签名凭据时，本地安装包不会签名或公证。
+每次用户要求的代码或 UI 修改都必须升级补丁版本，同步更新 `CHANGELOG.md` 和 `RELEASE_NOTES.md`，完成全部验证，构建并验证 Intel x64 DMG，确认安装包版本与架构，计算 SHA-256，最后提交源码。没有配置签名凭据时，安装包不会签名或公证。
 
 实现细节见 [本地 Agent 开发文档](docs/LOCAL_AGENT_DEVELOPMENT.md)。

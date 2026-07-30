@@ -1,6 +1,8 @@
 # Memento Agent
 
-Memento is a local macOS maintenance Agent. It combines deterministic device scanning and cleanup tools with a model chosen and configured by the user. The model can inspect structured scan results and prepare a concrete action plan; Memento executes only registered operations that the user explicitly confirms.
+[![Release](https://github.com/Cailiang/memento-client/actions/workflows/release.yml/badge.svg)](https://github.com/Cailiang/memento-client/actions/workflows/release.yml)
+
+Memento is a local desktop maintenance Agent. It combines deterministic device scanning and cleanup tools with a model chosen and configured by the user. The model can inspect structured scan results and prepare a concrete action plan; Memento executes only registered operations that the user explicitly confirms. Full scanning and cleanup currently target macOS; GitHub Actions also produces Windows and Linux packages for portability testing.
 
 [简体中文](README_ZH.md)
 
@@ -95,10 +97,22 @@ The current supported build chain is Vite 7, electron-vite 5, and electron-build
 
 ## Packaging
 
+Public packages are built by the repository's `Release` GitHub Actions workflow after a matching `v*` tag is pushed:
+
+| Platform | Architectures | Packages |
+| --- | --- | --- |
+| macOS | Intel x64, Apple Silicon arm64 | DMG |
+| Windows | x64, arm64 | NSIS EXE |
+| Linux | x64, arm64 | AppImage, DEB |
+
+The publishing job creates the bilingual GitHub Release, uploads all eight packages, and attaches `SHA256SUMS.txt`. A manual workflow dispatch builds the same matrix as temporary Actions artifacts without publishing a release. See [Release process](docs/RELEASING.md).
+
+The required local traceability build remains the Intel macOS package:
+
 ```bash
 CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist:mac -- --x64
 ```
 
-Every user-requested change must bump the patch version, update `CHANGELOG.md` and `RELEASE_NOTES.md`, run the full verification suite, build and mount an Intel x64 DMG, confirm the bundled version and architecture, calculate SHA-256, and commit the source. Local builds are unsigned and unnotarized unless signing credentials are available.
+Every user-requested change must bump the patch version, update `CHANGELOG.md` and `RELEASE_NOTES.md`, run the full verification suite, build and verify an Intel x64 DMG, confirm the bundled version and architecture, calculate SHA-256, and commit the source. Packages are unsigned and unnotarized unless signing credentials are configured.
 
 Implementation details are documented in [Local Agent development](docs/LOCAL_AGENT_DEVELOPMENT.md).

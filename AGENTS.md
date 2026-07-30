@@ -13,4 +13,6 @@ For every user-requested code or UI change in this repository, complete every it
 7. Commit the source changes so the installer can be traced to a commit.
 8. Give the user the installer path and SHA-256 without waiting for a reminder.
 
+When the user requests a public release, merge the verified source into `main`, push `main`, create the matching `v<package-version>` tag, and monitor `.github/workflows/release.yml` through successful publication. Confirm all expected platform assets and `SHA256SUMS.txt` in the GitHub Release before reporting completion.
+
 Local packages are unsigned and unnotarized unless working signing credentials are available.

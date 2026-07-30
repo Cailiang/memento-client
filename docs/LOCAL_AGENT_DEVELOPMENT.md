@@ -86,6 +86,12 @@ The connection test creates a two-step `ToolLoopAgent` run with a `connection_pr
 
 `update-checker.ts` requests the latest stable release from the GitHub Releases API after startup and every hour. It uses numeric version comparison, rejects draft, prerelease, malformed, and non-repository release URLs, times out after ten seconds, and never downloads or installs a package. The main process emits typed update state to the Renderer and shows one native notification per newly observed version. Settings exposes a manual check; the in-app notice opens only a URL under the repository's trusted release path.
 
+## 4.2 Release Automation
+
+`.github/workflows/release.yml` is the only supported path for publishing GitHub Release binaries. It requires Node.js 22.12, validates that a pushed tag exactly matches package metadata, runs unit tests and type checking, then builds six native runner targets: macOS x64 and arm64, Windows x64 and arm64, and Linux x64 and arm64. The resulting two DMGs, two NSIS executables, two AppImages, and two DEBs are collected into one release with `SHA256SUMS.txt`.
+
+Tag-triggered runs create or safely update the bilingual GitHub Release from `RELEASE_NOTES.md`. Manual dispatches run the same validation and build matrix but intentionally stop at temporary Actions artifacts. Packages remain unsigned until signing secrets and platform credentials are explicitly configured. The end-to-end operator checklist is in [`docs/RELEASING.md`](RELEASING.md).
+
 ## 5. Agent Run
 
 `LocalAgentRuntime.start` requires a completed scan and the default Provider. It stores the run before making a model request and tracks cancellation with an `AbortController`. A new task creates a conversation ID; follow-up runs reuse it.

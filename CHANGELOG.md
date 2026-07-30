@@ -8,6 +8,24 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.42 - 2026-07-30
+
+### English
+
+- Added a tag-driven GitHub Actions release pipeline that validates package metadata, runs tests and type checking, and builds native packages on macOS, Windows, and Linux runners.
+- Added Intel and Apple Silicon DMGs, x64 and arm64 NSIS installers, and x64 and arm64 AppImage and DEB packages to each public release, together with `SHA256SUMS.txt`.
+- Kept manual workflow runs available for non-publishing validation, with all platform artifacts retained temporarily for inspection.
+- Documented the complete release contract, version and tag requirements, supported package matrix, unsigned-package status, and the current macOS scope of full scanning and cleanup.
+- Updated the English and Simplified Chinese project descriptions, packaging guidance, development notes, and repository contributor instructions for automated releases.
+
+### 简体中文
+
+- 新增由版本标签触发的 GitHub Actions 发布流程：校验包元数据、运行测试与类型检查，并在 macOS、Windows 和 Linux 原生 runner 上构建安装包。
+- 每次公开发布提供 Intel 与 Apple Silicon DMG、x64 与 arm64 NSIS 安装包、x64 与 arm64 AppImage 和 DEB，并附带 `SHA256SUMS.txt`。
+- 保留手动运行 workflow 的非发布验证能力，所有平台产物会作为临时 Actions Artifacts 供检查。
+- 完整记录发布约束、版本与标签要求、支持的安装包矩阵、未签名状态，以及完整扫描和清理目前仍以 macOS 为目标的范围说明。
+- 更新中英文项目介绍、打包指南、开发文档和仓库贡献规则，使其与自动发布流程一致。
+
 ## 0.6.41 - 2026-07-30
 
 ### English

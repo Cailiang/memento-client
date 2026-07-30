@@ -1,33 +1,33 @@
-# Memento Agent 0.6.41
+# Memento Agent 0.6.42
 
 ## 简体中文
 
-`0.6.41` 新增 Antigravity 独立接口类型，并支持磁盘浏览连续删除而不触发全盘重扫。
+`0.6.42` 启用完整的 GitHub Actions 多平台发布流程，并包含近期完成的 Antigravity 协议适配与磁盘浏览连续删除修复。
 
 ### 主要变化
 
-- 设置中新增 Antigravity 类型，默认使用 Sub2API `/antigravity/v1beta` 路由。
-- Antigravity 继续复用 Vercel Google 适配器，不需要额外 SDK；连接探针使用兼容的 `VALIDATED` 工具模式。
-- 已有 `/antigravity` Google 配置和匹配的 CC Switch 配置会自动迁移。
-- 删除磁盘项目后只移除对应子树及注册 ID，不再自动扫描整块磁盘。
-- 同轮扫描中的其他项目保持可用，可以连续移到废纸篓；界面同步更新祖先容量。
+- 推送与项目版本一致的标签后，自动校验源码并在 macOS、Windows 和 Linux 原生 runner 上构建。
+- 发布包含 Intel 与 Apple Silicon DMG、x64 与 arm64 Windows EXE、x64 与 arm64 Linux AppImage 和 DEB，以及统一的 `SHA256SUMS.txt`。
+- 设置中新增 Antigravity 接口类型，复用 Vercel Google 适配器并明确兼容 Sub2API 的 Gemini 原生协议，无需额外 SDK。
+- 磁盘浏览删除成功后立即更新本地树，不再触发全盘重扫；同轮扫描中的其他项目可以继续删除。
+- 多个分析任务分别使用独立会话，确认执行计划后的状态动效也已改为紧凑的“执行、复检、完成”流程。
 
 ### 安装说明
 
-完整扫描和清理目前支持 macOS。本地 Intel x64 DMG 未签名、未公证，安装时可能需要在“系统设置 > 隐私与安全性”中手动允许。
+完整扫描和清理目前支持 macOS；Windows 与 Linux 安装包用于桌面外壳的可移植性验证。当前安装包未签名、未公证，操作系统可能显示安全提示；macOS 可在“系统设置 > 隐私与安全性”中手动允许。
 
 ## English
 
-`0.6.41` adds a dedicated Antigravity provider and supports consecutive disk-browser removal without full rescans.
+`0.6.42` introduces a complete GitHub Actions release pipeline for every packaged platform and includes the recent Antigravity protocol and consecutive disk-browser removal fixes.
 
 ### Highlights
 
-- Settings now exposes Antigravity with Sub2API's `/antigravity/v1beta` route by default.
-- Antigravity reuses the Vercel Google adapter and requires no extra SDK; its probe selects the compatible `VALIDATED` tool mode.
-- Existing `/antigravity` Google configurations and matching CC Switch entries migrate automatically.
-- Trash removes only the selected disk subtree and registered IDs, with no automatic full-volume scan.
-- Other items from the same scan remain available for consecutive removal while visible ancestor capacity updates locally.
+- A matching version tag now validates the source and builds on native macOS, Windows, and Linux runners.
+- Each release contains Intel and Apple Silicon DMGs, x64 and arm64 Windows EXEs, x64 and arm64 Linux AppImage and DEB packages, plus a shared `SHA256SUMS.txt`.
+- Settings includes a dedicated Antigravity provider that reuses the Vercel Google adapter while explicitly supporting Sub2API's native Gemini protocol without another SDK.
+- Successful disk-browser removal updates the local tree without a full-volume rescan, so other items from the same scan can be removed consecutively.
+- Concurrent analyses use separate conversations, and confirmed plans now show a compact Run, Verify, Done execution sequence.
 
 ### Installation
 
-Full scanning and cleanup currently support macOS. The local Intel x64 DMG is unsigned and unnotarized, so macOS may require manual approval under System Settings > Privacy & Security.
+Full scanning and cleanup currently support macOS; Windows and Linux packages validate portability of the desktop shell. Packages are currently unsigned and unnotarized, so the operating system may show a security warning. On macOS, manual approval may be required under System Settings > Privacy & Security.
