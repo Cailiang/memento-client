@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest'
 import {
   applicationTrashDestination,
   isAllowedApplicationTrashTarget,
-  isPermissionError
+  isPermissionError,
+  trashDestination
 } from './application-trash'
 
 describe('application trash fallback', () => {
@@ -25,6 +26,18 @@ describe('application trash fallback', () => {
       '/Users/test/.Trash',
       (target) => occupied.has(target)
     )).toBe('/Users/test/.Trash/Example 2.app')
+  })
+
+  it('uses Finder-style names for extensionless disk items', () => {
+    const occupied = new Set([
+      '/Users/test/.Trash/anyconnect',
+      '/Users/test/.Trash/anyconnect 2'
+    ])
+    expect(trashDestination(
+      '/Library/Logs/DiagnosticReports/anyconnect',
+      '/Users/test/.Trash',
+      (target) => occupied.has(target)
+    )).toBe('/Users/test/.Trash/anyconnect 3')
   })
 
   it('recognizes only filesystem permission failures as admin fallback candidates', () => {

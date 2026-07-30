@@ -47,7 +47,8 @@ import { discoverProviderModels } from './agent/provider-config'
 import {
   applicationTrashDestination,
   isAllowedApplicationTrashTarget,
-  isPermissionError
+  isPermissionError,
+  trashDestination
 } from './application-trash'
 import { runFullScan, type RegisteredAction } from './scanner'
 import { applyScanWhitelist } from './scan-whitelist'
@@ -369,6 +370,65 @@ async function moveApplicationToTrashWithAdmin(
     throw new Error(mainText(
       `macOS 未能将应用移到废纸篓${detail ? `：${detail}` : '，请重试'}`,
       `macOS could not move the application to Trash${detail ? `: ${detail}` : '. Try again.'}`
+    ))
+  }
+}
+
+async function moveDiskUsageTargetToTrashWithAdmin(
+  source: string,
+  destination: string
+): Promise<void> {
+  const uid = process.getuid?.()
+  if (uid === undefined) throw new Error(mainText('无法确定当前用户', 'The current user could not be determined.'))
+  try {
+    await execFileAsync(
+      '/usr/bin/osascript',
+      [
+        '-e',
+        PRIVILEGED_STAGE_SCRIPT,
+        '--',
+        ...privilegedMoveArguments(uid, [], [{ source, destination }])
+      ],
+      { timeout: 120_000, maxBuffer: 1024 * 1024 }
+    )
+  } catch (error) {
+    const detail = commandErrorDetail(error)
+    throw new Error(mainText(
+      `macOS 未能将磁盘项目移到废纸篓${detail ? `：${detail}` : '，请重试'}`,
+      `macOS could not move the disk item to Trash${detail ? `: ${detail}` : '. Try again.'}`
+    ))
+  }
+}
+
+async function trashDiskUsageTarget(target: string): Promise<void> {
+  try {
+    await shell.trashItem(target)
+  } catch {
+    // Finder can reject protected report types even when their parent is writable.
+  }
+  if (!existsSync(target)) return
+
+  const trashDirectory = path.join(os.homedir(), '.Trash')
+  if (!existsSync(trashDirectory) || !lstatSync(trashDirectory).isDirectory()) {
+    throw new Error(mainText('无法访问当前用户的废纸篓', 'The current user Trash is unavailable.'))
+  }
+  const destination = trashDestination(target, trashDirectory)
+  try {
+    await rename(target, destination)
+  } catch (error) {
+    if (!isPermissionError(error)) {
+      const detail = commandErrorDetail(error)
+      throw new Error(mainText(
+        `无法将磁盘项目移到废纸篓${detail ? `：${detail}` : ''}`,
+        `The disk item could not be moved to Trash${detail ? `: ${detail}` : ''}`
+      ))
+    }
+    await moveDiskUsageTargetToTrashWithAdmin(target, destination)
+  }
+  if (existsSync(target) || !existsSync(destination)) {
+    throw new Error(mainText(
+      '磁盘项目仍在原位置，移动未完成',
+      'The disk item is still in its original location. The move did not complete.'
     ))
   }
 }
@@ -998,7 +1058,7 @@ app.whenReady().then(async () => {
     } catch {
       throw new Error(mainText('这个磁盘项目不能从浏览器中移除', 'This disk item cannot be removed from the browser.'))
     }
-    await shell.trashItem(validatedTarget)
+    await trashDiskUsageTarget(validatedTarget)
     registeredDiskUsageTargets = new Map()
   })
 

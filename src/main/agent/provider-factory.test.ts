@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import type { PrivateAgentProvider } from './agent-store'
 import {
   createProviderModel,
+  PROVIDER_TEST_MAX_OUTPUT_TOKENS,
   PROVIDER_TEST_TIMEOUT,
   providerErrorMessage,
+  providerTestReasoning,
   providerTestToolChoice
 } from './provider-factory'
 
@@ -54,7 +56,10 @@ describe('Agent provider factory', () => {
 
   it('allows slower reasoning models to complete a two-step tool probe', () => {
     expect(PROVIDER_TEST_TIMEOUT).toEqual({ totalMs: 60_000, stepMs: 45_000 })
+    expect(PROVIDER_TEST_MAX_OUTPUT_TOKENS).toBe(2_048)
     expect(providerTestToolChoice(0)).toBe('required')
     expect(providerTestToolChoice(1)).toBe('none')
+    expect(providerTestReasoning('google')).toBe('none')
+    expect(providerTestReasoning('anthropic')).toBeUndefined()
   })
 })

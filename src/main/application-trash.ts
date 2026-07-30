@@ -20,9 +20,17 @@ export function applicationTrashDestination(
   trashDirectory: string,
   existsProvider: ExistsProvider = existsSync
 ): string {
+  return trashDestination(target, trashDirectory, existsProvider)
+}
+
+export function trashDestination(
+  target: string,
+  trashDirectory: string,
+  existsProvider: ExistsProvider = existsSync
+): string {
   const basename = path.basename(target)
   const extension = path.extname(basename)
-  const stem = basename.slice(0, -extension.length)
+  const stem = extension ? basename.slice(0, -extension.length) : basename
   let destination = path.join(trashDirectory, basename)
   for (let copy = 2; existsProvider(destination); copy += 1) {
     destination = path.join(trashDirectory, `${stem} ${copy}${extension}`)

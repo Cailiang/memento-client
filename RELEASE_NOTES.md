@@ -1,16 +1,16 @@
-# Memento Agent 0.6.38
+# Memento Agent 0.6.39
 
 ## 简体中文
 
-`0.6.38` 修复全屏磁盘删除确认，并兼容 Gemini CLI 使用的自定义代理地址。
+`0.6.39` 修复独立分析会话、Gemini 高推理模型连接测试和受保护磁盘项目删除，并重新设计计划执行动效。
 
 ### 主要变化
 
-- 全屏磁盘浏览中的“移到废纸篓”确认框不再被全屏界面遮挡。
-- UI 测试会在全屏模式中完成右键菜单和确认框交互，防止问题再次出现。
-- Gemini 自定义服务地址会按 Gemini CLI 规则自动补充 `/v1beta`。
-- 模型列表请求会访问代理的 Gemini 原生接口，不再误读同一代理的 OpenAI 模型接口。
-- 官方和代理 Gemini 请求统一使用 `x-goog-api-key` 认证。
+- 从电脑体检发起的分析会进入各自独立会话，并行任务不会混合消息和计划。
+- 后台任务完成时不会抢走用户当前选择的会话。
+- 计划执行改为“执行、复检、完成”三阶段状态管线，跟随真实进度并适配手机与减少动态效果设置。
+- Gemini 高推理模型的工具调用探针不再被过小的输出限制提前截断。
+- 磁盘浏览删除受保护诊断报告时，原生废纸篓失败后会安全降级，并仅在权限不足时请求管理员授权。
 
 ### 安装说明
 
@@ -18,15 +18,15 @@
 
 ## English
 
-`0.6.38` fixes fullscreen disk removal confirmation and supports custom proxy URLs used by Gemini CLI.
+`0.6.39` fixes isolated Agent conversations, Gemini high-reasoning connection tests, protected disk-item removal, and redesigns confirmed-plan motion.
 
 ### Highlights
 
-- Move to Trash confirmation now stays above the fullscreen disk browser.
-- UI coverage exercises the context menu and confirmation dialog while fullscreen.
-- Custom Gemini service URLs follow Gemini CLI behavior and automatically receive `/v1beta`.
-- Model discovery now reaches the proxy's native Gemini endpoint instead of interpreting its OpenAI model endpoint.
-- Official and proxied Gemini requests consistently use `x-goog-api-key` authentication.
+- Analyses launched from Computer Health now open independent conversations, so concurrent tasks do not mix messages or plans.
+- Background completion no longer steals focus from the conversation selected by the user.
+- Confirmed-plan execution now uses a real Run, Verify, Done status pipeline with mobile and reduced-motion support.
+- Gemini high-reasoning models receive enough probe output budget to complete the required tool call.
+- Protected diagnostic reports use a guarded Trash fallback, requesting administrator authorization only when filesystem permissions require it.
 
 ### Installation
 

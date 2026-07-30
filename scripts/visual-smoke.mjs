@@ -107,7 +107,14 @@ try {
   const taskItems = concurrentPage.locator('.agent-task-item')
   await taskItems.nth(1).waitFor()
   if (await taskItems.count() !== 2) failures.push('agent-concurrency: both analysis tasks are not visible')
-  await taskItems.first().click()
+  const activeConversationPrompts = await concurrentPage.locator('.conversation .message.user').allTextContents()
+  if (
+    activeConversationPrompts.length !== 1 ||
+    activeConversationPrompts.some((prompt) => prompt.includes('分析 Xcode 派生数据'))
+  ) {
+    failures.push(`agent-concurrency: isolated analysis reused another conversation ${JSON.stringify(activeConversationPrompts)}`)
+  }
+  await taskItems.first().locator('.agent-task-select').click()
   if (!await concurrentPage.locator('.message.user').filter({ hasText: '分析 Xcode 派生数据' }).count()) {
     failures.push('agent-concurrency: first analysis cannot be reopened')
   }

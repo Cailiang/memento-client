@@ -13,9 +13,16 @@ export const PROVIDER_TEST_TIMEOUT = {
   totalMs: 60_000,
   stepMs: 45_000
 } as const
+export const PROVIDER_TEST_MAX_OUTPUT_TOKENS = 2_048
 
 export function providerTestToolChoice(stepNumber: number): 'required' | 'none' {
   return stepNumber === 0 ? 'required' : 'none'
+}
+
+export function providerTestReasoning(
+  providerType: PrivateAgentProvider['type']
+): 'none' | undefined {
+  return providerType === 'google' ? 'none' : undefined
 }
 
 export function createProviderModel(provider: PrivateAgentProvider): LanguageModel {
@@ -71,7 +78,8 @@ export async function testProviderConnection(
       toolChoice: providerTestToolChoice(stepNumber)
     }),
     stopWhen: stepCountIs(2),
-    maxOutputTokens: 64,
+    maxOutputTokens: PROVIDER_TEST_MAX_OUTPUT_TOKENS,
+    reasoning: providerTestReasoning(provider.type),
     temperature: 0
   })
   await agent.generate({

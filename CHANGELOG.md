@@ -8,6 +8,26 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.39 - 2026-07-30
+
+### English
+
+- Isolated every analysis launched from Computer Health into its own Agent conversation, matching Application analysis. Concurrent tasks no longer mix unrelated prompts, results, plans, or follow-up context.
+- Prevented a completing background task from taking focus back after the user has selected another conversation, and extended UI coverage to verify both isolation and reopening.
+- Replaced the confirmed-plan Trash animation with a compact Run, Verify, Done status pipeline. The new motion follows real execution state, uses stable dimensions, supports reduced motion, and remains free of horizontal overflow on mobile.
+- Fixed Gemini high-reasoning connection tests by using minimal reasoning for the capability probe and allowing enough output tokens for the required function call to complete.
+- Added a guarded disk-browser Trash fallback for macOS-protected report types. After the native Trash API fails, Memento tries a verified move into the current user's Trash and requests administrator authorization only for filesystem permission failures.
+- Kept the disk fallback behind the existing scan capability registry, realpath and symbolic-link checks, protected-root rules, collision-safe Trash naming, and post-move verification.
+
+### 简体中文
+
+- 从电脑体检发起的每个分析现在都会创建独立 Agent 会话，与应用分析保持一致；并行任务不再混合无关的提示、结果、计划或追问上下文。
+- 修复后台任务完成时抢回当前会话的问题；用户切换会话后保持原选择，并新增会话隔离与重新打开的 UI 回归覆盖。
+- 将确认计划后的垃圾桶动画替换为紧凑的“执行、复检、完成”状态管线；新动效跟随真实执行阶段，尺寸稳定，支持减少动态效果，并在手机宽度下无横向溢出。
+- 修复 Gemini 高推理模型的连接测试：能力探针使用最低推理级别，并提供足够的输出 token 让必须执行的函数调用完成。
+- 为 macOS 受保护的诊断报告等项目增加磁盘浏览废纸篓降级；原生废纸篓 API 失败后，先尝试移动到当前用户废纸篓，仅在文件系统权限不足时请求管理员授权。
+- 磁盘删除降级继续受本轮扫描能力注册表、realpath 与符号链接校验、受保护根目录规则、废纸篓重名处理和移动后验证约束。
+
 ## 0.6.38 - 2026-07-30
 
 ### English

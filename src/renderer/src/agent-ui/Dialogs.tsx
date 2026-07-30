@@ -149,6 +149,19 @@ export function ExecutionProgressDialog({
       : phase === 'completed'
         ? text('复检通过', 'Verified')
         : text('需要查看', 'Review needed')
+  const stageIndex = phase === 'executing' ? 0 : phase === 'verifying' ? 1 : 2
+  const StatusIcon = phase === 'executing'
+    ? Play
+    : phase === 'verifying'
+      ? Search
+      : phase === 'completed'
+        ? CheckCircle2
+        : CircleAlert
+  const stages = [
+    { label: text('执行', 'Run'), icon: Play },
+    { label: text('复检', 'Verify'), icon: Search },
+    { label: text('完成', 'Done'), icon: CheckCircle2 }
+  ]
   return (
     <DialogFrame
       title={title}
@@ -158,19 +171,49 @@ export function ExecutionProgressDialog({
       actions={<button type="button" className="secondary-button" onClick={onClose} disabled={!finished}>{text('完成', 'Done')}</button>}
     >
       <div className={`execution-stage is-${phase}`} role="status" aria-live="polite">
-        <div className="cleanup-visual" aria-hidden="true">
-          {!finished && <><i className="cleanup-file" /><i className="cleanup-file" /><i className="cleanup-file" /></>}
-          <span className="cleanup-bin">{phase === 'completed' ? <CheckCircle2 size={27} /> : phase === 'failed' ? <CircleAlert size={27} /> : <Trash2 size={25} />}</span>
+        <div className="execution-overview">
+          <span className="execution-status-mark" aria-hidden="true"><StatusIcon size={22} /></span>
+          <div className="execution-copy">
+            <small>{text('当前阶段', 'Current stage')}</small>
+            <strong>{stage}</strong>
+            <span>{phase === 'executing'
+              ? text(`正在处理 ${itemCount} 项已确认操作`, `Running ${itemCount} confirmed ${itemCount === 1 ? 'action' : 'actions'}`)
+              : phase === 'verifying'
+                ? text('正在核对操作结果与设备状态', 'Checking action results and device state')
+                : detail}</span>
+          </div>
+          <strong className="execution-progress-value">{progressValue}%</strong>
         </div>
-        <div className="execution-copy"><strong>{stage}</strong><small>{phase === 'executing'
-          ? text(`正在处理 ${itemCount} 项操作，请不要退出应用。`, `Running ${itemCount} ${itemCount === 1 ? 'action' : 'actions'}. Keep Memento open.`)
-          : phase === 'verifying'
-            ? text('正在重新扫描相关项目，确认操作已经生效。', 'Scanning the affected items to confirm the changes.')
-            : detail}</small></div>
-        <div className="execution-progress-head"><span>{stage}</span><strong>{progressValue}%</strong></div>
-        <div className="execution-progress-track" role="progressbar" aria-label={text('处理进度', 'Action progress')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressValue}><span style={{ width: `${progressValue}%` }} /></div>
-        <div className="execution-steps"><span className="is-active">{text('执行', 'Run')}</span><span className={phase !== 'executing' ? 'is-active' : ''}>{text('复检', 'Verify')}</span><span className={finished ? 'is-active' : ''}>{text('完成', 'Done')}</span></div>
-        {finished && <div className="execution-result"><strong>{completedCount} / {itemCount}</strong><span>{text('项操作完成', 'actions completed')}</span></div>}
+        <div className="execution-progress-track" role="progressbar" aria-label={text('处理进度', 'Action progress')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressValue}>
+          <span style={{ width: `${progressValue}%` }}><i /></span>
+        </div>
+        <ol className="execution-pipeline">
+          {stages.map((item, index) => {
+            const Icon = item.icon
+            const state = phase === 'completed'
+              ? 'complete'
+              : phase === 'failed' && index === 2
+                ? 'failed'
+                : index < stageIndex
+                  ? 'complete'
+                  : index === stageIndex
+                    ? 'active'
+                    : 'pending'
+            return (
+              <li className={`is-${state}`} key={item.label}>
+                <span className="execution-phase-icon">{state === 'complete' ? <CheckCircle2 size={16} /> : <Icon size={16} />}</span>
+                <span><strong>{item.label}</strong><small>{state === 'complete'
+                  ? text('已完成', 'Complete')
+                  : state === 'active'
+                    ? text('进行中', 'In progress')
+                    : state === 'failed'
+                      ? text('未完成', 'Incomplete')
+                      : text('等待', 'Waiting')}</small></span>
+              </li>
+            )
+          })}
+        </ol>
+        {finished && <div className="execution-result"><span>{phase === 'completed' ? <CheckCircle2 size={16} /> : <CircleAlert size={16} />}</span><strong>{completedCount} / {itemCount}</strong><small>{text('项操作完成', 'actions completed')}</small></div>}
       </div>
     </DialogFrame>
   )
