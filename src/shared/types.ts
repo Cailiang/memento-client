@@ -219,6 +219,7 @@ export interface MementoApi extends MementoAgentApi, MementoSettingsApi {
   scanDiskUsage: () => Promise<DiskUsageScanResult>
   cancelDiskUsageScan: () => Promise<void>
   revealDiskUsageNode: (id: string) => Promise<void>
+  trashDiskUsageNode: (id: string) => Promise<void>
   getApplicationIcon: (id: string) => Promise<string | null>
   openApplication: (id: string) => Promise<void>
   runActions: (ids: string[]) => Promise<ActionResult[]>

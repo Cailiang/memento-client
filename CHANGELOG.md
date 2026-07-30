@@ -8,6 +8,24 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.36 - 2026-07-30
+
+### English
+
+- Cleanup findings now show their registered file or folder path directly in each row. Clicking the path opens the exact folder or reveals the file in Finder without accepting arbitrary Renderer paths.
+- Replaced vertically stacked background-service groups with a compact horizontal category switcher for all, orphaned, failed, resource-heavy, long-running, stale, and other startup items.
+- Added a disk-browser context menu with Finder reveal and Move to Trash actions. Removal always requires a second confirmation and refreshes the disk scan after completion.
+- Kept disk removal inside the current scan's ID-to-path capability registry, rejected symbolic links and paths outside the scanned volume, and blocked the volume root, top-level volume folders, and the user home directory itself.
+- Added UI smoke coverage for clickable cleanup paths, service category switching, disk context menus, and removal-scope confirmation, plus focused disk-trash path validation tests.
+
+### 简体中文
+
+- 清理建议现在直接展示已注册的文件或目录路径；点击路径会打开准确目录或在 Finder 中定位文件，Renderer 不能传入任意路径。
+- 后台服务从纵向分组改为紧凑的水平分类切换，包含全部、残留、启动失败、资源异常、长期运行、长期未使用和其他启动项。
+- 磁盘浏览新增右键菜单，可在 Finder 中显示或移到废纸篓；移除前必须二次确认，完成后自动刷新磁盘扫描。
+- 磁盘移除严格使用本轮扫描的 ID 到路径能力注册表，拒绝符号链接和扫描卷外路径，并禁止移除卷根目录、卷顶层目录和用户主目录本身。
+- UI 冒烟新增清理路径点击、服务分类切换、磁盘右键菜单与移除范围确认覆盖，同时补充磁盘废纸篓路径安全测试。
+
 ## 0.6.35 - 2026-07-30
 
 ### English

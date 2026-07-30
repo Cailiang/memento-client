@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { lstat } from 'node:fs/promises'
+import { lstat, realpath } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
@@ -58,6 +58,34 @@ export function parseDiskUsageLine(
   const sizeBytes = blocks * 1024
   if (target !== resolvedRoot && sizeBytes < minimumBytes) return null
   return { target, sizeBytes }
+}
+
+export async function validateDiskUsageTrashTarget(
+  target: string,
+  root: string,
+  home = os.homedir()
+): Promise<string> {
+  if (!path.isAbsolute(target) || !path.isAbsolute(root)) {
+    throw new Error('Disk usage trash target must be absolute')
+  }
+  const normalizedTarget = path.resolve(target)
+  const normalizedRoot = path.resolve(root)
+  const stats = await lstat(normalizedTarget)
+  if (stats.isSymbolicLink()) throw new Error('Disk usage trash target cannot be a symbolic link')
+  const [realTarget, realRoot, realHome] = await Promise.all([
+    realpath(normalizedTarget),
+    realpath(normalizedRoot),
+    realpath(home).catch(() => path.resolve(home))
+  ])
+  if (
+    realTarget === realRoot ||
+    path.dirname(realTarget) === realRoot ||
+    realTarget === realHome ||
+    !realTarget.startsWith(`${realRoot}${path.sep}`)
+  ) {
+    throw new Error('Disk usage trash target is outside the scanned volume')
+  }
+  return realTarget
 }
 
 function displayLocation(target: string, root: string): string {

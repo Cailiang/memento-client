@@ -34,6 +34,7 @@ const api: MementoApi = {
   scanDiskUsage: () => ipcRenderer.invoke('memento:disk-usage:scan'),
   cancelDiskUsageScan: () => ipcRenderer.invoke('memento:disk-usage:cancel'),
   revealDiskUsageNode: (id) => ipcRenderer.invoke('memento:disk-usage:reveal', id),
+  trashDiskUsageNode: (id) => ipcRenderer.invoke('memento:disk-usage:trash', id),
   getApplicationIcon: (id) => ipcRenderer.invoke('memento:get-application-icon', id),
   openApplication: (id) => ipcRenderer.invoke('memento:open-application', id),
   runActions: (ids) => ipcRenderer.invoke('memento:run-actions', ids),

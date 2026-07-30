@@ -22,6 +22,7 @@ import {
 import type {
   AppUpdateState,
   CandidateOperation,
+  DiskUsageNode,
   DiskUsageProgress,
   DiskUsageScanResult,
   InstalledApplication,
@@ -35,6 +36,7 @@ import { ApplicationsPage } from './agent-ui/ApplicationsPage'
 import {
   ApplicationIgnoreConfirmDialog,
   DeleteHistoryDialog,
+  DiskUsageTrashDialog,
   DirectActionConfirmDialog,
   type DirectActionRequest,
   type ExecutionPhase,
@@ -285,6 +287,8 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
   const [diskUsageProgress, setDiskUsageProgress] = useState<DiskUsageProgress | null>(null)
   const [diskUsageBusy, setDiskUsageBusy] = useState(false)
   const [diskUsageError, setDiskUsageError] = useState<string | null>(null)
+  const [pendingDiskUsageTrash, setPendingDiskUsageTrash] = useState<DiskUsageNode | null>(null)
+  const [diskUsageTrashBusy, setDiskUsageTrashBusy] = useState(false)
   const [agentOrigin, setAgentOrigin] = useState<AgentOrigin | null>(null)
   const [restoreTarget, setRestoreTarget] = useState<RestoreTarget | null>(null)
   const [pendingDirectAction, setPendingDirectAction] = useState<DirectActionRequest | null>(null)
@@ -466,6 +470,33 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     void window.memento.revealDiskUsageNode(id).catch((error) => {
       setToast(error instanceof Error ? error.message : appText('无法显示磁盘项目', 'Could not reveal the disk item.'))
     })
+  }
+
+  const revealCandidate = (candidate: ScanCandidate): void => {
+    if (!window.memento) {
+      setToast(appText('已打开所在目录', 'Location opened'))
+      return
+    }
+    void window.memento.revealCandidateLocation(candidate.id).catch((error) => {
+      setToast(error instanceof Error ? error.message : appText('无法打开项目目录', 'Could not open the item location.'))
+    })
+  }
+
+  const trashDiskUsageNode = async (): Promise<void> => {
+    if (!pendingDiskUsageTrash || diskUsageTrashBusy) return
+    const node = pendingDiskUsageTrash
+    setDiskUsageTrashBusy(true)
+    try {
+      if (window.memento) await window.memento.trashDiskUsageNode(node.id)
+      else await new Promise((resolve) => window.setTimeout(resolve, 420))
+      setPendingDiskUsageTrash(null)
+      setToast(appText(`“${node.name}”已移到废纸篓`, `"${node.name}" was moved to Trash.`))
+      await scanDiskUsage()
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : appText('无法将磁盘项目移到废纸篓', 'Could not move the disk item to Trash.'))
+    } finally {
+      setDiskUsageTrashBusy(false)
+    }
   }
 
   useEffect(() => {
@@ -1223,7 +1254,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       onOpenUpdate={openUpdatePage}
     >
       {view === 'agent' && <AgentPage scan={result} run={activeRun} conversationRuns={conversationRuns} workspaceRuns={workspaceRuns} statusMessage={runStatusMessage} selectedPlanIds={selectedPlanIds} providerConfigured={Boolean(defaultProvider)} addingOperationId={addingOperationId} openingApplicationId={openingApplicationId} returnLabel={agentOriginLabel} onSubmit={startAgentRun} onSelectWorkspaceRun={selectWorkspaceRun} onNewTask={() => { setActiveRun(null); activeRunId.current = null; setSelectedPlanIds(new Set()); setRunStatusMessage(''); setAgentOrigin(null) }} onOpenHistory={() => setView('history')} onOpenSettings={() => setView('settings')} onReturn={returnToAgentOrigin} onOpenApplication={openAgentApplication} onAddPlanItem={(id) => void addAgentPlanItem(id)} onTogglePlanItem={(id) => setSelectedPlanIds((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next })} onExecutePlan={() => void executePlan()} onDiscardPlan={discardPlan} />}
-      {view === 'health' && <HealthPage result={result} settings={settings} scanBusy={scanBusy} progress={progress} tab={healthTab} storageMode={storageMode} diskUsage={diskUsage} diskUsageProgress={diskUsageProgress} diskUsageBusy={diskUsageBusy} diskUsageError={diskUsageError} restoreTarget={restoreTarget?.view === 'health' ? restoreTarget : null} onRestoreComplete={() => setRestoreTarget(null)} onScan={() => void scanNow()} onTabChange={setHealthTab} onStorageModeChange={changeStorageMode} onDiskUsageScan={() => void scanDiskUsage()} onDiskUsageCancel={cancelDiskUsageScan} onRevealDiskUsageNode={revealDiskUsageNode} onAgentPrompt={(prompt, origin: HealthAgentOrigin) => startAgentRun(prompt, { origin: { view: 'health', ...origin } })} onDirectAction={requestDirectAction} onDirectTerminalFix={requestDirectTerminalFix} onIgnore={setPendingIgnore} onManageIgnored={openIgnoredManager} />}
+      {view === 'health' && <HealthPage result={result} settings={settings} scanBusy={scanBusy} progress={progress} tab={healthTab} storageMode={storageMode} diskUsage={diskUsage} diskUsageProgress={diskUsageProgress} diskUsageBusy={diskUsageBusy} diskUsageError={diskUsageError} restoreTarget={restoreTarget?.view === 'health' ? restoreTarget : null} onRestoreComplete={() => setRestoreTarget(null)} onScan={() => void scanNow()} onTabChange={setHealthTab} onStorageModeChange={changeStorageMode} onDiskUsageScan={() => void scanDiskUsage()} onDiskUsageCancel={cancelDiskUsageScan} onRevealDiskUsageNode={revealDiskUsageNode} onTrashDiskUsageNode={setPendingDiskUsageTrash} onRevealCandidate={revealCandidate} onAgentPrompt={(prompt, origin: HealthAgentOrigin) => startAgentRun(prompt, { origin: { view: 'health', ...origin } })} onDirectAction={requestDirectAction} onDirectTerminalFix={requestDirectTerminalFix} onIgnore={setPendingIgnore} onManageIgnored={openIgnoredManager} />}
       {view === 'apps' && <ApplicationsPage applications={result?.applications ?? []} openingId={openingApplicationId} removingId={removingApplicationId} restoreTarget={restoreTarget?.view === 'apps' ? restoreTarget : null} onRestoreComplete={() => setRestoreTarget(null)} ignoredCount={settings.applicationWhitelist.length} onOpen={(application) => void openApplication(application)} onUninstall={setPendingUninstall} onIgnore={setPendingApplicationIgnore} onManageIgnored={() => openIgnoredManager('applications')} onAgentPrompt={(prompt, origin) => startAgentRun(prompt, { isolated: true, origin: { view: 'apps', ...origin } })} />}
       {view === 'history' && <HistoryPage runs={runs} onOpenRun={(run) => { setActiveRun(run); activeRunId.current = run.id; setSelectedPlanIds(new Set()); setView('agent') }} onDeleteRun={setPendingHistoryDelete} />}
       {view === 'settings' && <SettingsPage settings={settings} providers={providers} appVersion={appVersion} updateState={updateState} onUpdateSettings={updateSettings} onDiscoverModels={discoverProviderModels} onSaveProvider={saveProvider} onTestProvider={testProvider} onDeleteProvider={deleteProvider} onSetDefaultProvider={setDefaultProvider} onImportCcSwitch={importCcSwitchProviders} onCheckUpdates={checkForUpdates} onManageIgnored={() => openIgnoredManager()} onToast={setToast} />}
@@ -1231,6 +1262,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       {pendingDirectAction && <DirectActionConfirmDialog action={pendingDirectAction} onClose={() => setPendingDirectAction(null)} onConfirm={() => void executeDirectAction()} />}
       {executionState && <ExecutionProgressDialog phase={executionState.phase} progress={executionState.progress} itemCount={executionState.itemCount} completedCount={executionState.completedCount} detail={executionState.detail} onClose={() => setExecutionState(null)} />}
       {pendingUninstall && <UninstallDialog application={pendingUninstall} busy={uninstallBusy} onClose={() => setPendingUninstall(null)} onConfirm={() => void uninstallApplication()} />}
+      {pendingDiskUsageTrash && <DiskUsageTrashDialog node={pendingDiskUsageTrash} busy={diskUsageTrashBusy} onClose={() => setPendingDiskUsageTrash(null)} onConfirm={() => void trashDiskUsageNode()} />}
       {pendingIgnore && <IgnoreConfirmDialog candidate={pendingIgnore} busy={ignoreBusy} onClose={() => setPendingIgnore(null)} onConfirm={() => void confirmIgnore()} />}
       {pendingApplicationIgnore && <ApplicationIgnoreConfirmDialog application={pendingApplicationIgnore} busy={ignoreBusy} onClose={() => setPendingApplicationIgnore(null)} onConfirm={() => void confirmApplicationIgnore()} />}
       {ignoredManagerOpen && <IgnoredItemsDialog initialKind={ignoredManagerKind} serviceValues={settings.serviceWhitelist} storageValues={settings.storageWhitelist} applicationValues={settings.applicationWhitelist} ignoredApplications={result?.ignoredApplications ?? []} busyValue={restoreBusyValue} onRestore={(kind, value) => void restoreIgnored(kind, value)} onClose={() => setIgnoredManagerOpen(false)} />}

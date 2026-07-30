@@ -5,10 +5,32 @@ import { describe, expect, it } from 'vitest'
 import {
   buildDiskUsageTree,
   DiskUsageScanner,
-  parseDiskUsageLine
+  parseDiskUsageLine,
+  validateDiskUsageTrashTarget
 } from './disk-usage-scanner'
 
 describe('disk usage scanner', () => {
+  it('allows only real descendants of the scanned root to move to Trash', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'memento-disk-trash-'))
+    const home = path.join(root, 'Users', 'tester')
+    const child = path.join(home, 'Downloads')
+    const outside = await fs.mkdtemp(path.join(os.tmpdir(), 'memento-disk-outside-'))
+    const link = path.join(root, 'linked-outside')
+    await fs.mkdir(child, { recursive: true })
+    await fs.symlink(outside, link)
+    try {
+      await expect(validateDiskUsageTrashTarget(child, root, home)).resolves.toBe(await fs.realpath(child))
+      await expect(validateDiskUsageTrashTarget(root, root, home)).rejects.toThrow('outside the scanned volume')
+      await expect(validateDiskUsageTrashTarget(path.join(root, 'Users'), root, home)).rejects.toThrow('outside the scanned volume')
+      await expect(validateDiskUsageTrashTarget(home, root, home)).rejects.toThrow('outside the scanned volume')
+      await expect(validateDiskUsageTrashTarget(outside, root, home)).rejects.toThrow('outside the scanned volume')
+      await expect(validateDiskUsageTrashTarget(link, root, home)).rejects.toThrow('symbolic link')
+    } finally {
+      await fs.rm(root, { recursive: true, force: true })
+      await fs.rm(outside, { recursive: true, force: true })
+    }
+  })
+
   it('keeps only meaningful entries inside the selected volume', () => {
     expect(parseDiskUsageLine('8192\t/volume/Users/fangcl/.codex', '/volume'))
       .toMatchObject({ target: '/volume/Users/fangcl/.codex', sizeBytes: 8 * 1024 * 1024 })

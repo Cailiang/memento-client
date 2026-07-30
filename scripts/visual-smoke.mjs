@@ -127,6 +127,17 @@ try {
   if (await diskPage.locator('.disk-usage-surface [role="progressbar"]').count()) {
     failures.push('disk-browser: asynchronous scan uses a fake percentage progress bar')
   }
+  const trashTarget = diskPage.locator('.disk-column').last().locator('.disk-node').first()
+  await trashTarget.click({ button: 'right' })
+  const diskContextMenu = diskPage.locator('.disk-context-menu')
+  await diskContextMenu.waitFor()
+  await diskContextMenu.getByRole('menuitem', { name: '移到废纸篓' }).click()
+  const diskTrashDialog = diskPage.getByRole('dialog', { name: /移到废纸篓/ })
+  await diskTrashDialog.waitFor()
+  if (!await diskTrashDialog.getByText(/整个目录|文件会移到废纸篓/).count()) {
+    failures.push('disk-browser: Trash confirmation does not explain the removal scope')
+  }
+  await diskTrashDialog.getByRole('button', { name: '取消' }).click()
   await diskPage.screenshot({ path: '/tmp/memento-interaction-disk-browser.png' })
   await diskPage.setViewportSize({ width: 390, height: 844 })
   await diskPage.screenshot({ path: '/tmp/memento-interaction-disk-browser-mobile.png', fullPage: true })
@@ -191,6 +202,9 @@ try {
     }
   }
   await page.getByRole('tab', { name: /存储空间/ }).click()
+  const candidateLocation = page.locator('.health-panel.is-active .candidate-location').first()
+  if (!await candidateLocation.isVisible()) failures.push('health/storage: cleanup finding path is missing')
+  else await candidateLocation.click()
   const directActionButton = page.locator('.health-panel.is-active .direct-action-button').first()
   await directActionButton.click()
   await page.locator('.health-panel.is-active .row-menu-popover [role="menuitem"]').first().click()
@@ -203,6 +217,14 @@ try {
   await directProgress.getByRole('button', { name: '完成' }).click()
 
   await page.getByRole('tab', { name: /后台服务/ }).click()
+  const serviceCategoryTabs = page.locator('.service-mode-tabs [role="tab"]')
+  if (await serviceCategoryTabs.count() < 2) failures.push('health/services: horizontal category switcher is missing')
+  else {
+    await serviceCategoryTabs.nth(1).click()
+    if (await serviceCategoryTabs.nth(1).getAttribute('aria-selected') !== 'true') {
+      failures.push('health/services: category switch did not become active')
+    }
+  }
   await page.locator('.health-panel.is-active .row-actions > .secondary-button:first-child').first().click()
   const returnButton = page.getByRole('button', { name: '返回后台服务' })
   await returnButton.waitFor()

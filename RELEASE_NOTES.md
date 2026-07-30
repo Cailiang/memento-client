@@ -1,16 +1,16 @@
-# Memento Agent 0.6.35
+# Memento Agent 0.6.36
 
 ## 简体中文
 
-`0.6.35` 减少重复清理建议，增加后台服务异常分类，并让磁盘浏览可以全屏使用。
+`0.6.36` 让清理位置更直观、后台服务分类更紧凑，并可直接从磁盘浏览把项目移到废纸篓。
 
 ### 主要变化
 
-- 同一目录中的多个大文件合并为一条建议，一次即可忽略整个目录；实际清理仍逐文件确认。
-- 后台服务按残留、启动失败、资源异常、长期运行、长期未使用和其他启动项分类。
-- 服务扫描增加 CPU、内存和连续运行时长证据，并将异常分类提供给 Agent 分析。
-- Homebrew 启动失败项也会显示，但不会提供不适用的停止操作。
-- 磁盘分栏浏览器支持全屏和 Esc 退出。
+- 每条清理建议直接显示路径，点击即可打开目录或在 Finder 中定位文件。
+- 后台服务使用水平分类切换，不再纵向堆叠多个分类区块。
+- 磁盘项目支持右键在 Finder 中显示或移到废纸篓，操作前会明确确认路径、类型和容量。
+- 移除后自动重新扫描磁盘；卷根、系统顶层目录和整个用户主目录不允许从浏览器移除。
+- 所有磁盘操作只接受本轮扫描注册的项目 ID，并拒绝符号链接和越界路径。
 
 ### 安装说明
 
@@ -18,15 +18,15 @@
 
 ## English
 
-`0.6.35` reduces repetitive cleanup findings, classifies background-service anomalies, and makes the disk browser usable fullscreen.
+`0.6.36` makes cleanup locations visible, compacts service categories, and allows scanned disk items to move directly to Trash.
 
 ### Highlights
 
-- Multiple large files in one folder are grouped into a single finding that can be ignored once; cleanup remains file-by-file.
-- Background services are grouped as orphaned, failed, resource-heavy, long-running, stale, or other startup items.
-- Service evidence and Agent analysis now include CPU, memory, and elapsed-runtime sampling.
-- Failed Homebrew services are visible without exposing an inapplicable stop action.
-- The disk column browser supports fullscreen viewing and Escape-key exit.
+- Every cleanup finding shows a clickable registered path that opens the folder or reveals the file in Finder.
+- Background services use a horizontal category switcher instead of stacked sections.
+- Disk items expose a right-click menu for Finder reveal or Move to Trash, followed by explicit path, type, and size confirmation.
+- The disk scan refreshes after removal; the volume root, top-level system folders, and the whole user home folder cannot be removed from the browser.
+- Disk actions accept only IDs registered by the current scan and reject symbolic links and out-of-volume paths.
 
 ### Installation
 

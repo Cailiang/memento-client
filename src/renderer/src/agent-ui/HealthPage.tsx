@@ -4,6 +4,7 @@ import {
   Bolt,
   Ellipsis,
   EyeOff,
+  FolderOpen,
   Hammer,
   LoaderCircle,
   Package,
@@ -52,12 +53,14 @@ function CandidateRow({
   candidate,
   onAgentPrompt,
   onDirectAction,
-  onIgnore
+  onIgnore,
+  onReveal
 }: {
   candidate: ScanCandidate
   onAgentPrompt: (prompt: string, itemId: string) => void
   onDirectAction: (candidate: ScanCandidate, operation: CandidateOperation) => void
   onIgnore: (candidate: ScanCandidate) => void
+  onReveal: (candidate: ScanCandidate) => void
 }): React.JSX.Element {
   const { text } = useI18n()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -83,7 +86,7 @@ function CandidateRow({
   return (
     <div className="data-row" data-focus-id={candidate.id} tabIndex={-1}>
       <span className="row-icon"><Icon size={16} /></span>
-      <div className="row-main"><strong>{candidate.name}</strong><small>{candidate.description}</small></div>
+      <div className="row-main"><strong>{candidate.name}</strong><small>{candidate.description}</small>{candidate.location && <button type="button" className="candidate-location" title={candidate.location} onClick={() => onReveal(candidate)}><FolderOpen size={12} /><span>{candidate.location}</span></button>}</div>
       <div className="row-meta"><strong>{candidate.sizeBytes ? formatBytes(candidate.sizeBytes) : candidate.status}</strong><small>{candidate.ageDays !== undefined ? text(`${candidate.ageDays} 天`, `${candidate.ageDays} days`) : candidate.subtitle}</small></div>
       <div className="row-meta"><strong>{operationCount ? text(`${operationCount} 个可选操作`, `${operationCount} available ${operationCount === 1 ? 'action' : 'actions'}`) : text('仅提供分析', 'Analysis only')}</strong><small>{operationCount ? text('可直接执行或先分析', 'Run directly or analyze first') : text('不会修改系统', 'No system changes')}</small></div>
       <div className="row-actions">
@@ -136,6 +139,8 @@ export function HealthPage({
   onDiskUsageScan,
   onDiskUsageCancel,
   onRevealDiskUsageNode,
+  onTrashDiskUsageNode,
+  onRevealCandidate,
   onAgentPrompt,
   onDirectAction,
   onDirectTerminalFix,
@@ -160,6 +165,8 @@ export function HealthPage({
   onDiskUsageScan: () => void
   onDiskUsageCancel: () => void
   onRevealDiskUsageNode: (id: string) => void
+  onTrashDiskUsageNode: (node: import('../../../shared/types').DiskUsageNode) => void
+  onRevealCandidate: (candidate: ScanCandidate) => void
   onAgentPrompt: (prompt: string, origin: HealthAgentOrigin) => void
   onDirectAction: (candidate: ScanCandidate, operation: CandidateOperation) => void
   onDirectTerminalFix: (finding: ScanResult['terminal']['findings'][number]) => void
@@ -168,9 +175,10 @@ export function HealthPage({
 }): React.JSX.Element {
   const { language, text } = useI18n()
   const pageRef = useRef<HTMLElement>(null)
+  const [serviceCategory, setServiceCategory] = useState<string>('all')
   const storage = result?.candidates.filter((item) => item.section === 'storage') ?? []
   const services = result?.candidates.filter((item) => item.section === 'services') ?? []
-  const serviceGroups = ([
+  const serviceCategories = ([
     ['orphaned', text('残留启动项', 'Orphaned startup items')],
     ['failed', text('启动异常', 'Startup failures')],
     ['resource', text('资源占用异常', 'High resource usage')],
@@ -182,8 +190,13 @@ export function HealthPage({
     label,
     items: services.filter((service) => kind === 'other'
       ? !(service.serviceAnomalies?.length)
-      : service.serviceAnomalies?.[0] === kind)
+      : service.serviceAnomalies?.includes(kind))
   })).filter((group) => group.items.length > 0)
+  const visibleServices = serviceCategory === 'all'
+    ? services
+    : services.filter((service) => serviceCategory === 'other'
+      ? !(service.serviceAnomalies?.length)
+      : service.serviceAnomalies?.includes(serviceCategory as NonNullable<ScanCandidate['serviceAnomalies']>[number]))
   const reclaimable = storage.reduce((sum, item) => sum + (operations(item).length ? item.sizeBytes ?? 0 : 0), 0)
   const terminalFindings = result?.terminal.findings ?? []
   const terminalFixes = terminalFindings.filter((item) => item.fix)
@@ -273,18 +286,18 @@ export function HealthPage({
           {storageMode === 'recommendations' ? (
             <>
               <div className="section-toolbar"><strong>{text('空间建议', 'Storage findings')}</strong><button type="button" className="ignored-count-button" onClick={() => onManageIgnored('storage')}><EyeOff size={14} />{text(`已忽略 ${settings.storageWhitelist.length} 项`, `${settings.storageWhitelist.length} ignored`)}</button></div>
-              <div className="data-list">{storage.length ? storage.map((candidate) => <CandidateRow key={candidate.id} candidate={candidate} onAgentPrompt={askAgent} onDirectAction={onDirectAction} onIgnore={onIgnore} />) : <div className="module-empty">{text('没有发现存储建议', 'No storage findings')}</div>}</div>
+              <div className="data-list">{storage.length ? storage.map((candidate) => <CandidateRow key={candidate.id} candidate={candidate} onAgentPrompt={askAgent} onDirectAction={onDirectAction} onIgnore={onIgnore} onReveal={onRevealCandidate} />) : <div className="module-empty">{text('没有发现存储建议', 'No storage findings')}</div>}</div>
             </>
           ) : (
-            <DiskUsageBrowser result={diskUsage} progress={diskUsageProgress} busy={diskUsageBusy} error={diskUsageError} onScan={onDiskUsageScan} onCancel={onDiskUsageCancel} onReveal={onRevealDiskUsageNode} />
+            <DiskUsageBrowser result={diskUsage} progress={diskUsageProgress} busy={diskUsageBusy} error={diskUsageError} onScan={onDiskUsageScan} onCancel={onDiskUsageCancel} onReveal={onRevealDiskUsageNode} onRequestTrash={onTrashDiskUsageNode} />
           )}
         </div>
       )}
 
       {tab === 'services' && (
         <div className="health-panel is-active">
-          <div className="section-toolbar"><strong>{text('常驻与启动项', 'Background and startup items')}</strong><button type="button" className="ignored-count-button" onClick={() => onManageIgnored('services')}><EyeOff size={14} />{text(`已忽略 ${settings.serviceWhitelist.length} 项`, `${settings.serviceWhitelist.length} ignored`)}</button></div>
-          {serviceGroups.length ? <div className="service-groups">{serviceGroups.map((group) => <section className="service-group" key={group.kind}><header><strong>{group.label}</strong><span>{group.items.length}</span></header><div className="data-list">{group.items.map((candidate) => <CandidateRow key={candidate.id} candidate={candidate} onAgentPrompt={askAgent} onDirectAction={onDirectAction} onIgnore={onIgnore} />)}</div></section>)}</div> : <div className="module-empty">{text('没有发现异常后台服务', 'No service findings')}</div>}
+          <div className="service-mode-toolbar"><div className="service-mode-tabs" role="tablist" aria-label={text('后台服务分类', 'Service categories')}><button type="button" role="tab" aria-selected={serviceCategory === 'all'} className={`service-mode-tab ${serviceCategory === 'all' ? 'is-active' : ''}`} onClick={() => setServiceCategory('all')}>{text('全部', 'All')} <span>{services.length}</span></button>{serviceCategories.map((category) => <button type="button" role="tab" aria-selected={serviceCategory === category.kind} className={`service-mode-tab ${serviceCategory === category.kind ? 'is-active' : ''}`} key={category.kind} onClick={() => setServiceCategory(category.kind)}>{category.label} <span>{category.items.length}</span></button>)}</div><button type="button" className="ignored-count-button" onClick={() => onManageIgnored('services')}><EyeOff size={14} />{text(`已忽略 ${settings.serviceWhitelist.length} 项`, `${settings.serviceWhitelist.length} ignored`)}</button></div>
+          <div className="data-list">{visibleServices.length ? visibleServices.map((candidate) => <CandidateRow key={candidate.id} candidate={candidate} onAgentPrompt={askAgent} onDirectAction={onDirectAction} onIgnore={onIgnore} onReveal={onRevealCandidate} />) : <div className="module-empty">{text('此分类没有后台服务', 'No services in this category')}</div>}</div>
         </div>
       )}
 

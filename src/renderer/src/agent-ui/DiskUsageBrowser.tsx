@@ -8,7 +8,8 @@ import {
   Maximize2,
   Minimize2,
   RefreshCw,
-  Square
+  Square,
+  Trash2
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type {
@@ -31,6 +32,12 @@ function childLabel(node: DiskUsageNode, language: 'zh-CN' | 'en-US'): string {
     : `${node.childCount} 个可见项目`
 }
 
+function canTrashNode(node: DiskUsageNode): boolean {
+  const segments = node.location.split('/').filter(Boolean)
+  if (segments.length < 2) return false
+  return !(node.kind === 'directory' && segments[0] === 'Users' && segments.length === 2)
+}
+
 interface DiskColumn {
   parent: DiskUsageNode
   nodes: DiskUsageNode[]
@@ -44,7 +51,8 @@ export function DiskUsageBrowser({
   error,
   onScan,
   onCancel,
-  onReveal
+  onReveal,
+  onRequestTrash
 }: {
   result: DiskUsageScanResult | null
   progress: DiskUsageProgress | null
@@ -53,10 +61,12 @@ export function DiskUsageBrowser({
   onScan: () => void
   onCancel: () => void
   onReveal: (id: string) => void
+  onRequestTrash: (node: DiskUsageNode) => void
 }): React.JSX.Element {
   const { language, text } = useI18n()
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [fullscreen, setFullscreen] = useState(false)
+  const [contextMenu, setContextMenu] = useState<{ node: DiskUsageNode; x: number; y: number } | null>(null)
   const columnsRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -71,6 +81,20 @@ export function DiskUsageBrowser({
     document.addEventListener('keydown', close)
     return () => document.removeEventListener('keydown', close)
   }, [fullscreen])
+
+  useEffect(() => {
+    if (!contextMenu) return
+    const close = (): void => setContextMenu(null)
+    const closeOnEscape = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') close()
+    }
+    document.addEventListener('pointerdown', close)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', close)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [contextMenu])
 
   const { columns, selected } = useMemo(() => {
     if (!result) return { columns: [] as DiskColumn[], selected: null }
@@ -168,6 +192,15 @@ export function DiskUsageBrowser({
                   ...current.slice(0, columnIndex),
                   node.id
                 ])}
+                onContextMenu={(event) => {
+                  event.preventDefault()
+                  setSelectedIds((current) => [...current.slice(0, columnIndex), node.id])
+                  setContextMenu({
+                    node,
+                    x: Math.min(event.clientX, window.innerWidth - 190),
+                    y: Math.min(event.clientY, window.innerHeight - 92)
+                  })
+                }}
               >
                 <span className="disk-node-size">{formatBytes(node.sizeBytes)}</span>
                 <span className="disk-node-name">{node.kind === 'directory' ? <Folder size={13} /> : <File size={13} />}<span>{node.name}</span></span>
@@ -182,6 +215,10 @@ export function DiskUsageBrowser({
         ))}
       </div>
       <div className="disk-browser-foot"><span>{text(`显示不小于 ${formatBytes(result.minimumDisplayBytes)} 的项目`, `Showing items at least ${formatBytes(result.minimumDisplayBytes)}`)}</span></div>
+      {contextMenu && <div className="disk-context-menu" role="menu" style={{ left: contextMenu.x, top: contextMenu.y }} onPointerDown={(event) => event.stopPropagation()}>
+        <button type="button" role="menuitem" onClick={() => { onReveal(contextMenu.node.id); setContextMenu(null) }}><FolderOpen size={14} />{text('在 Finder 中显示', 'Show in Finder')}</button>
+        {canTrashNode(contextMenu.node) && <button type="button" role="menuitem" className="is-danger" onClick={() => { onRequestTrash(contextMenu.node); setContextMenu(null) }}><Trash2 size={14} />{text('移到废纸篓', 'Move to Trash')}</button>}
+      </div>}
     </div>
   )
 }

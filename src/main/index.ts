@@ -64,7 +64,11 @@ import {
 import { validateLargeFileCleanupTarget } from './large-file-cleanup'
 import { brewCleanupVersionTargets, isSafeBrewVersion } from './brew-cleanup'
 import { reconcileScanCapabilities } from './scan-capability-reconciliation'
-import { diskUsageScanRoot, DiskUsageScanner } from './disk-usage-scanner'
+import {
+  diskUsageScanRoot,
+  DiskUsageScanner,
+  validateDiskUsageTrashTarget
+} from './disk-usage-scanner'
 import { fetchUpdateState } from './update-checker'
 import {
   applyTerminalFixGroup,
@@ -978,6 +982,24 @@ app.whenReady().then(async () => {
       return
     }
     shell.showItemInFolder(target)
+  })
+
+  ipcMain.handle('memento:disk-usage:trash', async (_event, id: string) => {
+    if (typeof id !== 'string' || id.length > 100) {
+      throw new Error(mainText('磁盘项目入口无效，请重新扫描', 'The disk item is invalid. Scan again.'))
+    }
+    const target = registeredDiskUsageTargets.get(id)
+    if (!target || !existsSync(target)) {
+      throw new Error(mainText('磁盘项目已经不存在，请重新扫描', 'The disk item no longer exists. Scan again.'))
+    }
+    let validatedTarget: string
+    try {
+      validatedTarget = await validateDiskUsageTrashTarget(target, diskUsageScanRoot())
+    } catch {
+      throw new Error(mainText('这个磁盘项目不能从浏览器中移除', 'This disk item cannot be removed from the browser.'))
+    }
+    await shell.trashItem(validatedTarget)
+    registeredDiskUsageTargets = new Map()
   })
 
   ipcMain.handle('memento:agent:providers:list', () => agentStore!.listProviders())

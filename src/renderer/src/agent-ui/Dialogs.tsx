@@ -19,7 +19,7 @@ import {
   applicationWhitelistValue,
   candidateWhitelistValue
 } from '../../../shared/app-settings'
-import type { InstalledApplication, ScanCandidate } from '../../../shared/types'
+import type { DiskUsageNode, InstalledApplication, ScanCandidate } from '../../../shared/types'
 import { useI18n } from '../i18n'
 import { ApplicationIcon } from './ApplicationsPage'
 import { formatBytes } from './utils'
@@ -190,6 +190,34 @@ export function UninstallDialog({
   return <DialogFrame title={text(`卸载 ${application.name}`, `Uninstall ${application.name}`)} description={busy ? text('Memento 正在将应用移到废纸篓，请稍候。', 'Memento is moving the application to Trash. Please wait.') : text('应用本体将移到废纸篓，文稿、设置和其他应用数据会保留。', 'The application bundle will move to Trash. Documents, settings, and app data are kept.')} busy={busy} onClose={onClose} actions={<><button type="button" className="secondary-button" onClick={onClose} disabled={busy}>{text('取消', 'Cancel')}</button><button type="button" className="danger-button" onClick={onConfirm} disabled={busy}>{busy ? <LoaderCircle className="spinner" size={15} /> : <Trash2 size={15} />}{busy ? text('正在卸载', 'Uninstalling') : text('移到废纸篓', 'Move to Trash')}</button></>}>
     {busy && <div className="uninstall-progress" role="status" aria-live="polite"><span className="uninstall-progress-mark"><Trash2 size={20} /></span><div><strong>{text('正在卸载应用', 'Uninstalling application')}</strong><small>{text('操作完成后，此应用会自动从列表中移除。', 'The app will disappear from the list when the operation completes.')}</small></div></div>}
   </DialogFrame>
+}
+
+export function DiskUsageTrashDialog({
+  node,
+  busy,
+  onClose,
+  onConfirm
+}: {
+  node: DiskUsageNode
+  busy: boolean
+  onClose: () => void
+  onConfirm: () => void
+}): React.JSX.Element {
+  const { text } = useI18n()
+  const itemType = node.kind === 'directory' ? text('目录', 'Folder') : text('文件', 'File')
+  return (
+    <DialogFrame
+      title={text(`将“${node.name}”移到废纸篓？`, `Move "${node.name}" to Trash?`)}
+      description={node.kind === 'directory'
+        ? text('整个目录及其中所有内容都会移到废纸篓。此操作不使用永久删除，但请先确认路径。', 'The entire folder and all of its contents will move to Trash. This is not a permanent deletion, but verify the path first.')
+        : text('文件会移到废纸篓，不会直接永久删除。', 'The file will move to Trash and will not be deleted permanently.')}
+      busy={busy}
+      onClose={onClose}
+      actions={<><button type="button" className="secondary-button" onClick={onClose} disabled={busy}>{text('取消', 'Cancel')}</button><button type="button" className="danger-button" onClick={onConfirm} disabled={busy}>{busy ? <LoaderCircle className="spinner" size={15} /> : <Trash2 size={15} />}{busy ? text('正在移动', 'Moving') : text('移到废纸篓', 'Move to Trash')}</button></>}
+    >
+      <div className="dialog-body"><div className="confirm-row"><span><Trash2 size={13} /></span><div><strong>{node.location}</strong><small>{itemType} · {formatBytes(node.sizeBytes)}</small></div><span className="risk-label review">{text('需确认', 'Review')}</span></div></div>
+    </DialogFrame>
+  )
 }
 
 export function IgnoreConfirmDialog({
