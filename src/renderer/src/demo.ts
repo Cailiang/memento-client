@@ -1,5 +1,7 @@
 import type { AppLanguage } from '../../shared/app-settings'
 import type {
+  DiskUsageNode,
+  DiskUsageScanResult,
   ScanCandidate,
   ScanProgress,
   ScanResult,
@@ -9,6 +11,71 @@ import type {
 
 const GB = 1024 ** 3
 const MB = 1024 ** 2
+
+function demoDiskNode(
+  id: string,
+  name: string,
+  location: string,
+  sizeBytes: number,
+  children: DiskUsageNode[] = [],
+  kind: DiskUsageNode['kind'] = 'directory'
+): DiskUsageNode {
+  return {
+    id,
+    name,
+    location,
+    sizeBytes,
+    kind,
+    childCount: children.length,
+    omittedChildCount: 0,
+    omittedSizeBytes: 0,
+    children
+  }
+}
+
+export function localizedDemoDiskUsageResult(language: AppLanguage): DiskUsageScanResult {
+  const fang = language === 'en-US' ? 'fangcl' : 'fangcl'
+  const applicationSupport = demoDiskNode('disk-app-support', 'Application Support', `/Users/${fang}/Library/Application Support`, 48.6 * GB, [
+    demoDiskNode('disk-claude', 'Claude', `/Users/${fang}/Library/Application Support/Claude`, 2.8 * GB),
+    demoDiskNode('disk-codex-app', 'Codex', `/Users/${fang}/Library/Application Support/Codex`, 1.6 * GB),
+    demoDiskNode('disk-antigravity-app', 'Antigravity', `/Users/${fang}/Library/Application Support/Antigravity`, 972 * MB)
+  ])
+  const userLibrary = demoDiskNode('disk-user-library', 'Library', `/Users/${fang}/Library`, 121.2 * GB, [
+    applicationSupport,
+    demoDiskNode('disk-caches', 'Caches', `/Users/${fang}/Library/Caches`, 19.4 * GB),
+    demoDiskNode('disk-containers', 'Containers', `/Users/${fang}/Library/Containers`, 17.1 * GB),
+    demoDiskNode('disk-developer', 'Developer', `/Users/${fang}/Library/Developer`, 15.8 * GB)
+  ])
+  const user = demoDiskNode('disk-user', fang, `/Users/${fang}`, 239.4 * GB, [
+    userLibrary,
+    demoDiskNode('disk-downloads', 'Downloads', `/Users/${fang}/Downloads`, 51.7 * GB),
+    demoDiskNode('disk-movies', 'Movies', `/Users/${fang}/Movies`, 18.2 * GB),
+    demoDiskNode('disk-gradle', '.gradle', `/Users/${fang}/.gradle`, 4.9 * GB),
+    demoDiskNode('disk-gemini', '.gemini', `/Users/${fang}/.gemini`, 3.9 * GB),
+    demoDiskNode('disk-cache', '.cache', `/Users/${fang}/.cache`, 2 * GB),
+    demoDiskNode('disk-codex', '.codex', `/Users/${fang}/.codex`, 1.1 * GB),
+    demoDiskNode('disk-antigravity', '.antigravity', `/Users/${fang}/.antigravity`, 376.5 * MB)
+  ])
+  const users = demoDiskNode('disk-users', 'Users', '/Users', 242.5 * GB, [
+    user,
+    demoDiskNode('disk-shared', 'Shared', '/Users/Shared', 2.8 * GB)
+  ])
+  const root = demoDiskNode('disk-root', 'Macintosh HD', '/', 287.6 * GB, [
+    users,
+    demoDiskNode('disk-applications', 'Applications', '/Applications', 38 * GB),
+    demoDiskNode('disk-library', 'Library', '/Library', 6.8 * GB)
+  ])
+  return {
+    scanId: `demo-disk-${language}`,
+    root,
+    scannedEntries: 186_420,
+    retainedEntries: 2_846,
+    inaccessibleEntries: 14,
+    minimumDisplayBytes: 5 * MB,
+    startedAt: new Date(Date.now() - 82_000).toISOString(),
+    completedAt: new Date().toISOString()
+  }
+}
 
 export const demoResult: ScanResult = {
   scanId: 'browser-demo',

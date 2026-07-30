@@ -1,17 +1,16 @@
-# Memento Agent 0.6.33
+# Memento Agent 0.6.34
 
 ## 简体中文
 
-`0.6.33` 修复分批执行与 Antigravity 鉴权，并让执行反馈和磁盘清理更真实、更实用。
+`0.6.34` 让并行 Agent 分析保持可见，并新增完整、异步的磁盘容量浏览器。
 
 ### 主要变化
 
-- 执行弹层会先显示再启动操作，从 8% 开始，并按真实复检进度推进；清理动画也重新设计。
-- 同一 Agent 任务可分批执行多个操作，复检后仍有效的第二个操作不会再报“操作已经失效”，已完成操作不能重复运行。
-- 任务记录新增即时搜索并移除导出入口。
-- Antigravity 等 Google 兼容代理改用 Authorization Header，Google 官方接口使用 `x-goog-api-key`。
-- 存储扫描新增 Claude、Codex、Antigravity、Grok 缓存、iOS 模拟器缓存、大型应用日志和用户目录大文件。
-- AI 配置、密钥、对话和项目不参与清理；大文件只会移到废纸篓。
+- Agent 页面新增任务切换条，同时分析多个对象时会保留每一项的独立状态和结果。
+- 存储空间拆分为安全筛选后的“清理建议”和完整容量“磁盘浏览”，不再让建议数量看起来像磁盘项目总数。
+- 磁盘扫描异步运行、支持取消，显示真实项目数、耗时、当前位置和无权限目录数，不显示虚假百分比。
+- 分栏浏览器按照容量排序并逐层展开目录和大文件，支持在 Finder 中定位扫描结果。
+- 磁盘浏览不会直接删除任意路径；现有白名单清理边界保持不变。
 
 ### 安装说明
 
@@ -19,16 +18,15 @@
 
 ## English
 
-`0.6.33` fixes batched execution and Antigravity authentication while making execution feedback and disk cleanup more useful.
+`0.6.34` keeps concurrent Agent analyses visible and adds a complete asynchronous disk-usage browser.
 
 ### Highlights
 
-- The execution dialog paints before work begins, starts at 8%, follows real verification progress, and uses a redesigned cleanup animation.
-- One Agent task can execute operations in multiple batches. A still-valid second operation no longer expires after verification, and completed operations cannot run twice.
-- Task history now has live search and no export action.
-- Google-compatible proxies such as Antigravity use Authorization headers, while the official Google API uses `x-goog-api-key`.
-- Storage inspection now includes Claude, Codex, Antigravity, and Grok caches, iOS simulator caches, large application logs, and large files in user folders.
-- AI configuration, credentials, conversations, and projects are excluded from cleanup; large files only move to Trash.
+- The Agent page now keeps every concurrent analysis visible in a task switcher with independent status and results.
+- Storage is split into safety-filtered cleanup findings and a complete disk-usage browser, so the finding count is no longer presented like a disk item total.
+- Disk scanning runs asynchronously, can be cancelled, and reports real item counts, elapsed time, current location, and inaccessible locations without a fake percentage.
+- The column browser sorts folders and large files by size, drills through their hierarchy, and reveals registered results in Finder.
+- Arbitrary disk-browser paths cannot be deleted; existing cleanup allowlists remain unchanged.
 
 ### Installation
 

@@ -8,8 +8,8 @@ Memento is a local macOS maintenance Agent. It combines deterministic device sca
 
 The application is rebuilt around the approved interactive prototype at [`../prototypes/memento-agent/index.html`](../prototypes/memento-agent/index.html). Its five work areas are:
 
-- **Agent:** ask for a goal in plain language, continue with context-aware follow-ups, act from structured module results, review the plan, confirm, execute, and verify.
-- **Computer health:** inspect rebuildable AI/developer caches, application logs, large user files, background services, and terminal startup without opening redundant detail pages.
+- **Agent:** ask for a goal in plain language, keep concurrent analyses visible as separate switchable tasks, continue with context-aware follow-ups, act from structured module results, review the plan, confirm, execute, and verify.
+- **Computer health:** inspect safety-filtered cleanup findings, browse the complete main-data-volume hierarchy asynchronously, and review background services and terminal startup without opening redundant detail pages.
 - **Applications:** browse user and read-only system apps in a real-logo grid, see usage and bundle metadata, ask Agent about one exact app, open it, ignore it, or move an uninstallable app to Trash after confirmation.
 - **Task history:** search, reopen, or permanently delete local Agent runs and their tool-call records.
 - **Settings:** manage multiple model providers, software updates, window behavior, ignored items, color theme, and language.
@@ -32,6 +32,8 @@ Each configuration contains a name, API type, base URL, API key, and selected mo
 Official Google model discovery uses the `x-goog-api-key` header. Google-compatible proxy URLs use Bearer authorization for discovery and model calls, so credentials never need to appear in a `/models` query string.
 
 Storage cleanup groups only known rebuildable cache paths for Claude, Codex, Antigravity, and Grok. It does not include their credentials, settings, conversations, sessions, workspaces, or projects. Large files at least seven days old and 500 MB in Downloads, Desktop, or Movies are review-only findings and can only be moved to Trash after the main process revalidates the exact file.
+
+The Storage count describes actionable findings selected by deterministic safety rules, not every file on disk. **Disk browser** runs a separate cancellable `du` scan of the macOS main data volume and presents folders and files of at least 5 MB in a size-sorted column hierarchy. Progress reports elapsed time, current location, item counts, and inaccessible locations without estimating a percentage. Disk-browser entries can be revealed in Finder, but they do not become cleanup actions.
 
 On the first launch after this importer is introduced, Memento detects the local CC Switch database at `~/.cc-switch/cc-switch.db` or its configured custom directory. Usable Claude, Codex, and Gemini entries are imported once and mapped by API format. The completed attempt is recorded in SQLite, so a provider the user later deletes does not return at the next launch. Settings provides an explicit **Re-import CC Switch** action whenever the user wants to read it again. Credential-free placeholders are skipped. The CC Switch database is opened read-only; imported credentials stay in the main process and are re-encrypted in Memento's own provider store.
 

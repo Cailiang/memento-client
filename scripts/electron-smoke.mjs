@@ -14,7 +14,13 @@ try {
   const page = await electronApp.firstWindow()
   await page.locator('.nav-button[title="应用管理"]').waitFor({ timeout: 15_000 })
 
-  const preloadReady = await page.evaluate(() => Boolean(window.memento?.scan))
+  const preloadReady = await page.evaluate(() => Boolean(
+    window.memento?.scan &&
+    window.memento.scanDiskUsage &&
+    window.memento.cancelDiskUsageScan &&
+    window.memento.revealDiskUsageNode &&
+    window.memento.onDiskUsageProgress
+  ))
   if (!preloadReady) throw new Error('preload API is unavailable')
   const providers = await page.evaluate(() => window.memento?.listAgentProviders() ?? [])
   if (providers.some((provider) => 'apiKey' in provider)) {

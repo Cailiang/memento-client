@@ -97,6 +97,43 @@ try {
   }
   await settingsPage.close()
 
+  const concurrentPage = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+  await concurrentPage.goto(baseUrl, { waitUntil: 'networkidle' })
+  await concurrentPage.locator('textarea[aria-label="输入任务"]').fill('分析 Xcode 派生数据')
+  await concurrentPage.locator('button[aria-label="发送"]').click()
+  await concurrentPage.locator('.nav-button[title="电脑体检"]').click()
+  await concurrentPage.getByRole('tab', { name: /存储空间/ }).click()
+  await concurrentPage.locator('.health-panel.is-active .row-actions > .secondary-button').first().click()
+  const taskItems = concurrentPage.locator('.agent-task-item')
+  await taskItems.nth(1).waitFor()
+  if (await taskItems.count() !== 2) failures.push('agent-concurrency: both analysis tasks are not visible')
+  await taskItems.first().click()
+  if (!await concurrentPage.locator('.message.user').filter({ hasText: '分析 Xcode 派生数据' }).count()) {
+    failures.push('agent-concurrency: first analysis cannot be reopened')
+  }
+  await concurrentPage.screenshot({ path: '/tmp/memento-interaction-agent-concurrency.png' })
+  await concurrentPage.close()
+
+  const diskPage = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+  await diskPage.goto(baseUrl, { waitUntil: 'networkidle' })
+  await diskPage.locator('.nav-button[title="电脑体检"]').click()
+  await diskPage.getByRole('tab', { name: '磁盘浏览' }).click()
+  await diskPage.locator('.disk-usage-surface').waitFor({ timeout: 3_000 })
+  await diskPage.locator('.disk-column').first().locator('.disk-node').first().click()
+  await diskPage.locator('.disk-column').nth(1).locator('.disk-node').first().click()
+  if (await diskPage.locator('.disk-column').count() < 3) {
+    failures.push('disk-browser: hierarchy did not open a third column')
+  }
+  if (await diskPage.locator('.disk-usage-surface [role="progressbar"]').count()) {
+    failures.push('disk-browser: asynchronous scan uses a fake percentage progress bar')
+  }
+  await diskPage.screenshot({ path: '/tmp/memento-interaction-disk-browser.png' })
+  await diskPage.setViewportSize({ width: 390, height: 844 })
+  await diskPage.screenshot({ path: '/tmp/memento-interaction-disk-browser-mobile.png', fullPage: true })
+  const diskMobileOverflow = await diskPage.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+  if (diskMobileOverflow > 1) failures.push(`disk-browser/mobile: horizontal page overflow ${diskMobileOverflow}`)
+  await diskPage.close()
+
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   await page.goto(baseUrl, { waitUntil: 'networkidle' })
   await page.locator('textarea[aria-label="输入任务"]').fill('检查可以安全清理的空间')

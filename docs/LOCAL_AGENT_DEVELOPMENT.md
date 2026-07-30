@@ -162,6 +162,8 @@ The Renderer also removes a newly ignored row immediately. Restoring detection u
 
 The production Renderer consists of one shell and five prototype-aligned pages under `src/renderer/src/agent-ui/`.
 
+Concurrent Agent starts are kept in a Renderer workspace list even when they use isolated conversation IDs. The compact task switcher displays each run's persisted state and changes the active conversation without cancelling or replacing other runs. Completion events update background tasks in place; recently completed workspace tasks remain available within the eight-item local workspace window unless their history record is deleted.
+
 - Dialogs trap focus, close with Escape when idle, restore previous focus, and block backdrop closing during execution.
 - Async buttons disable repeated submission and show a spinner.
 - Dynamic scan and Agent states use live regions.
@@ -171,6 +173,7 @@ The production Renderer consists of one shell and five prototype-aligned pages u
 - Application icons are requested lazily and only for target paths registered by the current scan.
 - Conversation turns remain visible together, while SQLite keeps their compact focus and pending-plan context available to subsequent runs.
 - Task history has local live search across prompts, provider/model names, status, response, and error text. Deletion is confirmed in the Renderer and handled in the main process. Deleting `agent_runs` cascades to `tool_calls`; active runs are rejected, and completed system changes are not undone.
+- Storage keeps cleanup findings and capacity browsing as separate surfaces. Findings remain bounded by deterministic cleanup allowlists. `disk-usage-scanner.ts` launches `/usr/bin/du -akx` against `/System/Volumes/Data` when available, streams real scan counters over a dedicated IPC event, supports cancellation, and retains entries of at least 5 MB. The resulting tree sorts siblings by size, caps a single folder at 200 visible children with an aggregate remainder, and registers opaque reveal IDs. Disk-browser paths never enter the cleanup action registry.
 - Structured application results use a logo grid with last-used time and size; storage, service, and terminal results use compact rows. Their buttons reference only registered application or operation IDs.
 - Model prose is parsed by `react-markdown` with GFM and soft-line-break support. Common model bullet characters are normalized into semantic lists, raw HTML remains disabled, and links are rendered as inert labels. The Renderer never uses `dangerouslySetInnerHTML` or model-generated HTML.
 - Health rows expose analysis as AI analysis, summarize the count of registered operations, and wait for the user to choose an operation from the trusted structured result before anything enters the confirmation plan.

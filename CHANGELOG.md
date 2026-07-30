@@ -8,6 +8,26 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.34 - 2026-07-30
+
+### English
+
+- Added a persistent Agent task switcher. Starting another analysis no longer hides the first task: concurrent and recently completed tasks retain their own status and can be reopened without merging isolated contexts.
+- Split Storage into **Cleanup findings** and **Disk browser**. The existing count now explicitly represents safety-filtered actionable findings rather than every item on disk.
+- Added a cancellable asynchronous main-data-volume scan powered by macOS `du`. It streams elapsed time, current location, scanned-entry count, and inaccessible-location count without showing a fabricated percentage.
+- Added an OmniDiskSweeper-inspired column browser that sorts folders and large files by size, drills through the hierarchy, shows the selected item’s share of scanned space, and can reveal only registered scan results in Finder.
+- Retains items of at least 5 MB, caps exceptionally wide folders at 200 visible children with an aggregate remainder, and never exposes arbitrary disk-browser paths as cleanup actions.
+- Added parser, real-directory scan, hierarchy, sorting, truncation, concurrent-task, responsive disk-browser, and overflow coverage.
+
+### 简体中文
+
+- Agent 新增持续可见的任务切换条。开始第二项分析后，第一项不会再从界面消失；并行任务和最近完成的任务保留独立状态，也可以随时切回，不会混合隔离任务的上下文。
+- 存储空间拆分为“清理建议”和“磁盘浏览”。原有数量现在明确表示经过安全规则筛选、可以处理的建议，而不是磁盘中的全部内容。
+- 新增基于 macOS `du` 的主数据卷异步扫描，可取消，并实时显示耗时、当前位置、已检查项目数和无权限位置数，不使用虚假的百分比。
+- 新增参考 OmniDiskSweeper 的分栏容量浏览器：按大小排列目录和大文件，逐层展开，显示选中项占扫描容量的比例，并且只能在 Finder 中定位本轮扫描注册的项目。
+- 只保留不小于 5 MB 的管理目标；异常宽的目录最多展示 200 个直接子项，其余容量合并显示；磁盘浏览中的任意路径不会直接成为清理操作。
+- 补充解析、真实目录扫描、层级、排序、截断、并行任务、响应式磁盘浏览和横向溢出测试。
+
 ## 0.6.33 - 2026-07-30
 
 ### English

@@ -18,6 +18,7 @@ import { promisify } from 'node:util'
 import type {
   ActionResult,
   AppUpdateState,
+  DiskUsageProgress,
   ScanProgress,
   ScanResult,
   TerminalFixRunResult
@@ -63,6 +64,7 @@ import {
 import { validateLargeFileCleanupTarget } from './large-file-cleanup'
 import { brewCleanupVersionTargets, isSafeBrewVersion } from './brew-cleanup'
 import { reconcileScanCapabilities } from './scan-capability-reconciliation'
+import { diskUsageScanRoot, DiskUsageScanner } from './disk-usage-scanner'
 import { fetchUpdateState } from './update-checker'
 import {
   applyTerminalFixGroup,
@@ -81,6 +83,8 @@ let applicationIconQueue = Promise.resolve()
 let lastTerminalFixBackups = new Map<string, TerminalFixBackup>()
 let scanInProgress = false
 let currentScanResult: ScanResult | null = null
+let diskUsageScanner: DiskUsageScanner | null = null
+let registeredDiskUsageTargets = new Map<string, string>()
 let agentStore: AgentStore | null = null
 let agentRuntime: LocalAgentRuntime | null = null
 let appSettings: AppSettings = { ...DEFAULT_APP_SETTINGS }
@@ -939,6 +943,43 @@ app.whenReady().then(async () => {
     })
   )
 
+  ipcMain.handle('memento:disk-usage:scan', async (event) => {
+    if (diskUsageScanner) {
+      throw new Error(mainText('磁盘扫描已经在进行中', 'A disk scan is already running.'))
+    }
+    const scanner = new DiskUsageScanner()
+    diskUsageScanner = scanner
+    try {
+      const bundle = await scanner.scan(appSettings.language, (progress: DiskUsageProgress) => {
+        if (!event.sender.isDestroyed()) event.sender.send('memento:disk-usage-progress', progress)
+      })
+      registeredDiskUsageTargets = bundle.targets
+      return bundle.result
+    } finally {
+      if (diskUsageScanner === scanner) diskUsageScanner = null
+    }
+  })
+
+  ipcMain.handle('memento:disk-usage:cancel', () => {
+    diskUsageScanner?.cancel()
+  })
+
+  ipcMain.handle('memento:disk-usage:reveal', async (_event, id: string) => {
+    if (typeof id !== 'string' || id.length > 100) {
+      throw new Error(mainText('磁盘项目入口无效，请重新扫描', 'The disk item is invalid. Scan again.'))
+    }
+    const target = registeredDiskUsageTargets.get(id)
+    if (!target || !existsSync(target)) {
+      throw new Error(mainText('磁盘项目已经不存在，请重新扫描', 'The disk item no longer exists. Scan again.'))
+    }
+    if (target === diskUsageScanRoot()) {
+      const error = await shell.openPath('/')
+      if (error) throw new Error(error)
+      return
+    }
+    shell.showItemInFolder(target)
+  })
+
   ipcMain.handle('memento:agent:providers:list', () => agentStore!.listProviders())
   ipcMain.handle('memento:agent:providers:import-cc-switch', () => importCcSwitchProviders())
   ipcMain.handle('memento:agent:providers:models', async (_event, input: DiscoverAgentModelsInput) => {
@@ -1106,6 +1147,8 @@ app.whenReady().then(async () => {
 
 app.on('before-quit', () => {
   isQuitting = true
+  diskUsageScanner?.cancel()
+  diskUsageScanner = null
   if (updateTimer) clearInterval(updateTimer)
   updateTimer = null
   agentStore?.close()

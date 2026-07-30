@@ -117,6 +117,7 @@ export function AgentPage({
   scan,
   run,
   conversationRuns,
+  workspaceRuns,
   statusMessage,
   selectedPlanIds,
   providerConfigured,
@@ -124,6 +125,7 @@ export function AgentPage({
   openingApplicationId,
   returnLabel,
   onSubmit,
+  onSelectWorkspaceRun,
   onNewTask,
   onOpenHistory,
   onOpenSettings,
@@ -137,6 +139,7 @@ export function AgentPage({
   scan: ScanResult | null
   run: AgentRunRecord | null
   conversationRuns: AgentRunRecord[]
+  workspaceRuns: AgentRunRecord[]
   statusMessage: string
   selectedPlanIds: Set<string>
   providerConfigured: boolean
@@ -144,6 +147,7 @@ export function AgentPage({
   openingApplicationId: string | null
   returnLabel: string | null
   onSubmit: (prompt: string) => void
+  onSelectWorkspaceRun: (run: AgentRunRecord) => void
   onNewTask: () => void
   onOpenHistory: () => void
   onOpenSettings: () => void
@@ -163,6 +167,7 @@ export function AgentPage({
   const selectedBytes = selectedItems.reduce((sum, item) => sum + item.estimatedBytes, 0)
   const activePlannedIds = new Set(run?.plan.map((item) => item.id) ?? [])
   const completedPlanIds = new Set(run?.results.filter((result) => result.ok).map((result) => result.id) ?? [])
+  const busyWorkspaceCount = workspaceRuns.filter((item) => runIsBusy(item)).length
 
   useEffect(() => {
     conversationRef.current?.scrollTo({ top: conversationRef.current.scrollHeight, behavior: 'smooth' })
@@ -200,6 +205,31 @@ export function AgentPage({
             </button>
           </div>
         </header>
+
+        {workspaceRuns.length > 1 && (
+          <div className="agent-task-switcher" aria-label={text('分析任务', 'Analysis tasks')}>
+            <strong>{busyWorkspaceCount
+              ? text(`正在处理 ${busyWorkspaceCount} 项任务`, `${busyWorkspaceCount} ${busyWorkspaceCount === 1 ? 'task' : 'tasks'} running`)
+              : text(`${workspaceRuns.length} 项最近任务`, `${workspaceRuns.length} recent tasks`)}</strong>
+            <div className="agent-task-list">
+              {workspaceRuns.map((workspaceRun) => {
+                const taskBusy = runIsBusy(workspaceRun)
+                const taskActive = workspaceRun.id === run?.id
+                return (
+                  <button type="button" className={`agent-task-item ${taskActive ? 'is-active' : ''}`} aria-current={taskActive ? 'true' : undefined} key={workspaceRun.id} onClick={() => onSelectWorkspaceRun(workspaceRun)}>
+                    <span>{taskBusy
+                      ? <LoaderCircle className="spinner" size={14} />
+                      : workspaceRun.status === 'failed'
+                        ? <X size={14} />
+                        : <CircleCheck size={14} />}</span>
+                    <strong>{workspaceRun.prompt}</strong>
+                    <small>{runStatusLabel(workspaceRun.status, language)}</small>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="conversation" ref={conversationRef} aria-live="polite">
           <div className="message assistant">

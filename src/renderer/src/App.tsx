@@ -19,7 +19,17 @@ import {
   type AppSettings,
   type UpdateAppSettingsInput
 } from '../../shared/app-settings'
-import type { AppUpdateState, CandidateOperation, InstalledApplication, ScanCandidate, ScanProgress, ScanResult, TerminalFinding } from '../../shared/types'
+import type {
+  AppUpdateState,
+  CandidateOperation,
+  DiskUsageProgress,
+  DiskUsageScanResult,
+  InstalledApplication,
+  ScanCandidate,
+  ScanProgress,
+  ScanResult,
+  TerminalFinding
+} from '../../shared/types'
 import { AgentPage } from './agent-ui/AgentPage'
 import { ApplicationsPage } from './agent-ui/ApplicationsPage'
 import {
@@ -33,11 +43,11 @@ import {
   IgnoredItemsDialog,
   UninstallDialog
 } from './agent-ui/Dialogs'
-import { HealthPage, type HealthAgentOrigin, type HealthTab, type PageRestoreTarget } from './agent-ui/HealthPage'
+import { HealthPage, type HealthAgentOrigin, type HealthTab, type PageRestoreTarget, type StorageMode } from './agent-ui/HealthPage'
 import { HistoryPage } from './agent-ui/HistoryPage'
 import { SettingsPage } from './agent-ui/SettingsPage'
 import { type AgentViewKey, Shell } from './agent-ui/Shell'
-import { localizedDemoResult } from './demo'
+import { localizedDemoDiskUsageResult, localizedDemoResult } from './demo'
 import { I18nProvider } from './i18n'
 
 const DEMO_PROVIDER: AgentProvider = {
@@ -266,9 +276,15 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
   const [scanBusy, setScanBusy] = useState(false)
   const [progress, setProgress] = useState<ScanProgress | null>(null)
   const [activeRun, setActiveRun] = useState<AgentRunRecord | null>(null)
+  const [workspaceRunIds, setWorkspaceRunIds] = useState<string[]>([])
   const [runStatusMessage, setRunStatusMessage] = useState('')
   const [selectedPlanIds, setSelectedPlanIds] = useState<Set<string>>(new Set())
   const [healthTab, setHealthTab] = useState<HealthTab>('storage')
+  const [storageMode, setStorageMode] = useState<StorageMode>('recommendations')
+  const [diskUsage, setDiskUsage] = useState<DiskUsageScanResult | null>(null)
+  const [diskUsageProgress, setDiskUsageProgress] = useState<DiskUsageProgress | null>(null)
+  const [diskUsageBusy, setDiskUsageBusy] = useState(false)
+  const [diskUsageError, setDiskUsageError] = useState<string | null>(null)
   const [agentOrigin, setAgentOrigin] = useState<AgentOrigin | null>(null)
   const [restoreTarget, setRestoreTarget] = useState<RestoreTarget | null>(null)
   const [pendingDirectAction, setPendingDirectAction] = useState<DirectActionRequest | null>(null)
@@ -289,6 +305,8 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
   const [toast, setToast] = useState<string | null>(null)
   const started = useRef(false)
   const activeRunId = useRef<string | null>(null)
+  const latestAgentStartToken = useRef(0)
+  const diskUsageCancelRequested = useRef(false)
   const appText = (chinese: string, english: string): string => (
     settings.language === 'en-US' ? english : chinese
   )
@@ -341,6 +359,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
           }
         : current)
     })
+    const unsubscribeDiskUsage = window.memento?.onDiskUsageProgress(setDiskUsageProgress)
     const unsubscribeUpdate = window.memento?.onUpdateState(setUpdateState)
     const unsubscribeAgent = window.memento?.onAgentRunEvent((event: AgentRunEvent) => {
       if (event.type === 'status') {
@@ -387,10 +406,67 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     })
     return () => {
       unsubscribeProgress?.()
+      unsubscribeDiskUsage?.()
       unsubscribeUpdate?.()
       unsubscribeAgent?.()
     }
   }, [])
+
+  const scanDiskUsage = useCallback(async (): Promise<void> => {
+    if (diskUsageBusy) return
+    diskUsageCancelRequested.current = false
+    setDiskUsageBusy(true)
+    setDiskUsageError(null)
+    setDiskUsageProgress({
+      phase: 'scanning',
+      scannedEntries: 0,
+      retainedEntries: 0,
+      inaccessibleEntries: 0,
+      currentLocation: '/',
+      elapsedMs: 0,
+      message: settings.language === 'en-US' ? 'Scanning the disk asynchronously' : '正在异步扫描磁盘'
+    })
+    try {
+      const next = window.memento
+        ? await window.memento.scanDiskUsage()
+        : await new Promise<DiskUsageScanResult>((resolve) => window.setTimeout(
+            () => resolve(localizedDemoDiskUsageResult(settings.language)),
+            720
+          ))
+      setDiskUsage(next)
+      setDiskUsageProgress(null)
+    } catch (error) {
+      if (!diskUsageCancelRequested.current) {
+        setDiskUsageError(error instanceof Error
+          ? error.message
+          : settings.language === 'en-US' ? 'Disk scan failed.' : '磁盘扫描失败')
+      }
+    } finally {
+      setDiskUsageBusy(false)
+      diskUsageCancelRequested.current = false
+    }
+  }, [diskUsageBusy, settings.language])
+
+  const cancelDiskUsageScan = (): void => {
+    if (!diskUsageBusy) return
+    diskUsageCancelRequested.current = true
+    void window.memento?.cancelDiskUsageScan()
+  }
+
+  const changeStorageMode = (mode: StorageMode): void => {
+    setStorageMode(mode)
+    if (mode === 'browser' && !diskUsage && !diskUsageBusy) void scanDiskUsage()
+  }
+
+  const revealDiskUsageNode = (id: string): void => {
+    if (!window.memento) {
+      setToast(appText('已在 Finder 中显示', 'Shown in Finder'))
+      return
+    }
+    void window.memento.revealDiskUsageNode(id).catch((error) => {
+      setToast(error instanceof Error ? error.message : appText('无法显示磁盘项目', 'Could not reveal the disk item.'))
+    })
+  }
 
   useEffect(() => {
     if (started.current) return
@@ -455,6 +531,8 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       return
     }
     if (options.origin) setAgentOrigin(options.origin)
+    const startToken = latestAgentStartToken.current + 1
+    latestAgentStartToken.current = startToken
     setView('agent')
     setRunStatusMessage(uiText('正在准备设备信息', 'Preparing device information'))
     setSelectedPlanIds(new Set())
@@ -481,6 +559,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       }
       setActiveRun(run)
       activeRunId.current = run.id
+      setWorkspaceRunIds((current) => [...current.filter((id) => id !== run.id), run.id].slice(-8))
       window.setTimeout(() => {
         const plan = demoPlan(result, settings.language)
         const presentation = demoPresentation(result, prompt, settings.language)
@@ -492,10 +571,13 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
           plan,
           updatedAt: new Date().toISOString()
         }
-        setActiveRun(completed)
         setRuns((current) => [completed, ...current])
-        setSelectedPlanIds(new Set(plan.map((item) => item.id)))
-        setRunStatusMessage(uiText('处理计划已经准备好', 'The action plan is ready'))
+        if (latestAgentStartToken.current === startToken) {
+          setActiveRun(completed)
+          activeRunId.current = completed.id
+          setSelectedPlanIds(new Set(plan.map((item) => item.id)))
+          setRunStatusMessage(uiText('处理计划已经准备好', 'The action plan is ready'))
+        }
       }, 900)
       return
     }
@@ -504,9 +586,12 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       prompt,
       conversationId: options.isolated ? undefined : activeRun?.conversationId
     }).then((run) => {
-      activeRunId.current = run.id
-      setActiveRun(run)
       setRuns((current) => [run, ...current.filter((item) => item.id !== run.id)])
+      setWorkspaceRunIds((current) => [...current.filter((id) => id !== run.id), run.id].slice(-8))
+      if (latestAgentStartToken.current === startToken) {
+        activeRunId.current = run.id
+        setActiveRun(run)
+      }
     }).catch((error) => setToast(error instanceof Error
       ? error.message
       : uiText('无法启动 Agent', 'Could not start the Agent.')))
@@ -877,6 +962,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     try {
       if (window.memento) await window.memento.deleteAgentRun(run.id)
       setRuns((current) => current.filter((item) => item.id !== run.id))
+      setWorkspaceRunIds((current) => current.filter((id) => id !== run.id))
       if (activeRun?.id === run.id) {
         setActiveRun(null)
         activeRunId.current = null
@@ -1084,6 +1170,24 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     byId.set(activeRun.id, activeRun)
     return [...byId.values()].sort((left, right) => left.createdAt.localeCompare(right.createdAt))
   }, [activeRun, runs])
+  const workspaceRuns = useMemo(() => {
+    const byId = new Map(runs.map((run) => [run.id, run]))
+    if (activeRun) byId.set(activeRun.id, activeRun)
+    return workspaceRunIds
+      .map((id) => byId.get(id))
+      .filter((run): run is AgentRunRecord => Boolean(run))
+  }, [activeRun, runs, workspaceRunIds])
+
+  const selectWorkspaceRun = (run: AgentRunRecord): void => {
+    setActiveRun(run)
+    activeRunId.current = run.id
+    const completedIds = new Set(run.results.filter((item) => item.ok).map((item) => item.id))
+    setSelectedPlanIds(new Set(run.plan
+      .filter((item) => !completedIds.has(item.id))
+      .map((item) => item.id)))
+    setRunStatusMessage('')
+    setView('agent')
+  }
   const agentOriginLabel = agentOrigin?.view === 'apps'
     ? appText('应用管理', 'Applications')
     : agentOrigin?.view === 'health'
@@ -1118,8 +1222,8 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       onNavigate={setView}
       onOpenUpdate={openUpdatePage}
     >
-      {view === 'agent' && <AgentPage scan={result} run={activeRun} conversationRuns={conversationRuns} statusMessage={runStatusMessage} selectedPlanIds={selectedPlanIds} providerConfigured={Boolean(defaultProvider)} addingOperationId={addingOperationId} openingApplicationId={openingApplicationId} returnLabel={agentOriginLabel} onSubmit={startAgentRun} onNewTask={() => { setActiveRun(null); activeRunId.current = null; setSelectedPlanIds(new Set()); setRunStatusMessage(''); setAgentOrigin(null) }} onOpenHistory={() => setView('history')} onOpenSettings={() => setView('settings')} onReturn={returnToAgentOrigin} onOpenApplication={openAgentApplication} onAddPlanItem={(id) => void addAgentPlanItem(id)} onTogglePlanItem={(id) => setSelectedPlanIds((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next })} onExecutePlan={() => void executePlan()} onDiscardPlan={discardPlan} />}
-      {view === 'health' && <HealthPage result={result} settings={settings} scanBusy={scanBusy} progress={progress} tab={healthTab} restoreTarget={restoreTarget?.view === 'health' ? restoreTarget : null} onRestoreComplete={() => setRestoreTarget(null)} onScan={() => void scanNow()} onTabChange={setHealthTab} onAgentPrompt={(prompt, origin: HealthAgentOrigin) => startAgentRun(prompt, { origin: { view: 'health', ...origin } })} onDirectAction={requestDirectAction} onDirectTerminalFix={requestDirectTerminalFix} onIgnore={setPendingIgnore} onManageIgnored={openIgnoredManager} />}
+      {view === 'agent' && <AgentPage scan={result} run={activeRun} conversationRuns={conversationRuns} workspaceRuns={workspaceRuns} statusMessage={runStatusMessage} selectedPlanIds={selectedPlanIds} providerConfigured={Boolean(defaultProvider)} addingOperationId={addingOperationId} openingApplicationId={openingApplicationId} returnLabel={agentOriginLabel} onSubmit={startAgentRun} onSelectWorkspaceRun={selectWorkspaceRun} onNewTask={() => { setActiveRun(null); activeRunId.current = null; setSelectedPlanIds(new Set()); setRunStatusMessage(''); setAgentOrigin(null) }} onOpenHistory={() => setView('history')} onOpenSettings={() => setView('settings')} onReturn={returnToAgentOrigin} onOpenApplication={openAgentApplication} onAddPlanItem={(id) => void addAgentPlanItem(id)} onTogglePlanItem={(id) => setSelectedPlanIds((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next })} onExecutePlan={() => void executePlan()} onDiscardPlan={discardPlan} />}
+      {view === 'health' && <HealthPage result={result} settings={settings} scanBusy={scanBusy} progress={progress} tab={healthTab} storageMode={storageMode} diskUsage={diskUsage} diskUsageProgress={diskUsageProgress} diskUsageBusy={diskUsageBusy} diskUsageError={diskUsageError} restoreTarget={restoreTarget?.view === 'health' ? restoreTarget : null} onRestoreComplete={() => setRestoreTarget(null)} onScan={() => void scanNow()} onTabChange={setHealthTab} onStorageModeChange={changeStorageMode} onDiskUsageScan={() => void scanDiskUsage()} onDiskUsageCancel={cancelDiskUsageScan} onRevealDiskUsageNode={revealDiskUsageNode} onAgentPrompt={(prompt, origin: HealthAgentOrigin) => startAgentRun(prompt, { origin: { view: 'health', ...origin } })} onDirectAction={requestDirectAction} onDirectTerminalFix={requestDirectTerminalFix} onIgnore={setPendingIgnore} onManageIgnored={openIgnoredManager} />}
       {view === 'apps' && <ApplicationsPage applications={result?.applications ?? []} openingId={openingApplicationId} removingId={removingApplicationId} restoreTarget={restoreTarget?.view === 'apps' ? restoreTarget : null} onRestoreComplete={() => setRestoreTarget(null)} ignoredCount={settings.applicationWhitelist.length} onOpen={(application) => void openApplication(application)} onUninstall={setPendingUninstall} onIgnore={setPendingApplicationIgnore} onManageIgnored={() => openIgnoredManager('applications')} onAgentPrompt={(prompt, origin) => startAgentRun(prompt, { isolated: true, origin: { view: 'apps', ...origin } })} />}
       {view === 'history' && <HistoryPage runs={runs} onOpenRun={(run) => { setActiveRun(run); activeRunId.current = run.id; setSelectedPlanIds(new Set()); setView('agent') }} onDeleteRun={setPendingHistoryDelete} />}
       {view === 'settings' && <SettingsPage settings={settings} providers={providers} appVersion={appVersion} updateState={updateState} onUpdateSettings={updateSettings} onDiscoverModels={discoverProviderModels} onSaveProvider={saveProvider} onTestProvider={testProvider} onDeleteProvider={deleteProvider} onSetDefaultProvider={setDefaultProvider} onImportCcSwitch={importCcSwitchProviders} onCheckUpdates={checkForUpdates} onManageIgnored={() => openIgnoredManager()} onToast={setToast} />}

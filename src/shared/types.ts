@@ -144,6 +144,41 @@ export interface ScanProgress {
   completedSections?: ScanSection[]
 }
 
+export type DiskUsageNodeKind = 'directory' | 'file'
+
+export interface DiskUsageNode {
+  id: string
+  name: string
+  location: string
+  sizeBytes: number
+  kind: DiskUsageNodeKind
+  childCount: number
+  omittedChildCount: number
+  omittedSizeBytes: number
+  children: DiskUsageNode[]
+}
+
+export interface DiskUsageScanResult {
+  scanId: string
+  root: DiskUsageNode
+  scannedEntries: number
+  retainedEntries: number
+  inaccessibleEntries: number
+  minimumDisplayBytes: number
+  startedAt: string
+  completedAt: string
+}
+
+export interface DiskUsageProgress {
+  phase: 'scanning' | 'organizing'
+  scannedEntries: number
+  retainedEntries: number
+  inaccessibleEntries: number
+  currentLocation: string
+  elapsedMs: number
+  message: string
+}
+
 export interface ActionResult {
   id: string
   ok: boolean
@@ -170,6 +205,9 @@ export interface MementoApi extends MementoAgentApi, MementoSettingsApi {
   checkForUpdates: () => Promise<AppUpdateState>
   openUpdatePage: () => Promise<void>
   scan: (language?: import('./app-settings').AppLanguage) => Promise<ScanResult>
+  scanDiskUsage: () => Promise<DiskUsageScanResult>
+  cancelDiskUsageScan: () => Promise<void>
+  revealDiskUsageNode: (id: string) => Promise<void>
   getApplicationIcon: (id: string) => Promise<string | null>
   openApplication: (id: string) => Promise<void>
   runActions: (ids: string[]) => Promise<ActionResult[]>
@@ -177,6 +215,7 @@ export interface MementoApi extends MementoAgentApi, MementoSettingsApi {
   undoTerminalFixes: () => Promise<ActionResult[]>
   revealCandidateLocation: (id: string) => Promise<void>
   onScanProgress: (callback: (progress: ScanProgress) => void) => () => void
+  onDiskUsageProgress: (callback: (progress: DiskUsageProgress) => void) => () => void
   onUpdateState: (callback: (state: AppUpdateState) => void) => () => void
   platform: NodeJS.Platform
 }

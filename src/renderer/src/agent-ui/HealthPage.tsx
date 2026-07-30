@@ -16,11 +16,20 @@ import {
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { AppSettings } from '../../../shared/app-settings'
-import type { CandidateOperation, ScanCandidate, ScanProgress, ScanResult } from '../../../shared/types'
+import type {
+  CandidateOperation,
+  DiskUsageProgress,
+  DiskUsageScanResult,
+  ScanCandidate,
+  ScanProgress,
+  ScanResult
+} from '../../../shared/types'
 import { useI18n } from '../i18n'
+import { DiskUsageBrowser } from './DiskUsageBrowser'
 import { formatBytes, formatDateTime } from './utils'
 
 export type HealthTab = 'storage' | 'services' | 'terminal'
+export type StorageMode = 'recommendations' | 'browser'
 
 export interface HealthAgentOrigin {
   tab: HealthTab
@@ -114,10 +123,19 @@ export function HealthPage({
   scanBusy,
   progress,
   tab,
+  storageMode,
+  diskUsage,
+  diskUsageProgress,
+  diskUsageBusy,
+  diskUsageError,
   restoreTarget,
   onRestoreComplete,
   onScan,
   onTabChange,
+  onStorageModeChange,
+  onDiskUsageScan,
+  onDiskUsageCancel,
+  onRevealDiskUsageNode,
   onAgentPrompt,
   onDirectAction,
   onDirectTerminalFix,
@@ -129,10 +147,19 @@ export function HealthPage({
   scanBusy: boolean
   progress: ScanProgress | null
   tab: HealthTab
+  storageMode: StorageMode
+  diskUsage: DiskUsageScanResult | null
+  diskUsageProgress: DiskUsageProgress | null
+  diskUsageBusy: boolean
+  diskUsageError: string | null
   restoreTarget: PageRestoreTarget | null
   onRestoreComplete: () => void
   onScan: () => void
   onTabChange: (tab: HealthTab) => void
+  onStorageModeChange: (mode: StorageMode) => void
+  onDiskUsageScan: () => void
+  onDiskUsageCancel: () => void
+  onRevealDiskUsageNode: (id: string) => void
   onAgentPrompt: (prompt: string, origin: HealthAgentOrigin) => void
   onDirectAction: (candidate: ScanCandidate, operation: CandidateOperation) => void
   onDirectTerminalFix: (finding: ScanResult['terminal']['findings'][number]) => void
@@ -218,8 +245,25 @@ export function HealthPage({
 
       {tab === 'storage' && (
         <div className="health-panel is-active">
-          <div className="section-toolbar"><strong>{text('空间建议', 'Storage findings')}</strong><button type="button" className="ignored-count-button" onClick={() => onManageIgnored('storage')}><EyeOff size={14} />{text(`已忽略 ${settings.storageWhitelist.length} 项`, `${settings.storageWhitelist.length} ignored`)}</button></div>
-          <div className="data-list">{storage.length ? storage.map((candidate) => <CandidateRow key={candidate.id} candidate={candidate} onAgentPrompt={askAgent} onDirectAction={onDirectAction} onIgnore={onIgnore} />) : <div className="module-empty">{text('没有发现存储建议', 'No storage findings')}</div>}</div>
+          <div className="storage-mode-toolbar">
+            <div className="storage-mode-tabs" role="tablist" aria-label={text('存储空间视图', 'Storage view')}>
+              <button type="button" role="tab" aria-selected={storageMode === 'recommendations'} className={`storage-mode-tab ${storageMode === 'recommendations' ? 'is-active' : ''}`} onClick={() => onStorageModeChange('recommendations')}>{text('清理建议', 'Cleanup findings')} <span>{storage.length}</span></button>
+              <button type="button" role="tab" aria-selected={storageMode === 'browser'} className={`storage-mode-tab ${storageMode === 'browser' ? 'is-active' : ''}`} onClick={() => onStorageModeChange('browser')}>{text('磁盘浏览', 'Disk browser')}</button>
+            </div>
+            <span>{storageMode === 'recommendations'
+              ? text(`${storage.length} 条经过安全规则筛选的建议`, `${storage.length} findings selected by safety rules`)
+              : diskUsage
+                ? text(`${diskUsage.retainedEntries.toLocaleString()} 个大目录和文件`, `${diskUsage.retainedEntries.toLocaleString()} large folders and files`)
+                : text('主数据卷', 'Main data volume')}</span>
+          </div>
+          {storageMode === 'recommendations' ? (
+            <>
+              <div className="section-toolbar"><strong>{text('空间建议', 'Storage findings')}</strong><button type="button" className="ignored-count-button" onClick={() => onManageIgnored('storage')}><EyeOff size={14} />{text(`已忽略 ${settings.storageWhitelist.length} 项`, `${settings.storageWhitelist.length} ignored`)}</button></div>
+              <div className="data-list">{storage.length ? storage.map((candidate) => <CandidateRow key={candidate.id} candidate={candidate} onAgentPrompt={askAgent} onDirectAction={onDirectAction} onIgnore={onIgnore} />) : <div className="module-empty">{text('没有发现存储建议', 'No storage findings')}</div>}</div>
+            </>
+          ) : (
+            <DiskUsageBrowser result={diskUsage} progress={diskUsageProgress} busy={diskUsageBusy} error={diskUsageError} onScan={onDiskUsageScan} onCancel={onDiskUsageCancel} onReveal={onRevealDiskUsageNode} />
+          )}
         </div>
       )}
 

@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { AgentRunEvent } from '../shared/agent-types'
-import type { AppUpdateState, MementoApi, ScanProgress } from '../shared/types'
+import type { AppUpdateState, DiskUsageProgress, MementoApi, ScanProgress } from '../shared/types'
 
 const bootTheme = process.argv
   .find((argument) => argument.startsWith('--memento-theme='))
@@ -31,6 +31,9 @@ const api: MementoApi = {
   getAppSettings: () => ipcRenderer.invoke('memento:settings:get'),
   updateAppSettings: (input) => ipcRenderer.invoke('memento:settings:update', input),
   scan: (language) => ipcRenderer.invoke('memento:scan', language),
+  scanDiskUsage: () => ipcRenderer.invoke('memento:disk-usage:scan'),
+  cancelDiskUsageScan: () => ipcRenderer.invoke('memento:disk-usage:cancel'),
+  revealDiskUsageNode: (id) => ipcRenderer.invoke('memento:disk-usage:reveal', id),
   getApplicationIcon: (id) => ipcRenderer.invoke('memento:get-application-icon', id),
   openApplication: (id) => ipcRenderer.invoke('memento:open-application', id),
   runActions: (ids) => ipcRenderer.invoke('memento:run-actions', ids),
@@ -64,6 +67,13 @@ const api: MementoApi = {
     }
     ipcRenderer.on('memento:scan-progress', listener)
     return () => ipcRenderer.removeListener('memento:scan-progress', listener)
+  },
+  onDiskUsageProgress: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, progress: DiskUsageProgress): void => {
+      callback(progress)
+    }
+    ipcRenderer.on('memento:disk-usage-progress', listener)
+    return () => ipcRenderer.removeListener('memento:disk-usage-progress', listener)
   },
   onUpdateState: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, state: AppUpdateState): void => {
