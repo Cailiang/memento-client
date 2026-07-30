@@ -14,6 +14,7 @@ function resultWith(candidates: ScanCandidate[]): ScanResult {
     },
     candidates,
     applications: [],
+    ignoredApplications: [],
     terminal: {
       shell: '/bin/zsh', baselineMs: 1, startupMs: 1, sampleCount: 1,
       findings: [], configFiles: []
@@ -99,5 +100,10 @@ describe('applyScanWhitelist', () => {
     expect(filtered.revealTargets.has('storage-id')).toBe(false)
     expect(filtered.revealTargets.has('application-id')).toBe(false)
     expect(filtered.result.applications).toEqual([])
+    expect(filtered.result.ignoredApplications).toEqual([expect.objectContaining({
+      id: 'application-id',
+      name: 'Security Helper',
+      action: undefined
+    })])
   })
 })

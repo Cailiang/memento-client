@@ -2,22 +2,26 @@ import {
   Archive,
   AppWindow,
   CheckCircle2,
+  CircleAlert,
   Eye,
   EyeOff,
   LoaderCircle,
   Play,
   RadioTower,
+  Search,
+  ShieldCheck,
   Trash2,
   X
 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
-import type { AgentPlanItem, AgentRunRecord } from '../../../shared/agent-types'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { AgentRunRecord } from '../../../shared/agent-types'
 import {
   applicationWhitelistValue,
   candidateWhitelistValue
 } from '../../../shared/app-settings'
 import type { InstalledApplication, ScanCandidate } from '../../../shared/types'
 import { useI18n } from '../i18n'
+import { ApplicationIcon } from './ApplicationsPage'
 import { formatBytes } from './utils'
 
 function DialogFrame({
@@ -72,22 +76,98 @@ function DialogFrame({
   )
 }
 
-export function PlanConfirmDialog({
-  items,
-  busy,
+export interface DirectActionRequest {
+  id: string
+  kind: 'action' | 'terminal-fix'
+  subject: string
+  label: string
+  consequence: string
+  reversible: boolean
+  estimatedBytes: number
+}
+
+export type ExecutionPhase = 'executing' | 'verifying' | 'completed' | 'failed'
+
+export function DirectActionConfirmDialog({
+  action,
   onClose,
   onConfirm
 }: {
-  items: AgentPlanItem[]
-  busy: boolean
+  action: DirectActionRequest
   onClose: () => void
   onConfirm: () => void
 }): React.JSX.Element {
   const { text } = useI18n()
   return (
-    <DialogFrame title={text('确认处理计划', 'Confirm plan')} description={text('只执行下面选中的操作，完成后会重新体检并验证结果。', 'Only the selected operations will run. Memento will scan again to verify results.')} busy={busy} onClose={onClose} actions={<><button type="button" className="secondary-button" onClick={onClose} disabled={busy}>{text('返回检查', 'Go back')}</button><button type="button" className="primary-button" onClick={onConfirm} disabled={busy}>{busy ? <LoaderCircle className="spinner" size={15} /> : <Play size={15} />}{busy ? text('正在执行', 'Executing') : text('开始执行', 'Run plan')}</button></>}>
+    <DialogFrame
+      title={text(`直接执行“${action.label}”？`, `Run "${action.label}" directly?`)}
+      description={text('不会经过 AI 分析；只执行下面这项已注册操作，完成后自动复检。', 'AI analysis is skipped. Only this registered action runs, followed by automatic verification.')}
+      onClose={onClose}
+      actions={<><button type="button" className="secondary-button" onClick={onClose}>{text('取消', 'Cancel')}</button><button type="button" className={action.reversible ? 'primary-button' : 'danger-button'} onClick={onConfirm}><Play size={15} />{text('确认并执行', 'Confirm and run')}</button></>}
+    >
       <div className="dialog-body">
-        {items.map((item) => <div className="confirm-row" key={item.id}><span>{item.kind === 'terminal-fix' ? <RadioTower size={13} /> : <Archive size={13} />}</span><div><strong>{item.title}</strong><small>{item.detail}</small></div><span className={`risk-label ${item.risk}`}>{item.estimatedBytes ? formatBytes(item.estimatedBytes) : text('操作', 'Action')}</span></div>)}
+        <div className="confirm-row">
+          <span>{action.reversible ? <ShieldCheck size={13} /> : <CircleAlert size={13} />}</span>
+          <div><strong>{action.subject}</strong><small>{action.consequence}</small></div>
+          <span className={`risk-label ${action.reversible ? 'safe' : 'review'}`}>{action.estimatedBytes ? formatBytes(action.estimatedBytes) : text('操作', 'Action')}</span>
+        </div>
+      </div>
+    </DialogFrame>
+  )
+}
+
+export function ExecutionProgressDialog({
+  phase,
+  itemCount,
+  completedCount,
+  detail,
+  onClose
+}: {
+  phase: ExecutionPhase
+  itemCount: number
+  completedCount: number
+  detail: string
+  onClose: () => void
+}): React.JSX.Element {
+  const { text } = useI18n()
+  const finished = phase === 'completed' || phase === 'failed'
+  const progress = phase === 'executing' ? 32 : phase === 'verifying' ? 78 : 100
+  const title = phase === 'executing'
+    ? text('正在执行已确认的操作', 'Running confirmed actions')
+    : phase === 'verifying'
+      ? text('正在重新体检', 'Verifying results')
+      : phase === 'completed'
+        ? text('处理完成', 'Actions completed')
+        : text('部分操作未完成', 'Some actions did not complete')
+  const stage = phase === 'executing'
+    ? text('执行操作', 'Running actions')
+    : phase === 'verifying'
+      ? text('验证结果', 'Verifying')
+      : phase === 'completed'
+        ? text('复检通过', 'Verified')
+        : text('需要查看', 'Review needed')
+  return (
+    <DialogFrame
+      title={title}
+      description={detail}
+      busy={!finished}
+      onClose={onClose}
+      actions={<button type="button" className="secondary-button" onClick={onClose} disabled={!finished}>{text('完成', 'Done')}</button>}
+    >
+      <div className={`execution-stage is-${phase}`} role="status" aria-live="polite">
+        <div className="cleanup-visual" aria-hidden="true">
+          {!finished && <><i className="cleanup-file" /><i className="cleanup-file" /><i className="cleanup-file" /></>}
+          <span className="cleanup-bin">{phase === 'completed' ? <CheckCircle2 size={27} /> : phase === 'failed' ? <CircleAlert size={27} /> : <Trash2 size={25} />}</span>
+        </div>
+        <div className="execution-copy"><strong>{stage}</strong><small>{phase === 'executing'
+          ? text(`正在处理 ${itemCount} 项操作，请不要退出应用。`, `Running ${itemCount} ${itemCount === 1 ? 'action' : 'actions'}. Keep Memento open.`)
+          : phase === 'verifying'
+            ? text('正在重新扫描相关项目，确认操作已经生效。', 'Scanning the affected items to confirm the changes.')
+            : detail}</small></div>
+        <div className="execution-progress-head"><span>{stage}</span><strong>{progress}%</strong></div>
+        <div className="execution-progress-track" role="progressbar" aria-label={text('处理进度', 'Action progress')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}><span style={{ width: `${progress}%` }} /></div>
+        <div className="execution-steps"><span className="is-active">{text('执行', 'Run')}</span><span className={phase !== 'executing' ? 'is-active' : ''}>{text('复检', 'Verify')}</span><span className={finished ? 'is-active' : ''}>{text('完成', 'Done')}</span></div>
+        {finished && <div className="execution-result"><strong>{completedCount} / {itemCount}</strong><span>{text('项操作完成', 'actions completed')}</span></div>}
       </div>
     </DialogFrame>
   )
@@ -175,6 +255,7 @@ export function IgnoredItemsDialog({
   serviceValues,
   storageValues,
   applicationValues,
+  ignoredApplications,
   busyValue,
   onRestore,
   onClose
@@ -183,18 +264,52 @@ export function IgnoredItemsDialog({
   serviceValues: string[]
   storageValues: string[]
   applicationValues: string[]
+  ignoredApplications: InstalledApplication[]
   busyValue: string | null
   onRestore: (kind: 'services' | 'storage' | 'applications', value: string) => void
   onClose: () => void
 }): React.JSX.Element {
   const { text } = useI18n()
   const [kind, setKind] = useState<'storage' | 'services' | 'applications'>(initialKind)
+  const [search, setSearch] = useState('')
   const values = kind === 'storage' ? storageValues : kind === 'services' ? serviceValues : applicationValues
+  const applicationByValue = useMemo(() => new Map(
+    ignoredApplications.map((application) => [applicationWhitelistValue(application), application])
+  ), [ignoredApplications])
+  const filteredValues = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase()
+    if (!query) return values
+    return values.filter((value) => {
+      const application = kind === 'applications' ? applicationByValue.get(value) : undefined
+      return [value, application?.name, application?.bundleId, application?.location]
+        .filter(Boolean)
+        .join(' ')
+        .toLocaleLowerCase()
+        .includes(query)
+    })
+  }, [applicationByValue, kind, search, values])
+  const selectKind = (next: typeof kind): void => {
+    setKind(next)
+    setSearch('')
+  }
   return (
     <DialogFrame wide title={text('忽略列表', 'Ignored items')} description={text('这些项目不会出现在体检建议中，Agent 也无法处理。', 'These items stay out of health recommendations and cannot be changed by Agent.')} busy={busyValue !== null} onClose={onClose} actions={<button type="button" className="secondary-button" onClick={onClose} disabled={busyValue !== null}>{text('完成', 'Done')}</button>}>
-      <div className="ignored-tabs" role="tablist" aria-label={text('忽略项目类型', 'Ignored item type')}><button type="button" role="tab" aria-selected={kind === 'storage'} className={`ignored-tab ${kind === 'storage' ? 'is-active' : ''}`} onClick={() => setKind('storage')}>{text('存储空间', 'Storage')} <span>{storageValues.length}</span></button><button type="button" role="tab" aria-selected={kind === 'services'} className={`ignored-tab ${kind === 'services' ? 'is-active' : ''}`} onClick={() => setKind('services')}>{text('后台服务', 'Services')} <span>{serviceValues.length}</span></button><button type="button" role="tab" aria-selected={kind === 'applications'} className={`ignored-tab ${kind === 'applications' ? 'is-active' : ''}`} onClick={() => setKind('applications')}>{text('应用', 'Applications')} <span>{applicationValues.length}</span></button></div>
+      <div className="ignored-tabs" role="tablist" aria-label={text('忽略项目类型', 'Ignored item type')}><button type="button" role="tab" aria-selected={kind === 'storage'} className={`ignored-tab ${kind === 'storage' ? 'is-active' : ''}`} onClick={() => selectKind('storage')}>{text('存储空间', 'Storage')} <span>{storageValues.length}</span></button><button type="button" role="tab" aria-selected={kind === 'services'} className={`ignored-tab ${kind === 'services' ? 'is-active' : ''}`} onClick={() => selectKind('services')}>{text('后台服务', 'Services')} <span>{serviceValues.length}</span></button><button type="button" role="tab" aria-selected={kind === 'applications'} className={`ignored-tab ${kind === 'applications' ? 'is-active' : ''}`} onClick={() => selectKind('applications')}>{text('应用', 'Applications')} <span>{applicationValues.length}</span></button></div>
+      <label className="ignored-search search-field">
+        <Search size={15} />
+        <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={kind === 'applications' ? text('搜索应用名称、Bundle ID 或路径', 'Search app name, Bundle ID, or path') : text('搜索名称或路径', 'Search name or path')} aria-label={text('搜索忽略项目', 'Search ignored items')} />
+      </label>
       <div className="ignored-list">
-        {values.length ? values.map((value) => <div className="ignored-row" key={value}><span>{kind === 'storage' ? <Archive size={14} /> : kind === 'services' ? <RadioTower size={14} /> : <AppWindow size={14} />}</span><div><strong>{kind === 'storage' ? value.split('/').filter(Boolean).at(-1) ?? value : kind === 'applications' ? value.split('.').at(-1) ?? value : value}</strong><small>{value}</small></div><button type="button" className="quiet-button" onClick={() => onRestore(kind, value)} disabled={busyValue !== null}>{busyValue === value ? <LoaderCircle className="spinner" size={14} /> : <Eye size={14} />}{text('恢复检测', 'Restore')}</button></div>) : <div className="ignored-empty"><div><CheckCircle2 size={18} /><span>{kind === 'storage' ? text('没有忽略的存储项目', 'No ignored storage') : kind === 'services' ? text('没有忽略的后台服务', 'No ignored services') : text('没有忽略的应用', 'No ignored applications')}</span></div></div>}
+        {filteredValues.length ? filteredValues.map((value) => {
+          const application = kind === 'applications' ? applicationByValue.get(value) : undefined
+          const name = kind === 'storage'
+            ? value.split('/').filter(Boolean).at(-1) ?? value
+            : application?.name ?? (kind === 'applications' ? value.split('.').at(-1) ?? value : value)
+          const detail = application
+            ? [application.bundleId, application.location].filter(Boolean).join(' · ')
+            : value
+          return <div className="ignored-row" key={value}>{application ? <ApplicationIcon application={application} /> : <span>{kind === 'storage' ? <Archive size={14} /> : kind === 'services' ? <RadioTower size={14} /> : <AppWindow size={14} />}</span>}<div><strong>{name}</strong><small>{detail}</small></div><button type="button" className="quiet-button" onClick={() => onRestore(kind, value)} disabled={busyValue !== null}>{busyValue === value ? <LoaderCircle className="spinner" size={14} /> : <Eye size={14} />}{text('恢复检测', 'Restore')}</button></div>
+        }) : <div className="ignored-empty"><div>{search ? <Search size={18} /> : <CheckCircle2 size={18} />}<span>{search ? text('没有匹配的忽略项目', 'No ignored items match') : kind === 'storage' ? text('没有忽略的存储项目', 'No ignored storage') : kind === 'services' ? text('没有忽略的后台服务', 'No ignored services') : text('没有忽略的应用', 'No ignored applications')}</span></div></div>}
       </div>
     </DialogFrame>
   )

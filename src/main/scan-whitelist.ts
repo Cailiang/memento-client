@@ -10,7 +10,11 @@ export function applyScanWhitelist(
   storageWhitelist: readonly string[],
   applicationWhitelist: readonly string[] = []
 ): ScanBundle {
-  const hiddenApplications = bundle.result.applications.filter((application) =>
+  const allApplications = [...new Map([
+    ...bundle.result.applications,
+    ...bundle.result.ignoredApplications
+  ].map((application) => [application.id, application])).values()]
+  const hiddenApplications = allApplications.filter((application) =>
     isApplicationWhitelisted(application, applicationWhitelist)
   )
   const hiddenApplicationIds = new Set(hiddenApplications.map((application) => application.id))
@@ -48,7 +52,11 @@ export function applyScanWhitelist(
       ),
       applications: bundle.result.applications.filter(
         (application) => !hiddenApplicationIds.has(application.id)
-      )
+      ),
+      ignoredApplications: hiddenApplications.map((application) => ({
+        ...application,
+        action: undefined
+      }))
     }
   }
 }

@@ -98,9 +98,17 @@ try {
   await page.locator('.agent-result-section').first().waitFor({ timeout: 5_000 })
   await page.screenshot({ path: '/tmp/memento-interaction-agent-results.png' })
   await page.locator('.plan-actions .primary-button').click()
-  await page.locator('[role="dialog"]').waitFor()
-  await page.keyboard.press('Escape')
-  await page.locator('[role="dialog"]').waitFor({ state: 'hidden' })
+  const executionDialog = page.locator('[role="dialog"]').filter({ has: page.locator('.execution-stage') })
+  await executionDialog.waitFor()
+  if (await page.getByRole('dialog', { name: /确认处理计划/ }).count()) {
+    failures.push('agent-execution: duplicate confirmation dialog is still rendered')
+  }
+  const executionStart = Number(await executionDialog.locator('[role="progressbar"]').getAttribute('aria-valuenow'))
+  if (executionStart !== 32) failures.push(`agent-execution: unexpected execution progress ${executionStart}`)
+  await page.screenshot({ path: '/tmp/memento-interaction-agent-execution.png' })
+  await executionDialog.getByRole('button', { name: '完成' }).waitFor({ state: 'visible' })
+  await page.waitForFunction(() => !document.querySelector('[role="dialog"] .dialog-actions button')?.hasAttribute('disabled'))
+  await executionDialog.getByRole('button', { name: '完成' }).click()
 
   await page.locator('.nav-button[title="任务记录"]').click()
   const historyEntries = page.locator('.history-entry')
@@ -114,7 +122,7 @@ try {
   await page.locator('.nav-button[title="电脑体检"]').click()
   for (const tab of ['存储空间', '后台服务', '终端诊断']) {
     await page.getByRole('tab', { name: new RegExp(tab) }).click()
-    const actionLabels = await page.locator('.health-panel.is-active .row-actions > .secondary-button').allTextContents()
+    const actionLabels = await page.locator('.health-panel.is-active .row-actions > .secondary-button:first-child').allTextContents()
     if (!actionLabels.length || actionLabels.some((label) => label.trim() !== 'AI 分析')) {
       failures.push(`health/${tab}: analysis actions are ambiguous ${JSON.stringify(actionLabels)}`)
     }
@@ -123,9 +131,33 @@ try {
       failures.push(`health/${tab}: obsolete risk/action labels are still visible`)
     }
   }
+  await page.getByRole('tab', { name: /存储空间/ }).click()
+  const directActionButton = page.locator('.health-panel.is-active .direct-action-button').first()
+  await directActionButton.click()
+  await page.locator('.health-panel.is-active .row-menu-popover [role="menuitem"]').first().click()
+  const directConfirm = page.getByRole('dialog', { name: /直接执行/ })
+  await directConfirm.waitFor()
+  await directConfirm.locator('.primary-button, .danger-button').click()
+  const directProgress = page.locator('[role="dialog"]').filter({ has: page.locator('.execution-stage') })
+  await directProgress.waitFor()
+  await page.waitForFunction(() => !document.querySelector('[role="dialog"] .dialog-actions button')?.hasAttribute('disabled'))
+  await directProgress.getByRole('button', { name: '完成' }).click()
+
+  await page.getByRole('tab', { name: /后台服务/ }).click()
+  await page.locator('.health-panel.is-active .row-actions > .secondary-button:first-child').first().click()
+  const returnButton = page.getByRole('button', { name: '返回后台服务' })
+  await returnButton.waitFor()
+  await returnButton.click()
+  if (await page.getByRole('tab', { name: /后台服务/ }).getAttribute('aria-selected') !== 'true') {
+    failures.push('agent-return: source health tab was not restored')
+  }
+  await page.waitForFunction(() => Boolean(document.activeElement?.getAttribute('data-focus-id')))
+  await page.waitForTimeout(1_000)
+
+  await page.getByRole('tab', { name: /终端诊断/ }).click()
   await page.locator('.health-panel.is-active .row-actions > .secondary-button').first().click()
   const healthAnalysisPrompt = await page.locator('.message.user .message-body').last().textContent()
-  if (!healthAnalysisPrompt?.includes('不要直接修改')) {
+  if (!healthAnalysisPrompt || !/不要(?:直接)?修改/.test(healthAnalysisPrompt)) {
     failures.push(`health: analysis action did not preserve the no-change boundary ${JSON.stringify(healthAnalysisPrompt)}`)
   }
   await page.locator('.nav-button[title="应用管理"]').click()
@@ -153,6 +185,15 @@ try {
   if (await applicationIgnoredTab.getAttribute('aria-selected') !== 'true') {
     failures.push('applications: direct ignored-items entry did not open the Applications tab')
   }
+  if (await applicationIgnoredDialog.locator('.ignored-row .app-logo').count() !== 1) {
+    failures.push('applications: ignored application does not show an app logo')
+  }
+  const ignoredSearch = applicationIgnoredDialog.getByRole('searchbox', { name: '搜索忽略项目' })
+  await ignoredSearch.fill('com.anthropic.claude-code-url-handler')
+  await applicationIgnoredDialog.locator('.ignored-row').waitFor()
+  await ignoredSearch.fill('not-a-real-ignored-app')
+  await applicationIgnoredDialog.getByText('没有匹配的忽略项目', { exact: true }).waitFor()
+  await ignoredSearch.fill('')
   await page.screenshot({ path: '/tmp/memento-interaction-application-ignored.png' })
   await applicationIgnoredDialog.getByRole('button', { name: '完成' }).click()
   await page.locator('.nav-button[title="设置"]').click()

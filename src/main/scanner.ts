@@ -1773,6 +1773,7 @@ export async function runFullScan(
         system,
         candidates: [],
         applications: [],
+        ignoredApplications: [],
         terminal: {
           shell: process.env.ComSpec || process.env.SHELL || 'unsupported',
           baselineMs: null,
@@ -1872,6 +1873,7 @@ export async function runFullScan(
     system,
     candidates: [...services, ...storage, ...applicationScan.candidates],
     applications: applicationScan.applications,
+    ignoredApplications: [],
     terminal,
     warnings
   }

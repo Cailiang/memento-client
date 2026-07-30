@@ -11,6 +11,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { InstalledApplication } from '../../../shared/types'
 import { useI18n } from '../i18n'
+import type { PageRestoreTarget } from './HealthPage'
 import { formatBytes, relativeDate } from './utils'
 
 export type ApplicationFilter = 'all' | 'recent' | 'unused' | 'system'
@@ -80,6 +81,8 @@ export function ApplicationsPage({
   applications,
   openingId,
   removingId,
+  restoreTarget,
+  onRestoreComplete,
   ignoredCount,
   onOpen,
   onUninstall,
@@ -90,17 +93,20 @@ export function ApplicationsPage({
   applications: InstalledApplication[]
   openingId: string | null
   removingId: string | null
+  restoreTarget: PageRestoreTarget | null
+  onRestoreComplete: () => void
   ignoredCount: number
   onOpen: (application: InstalledApplication) => void
   onUninstall: (application: InstalledApplication) => void
   onIgnore: (application: InstalledApplication) => void
   onManageIgnored: () => void
-  onAgentPrompt: (prompt: string) => void
+  onAgentPrompt: (prompt: string, origin: { itemId?: string; scrollTop: number }) => void
 }): React.JSX.Element {
   const { language, text } = useI18n()
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<ApplicationFilter>('all')
   const [sort, setSort] = useState<ApplicationSort>('recent')
+  const pageRef = useRef<HTMLElement>(null)
   const manageable = applications.filter((application) => application.action && !application.protectedReason && application.scope !== 'system')
   const totalBytes = applications.reduce((sum, application) => sum + application.sizeBytes, 0)
   const filtered = useMemo(
@@ -108,15 +114,39 @@ export function ApplicationsPage({
     [applications, filter, language, search, sort]
   )
 
+  useEffect(() => {
+    if (!restoreTarget || !pageRef.current) return
+    const page = pageRef.current
+    const frame = window.requestAnimationFrame(() => {
+      page.scrollTop = restoreTarget.scrollTop
+      const target = restoreTarget.itemId
+        ? [...page.querySelectorAll<HTMLElement>('[data-focus-id]')].find((item) => item.dataset.focusId === restoreTarget.itemId)
+        : null
+      if (target) {
+        target.scrollIntoView({ block: 'center' })
+        target.focus({ preventScroll: true })
+        target.classList.add('is-returned')
+        window.setTimeout(() => target.classList.remove('is-returned'), 1400)
+      }
+      onRestoreComplete()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [onRestoreComplete, restoreTarget])
+
+  const askAgent = (prompt: string, itemId?: string): void => onAgentPrompt(prompt, {
+    itemId,
+    scrollTop: pageRef.current?.scrollTop ?? 0
+  })
+
   return (
-    <section className="page content-page is-active">
+    <section ref={pageRef} className="page content-page is-active">
       <div className="page-command-bar">
         <span className="page-command-summary">{text(`共 ${applications.length} 个应用，其中 ${manageable.length} 个可卸载，占用 ${formatBytes(totalBytes)}`, `${applications.length} applications, ${manageable.length} uninstallable, using ${formatBytes(totalBytes)}`)}</span>
         <div className="page-command-actions">
           <button type="button" className="secondary-button" onClick={onManageIgnored}>
             <EyeOff size={16} />{text(`已忽略 ${ignoredCount} 项`, `${ignoredCount} ignored`)}
           </button>
-          <button type="button" className="secondary-button" onClick={() => onAgentPrompt(text('帮我检查长期没用的应用和可以安全清理的应用残留', 'Find unused applications and safe application leftovers'))}>
+          <button type="button" className="secondary-button" onClick={() => askAgent(text('帮我检查长期没用的应用和可以安全清理的应用残留', 'Find unused applications and safe application leftovers'))}>
             <Sparkles size={16} />{text('Agent 分析', 'Agent analysis')}
           </button>
         </div>
@@ -143,7 +173,7 @@ export function ApplicationsPage({
       {filtered.length ? (
         <div className="app-grid">
           {filtered.map((application) => (
-            <article className={`app-card ${removingId === application.id ? 'is-removing' : ''}`} key={application.id} aria-busy={removingId === application.id}>
+            <article className={`app-card ${removingId === application.id ? 'is-removing' : ''}`} key={application.id} aria-busy={removingId === application.id} data-focus-id={application.id} tabIndex={-1}>
               {(application.scope === 'system' || application.backgroundOnly) && <span className="app-scope-label">{application.scope === 'system' ? text('系统', 'System') : text('后台组件', 'Helper')}</span>}
               <button type="button" className="icon-button app-ignore-button" onClick={() => onIgnore(application)} disabled={removingId === application.id} title={text('忽略应用', 'Ignore application')} aria-label={text(`忽略 ${application.name}`, `Ignore ${application.name}`)}>
                 <EyeOff size={14} />
@@ -155,10 +185,10 @@ export function ApplicationsPage({
                 <div><span>{text('大小', 'Size')}</span><strong>{formatBytes(application.sizeBytes)}</strong></div>
               </div>
               <div className="app-actions">
-                <button type="button" className="secondary-button app-agent-action" onClick={() => onAgentPrompt(text(
+                <button type="button" className="secondary-button app-agent-action" onClick={() => askAgent(text(
                   `请分析应用“${application.name}”。Bundle ID：${application.bundleId ?? '未知'}；版本：${application.version}；路径：${application.location}；最后使用：${relativeDate(application.lastUsedAt, language)}；类型：${application.scope === 'system' ? 'macOS 系统应用' : application.backgroundOnly ? '后台辅助组件' : '用户安装应用'}；可执行文件：${application.executable ?? '未知'}；注册的 URL 协议：${application.urlSchemes?.join(', ') || '无'}。请说明它是什么、主要用途、是否属于驱动/安全组件/辅助程序、能否卸载、卸载影响和你的建议。`,
                   `Analyze the application "${application.name}". Bundle ID: ${application.bundleId ?? 'unknown'}; version: ${application.version}; path: ${application.location}; last used: ${relativeDate(application.lastUsedAt, language)}; type: ${application.scope === 'system' ? 'macOS system application' : application.backgroundOnly ? 'background helper' : 'user-installed application'}; executable: ${application.executable ?? 'unknown'}; registered URL schemes: ${application.urlSchemes?.join(', ') || 'none'}. Explain what it is, its purpose, whether it is a driver, security component, or helper, whether it can be uninstalled, the impact, and your recommendation.`
-                ))} disabled={removingId === application.id}>
+                ), application.id)} disabled={removingId === application.id}>
                   <Sparkles size={14} />{text('问 Agent', 'Ask Agent')}
                 </button>
                 <button type="button" className="icon-button" onClick={() => onOpen(application)} disabled={openingId === application.id || removingId === application.id} title={text(`打开 ${application.name}`, `Open ${application.name}`)} aria-label={text(`打开 ${application.name}`, `Open ${application.name}`)}>

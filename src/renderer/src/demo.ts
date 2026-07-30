@@ -342,6 +342,7 @@ export const demoResult: ScanResult = {
       protectedReason: 'macOS 系统应用'
     }
   ],
+  ignoredApplications: [],
   terminal: {
     shell: '/bin/zsh',
     baselineMs: 34,

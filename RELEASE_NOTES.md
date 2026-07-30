@@ -1,17 +1,17 @@
-# Memento Agent 0.6.29
+# Memento Agent 0.6.30
 
 ## 简体中文
 
-`0.6.29` 让忽略项、电脑体检分析动作和 Agent 回复变得更直观。
+`0.6.30` 缩短从发现问题到完成处理的路径，并让用户随时回到原来的工作位置。
 
 ### 主要变化
 
-- 应用管理顶部新增“已忽略 N 项”，点击后直接查看或恢复被忽略的应用；设置中仍保留统一管理入口。
-- 电脑体检中的“处理 / 问 Agent”统一改为“AI 分析”，明确点击只会分析，不会立即删除或修改系统。
-- 体检列表不再混用“可安全处理 / 需要确认”与相同按钮，改为显示每项有几个可选操作，并提示用户在 AI 分析后选择。
-- AI 分析会比较该项目的全部可选操作，不会默认选择第一项或直接加入执行计划。
-- Agent 正文现在正确解析粗体、项目符号、编号列表、换行、代码和表格；模型提供的原始 HTML 不会执行。
-- 新增 Markdown 渲染安全测试和应用忽略入口、体检动作的四视口回归检查。
+- 忽略列表新增搜索；已忽略应用继续显示真实名称、Bundle ID、路径和应用 Logo，重启后也不会丢失。
+- Agent 中点击“确认并执行”后不再出现第二次确认，而是立即显示清理动画、阶段进度和真实复检状态。
+- 从存储空间、后台服务、终端诊断或应用管理进入 Agent 时，会记住标签、项目和滚动位置；顶部按钮可一键返回并高亮原位置。
+- 电脑体检新增“直接操作”：熟练用户可以直接清理、停止服务、移除启动项或优化终端，无需先做 AI 分析。
+- 直接操作仍只使用当前扫描注册的操作 ID，执行前确认一次，完成后自动重新体检。
+- 新增忽略应用元数据、搜索与 Logo、单次确认、直接操作和返回定位的回归测试。
 
 ### 安装说明
 
@@ -19,16 +19,16 @@
 
 ## English
 
-`0.6.29` makes ignored items, Computer Health analysis, and Agent responses easier to understand.
+`0.6.30` shortens the path from finding an issue to completing the action while preserving the user's working position.
 
 ### Highlights
 
-- Application Management now shows an “N ignored” control that opens ignored applications directly; Settings still provides the combined manager.
-- Computer Health uses AI analysis instead of ambiguous Handle and Ask Agent labels, making it clear that a click does not delete or change anything.
-- Health rows show the number of available actions and tell the user to choose after analysis instead of mixing Safe to handle and Needs review with the same button.
-- Analysis compares every available operation without selecting the first operation or adding it to an execution plan automatically.
-- Agent prose now renders bold text, bullets, numbered lists, line breaks, code, and tables correctly; model-provided raw HTML is never executed.
-- Added Markdown safety coverage and four-viewport regression checks for ignored applications and health analysis actions.
+- Ignored items are searchable, and ignored applications retain their real name, Bundle ID, path, and app logo across scans and restarts.
+- Confirm and run in Agent no longer opens a second confirmation; it immediately shows a cleanup animation, stage progress, and real verification state.
+- Entering Agent from Storage, Services, Terminal, or Applications preserves the source tab, item, and scroll position for one-click return and focus restoration.
+- Computer Health now offers direct registered actions for experienced users who want to clean, stop, remove, or optimize without AI analysis first.
+- Direct actions still use only current-scan registered operation IDs, require one confirmation, and trigger an automatic verification scan.
+- Added regression coverage for ignored metadata, search and logos, single-confirmation execution, direct actions, and source restoration.
 
 ### Installation
 

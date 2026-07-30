@@ -39,6 +39,21 @@ try {
   if (!runtimeVersion || result.visibleVersion !== `v${runtimeVersion}`) {
     throw new Error(`visible version does not match runtime: ${JSON.stringify({ runtimeVersion, ...result })}`)
   }
+  const manageableCard = page.locator('.app-card').filter({ has: page.locator('.uninstall-app') }).first()
+  const manageableName = await manageableCard.locator('.app-title strong').textContent()
+  await manageableCard.locator('.app-ignore-button').click()
+  await page.getByRole('dialog').locator('.primary-button').click()
+  await page.getByRole('button', { name: /已忽略 1 项/ }).click()
+  const ignoredDialog = page.getByRole('dialog', { name: '忽略列表' })
+  await ignoredDialog.locator('.ignored-row .app-logo img').waitFor({ timeout: 20_000 })
+  await ignoredDialog.getByRole('searchbox', { name: '搜索忽略项目' }).fill(manageableName ?? '')
+  if (await ignoredDialog.locator('.ignored-row').count() !== 1) {
+    throw new Error(`ignored application search did not find ${JSON.stringify(manageableName)}`)
+  }
+  await ignoredDialog.locator('.ignored-row .quiet-button').click()
+  await ignoredDialog.locator('.ignored-row').waitFor({ state: 'detached', timeout: 60_000 })
+  await ignoredDialog.getByRole('button', { name: '完成' }).click()
+  await page.locator('.app-card').first().waitFor({ timeout: 30_000 })
   await page.locator('select[aria-label="筛选应用"]').selectOption('system')
   const appStore = page.locator('.app-card').filter({ hasText: 'App Store' }).first()
   await appStore.waitFor({ timeout: 20_000 })

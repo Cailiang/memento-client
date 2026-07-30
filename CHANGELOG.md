@@ -8,6 +8,26 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.30 - 2026-07-30
+
+### English
+
+- Added search to the shared ignored-items manager across applications, services, and storage, including name, Bundle ID, and path matching.
+- Preserved read-only metadata and icon access for ignored applications so their real localized name and app logo remain visible after a scan or restart, while their uninstall and reveal capabilities stay revoked.
+- Removed the duplicate Agent plan dialog: Confirm and run is now the single confirmation and immediately opens a cleanup-themed progress surface driven by actual executing, verifying, completed, and failed states.
+- Added source-aware Agent navigation that remembers Application Management or the exact Computer Health tab, item, and scroll position, then restores and highlights that working position on return.
+- Added registered direct actions to storage, service, and terminal findings so experienced users can clean, stop, remove, or optimize without first requesting AI analysis; each system-changing action still has one explicit confirmation and post-action verification.
+- Added regression coverage for ignored-app metadata, search and logos, single-confirmation execution, direct actions, and source restoration.
+
+### 简体中文
+
+- 统一忽略列表新增搜索，支持应用、后台服务和存储项目，并可按名称、Bundle ID 与路径匹配。
+- 扫描和重启后仍保留已忽略应用的只读元数据与图标入口，可展示真实中文名和应用 Logo；卸载与定位能力仍会被白名单撤销。
+- 移除 Agent 计划的重复确认弹窗：“确认并执行”就是唯一确认，点击后立即进入由真实执行、复检、完成和失败状态驱动的清理进度界面。
+- Agent 新增来源返回能力，记住应用管理或电脑体检的精确标签、项目与滚动位置，返回后恢复并短暂高亮刚才的工作位置。
+- 存储、后台服务和终端建议新增已注册的直接操作，熟练用户无需先做 AI 分析即可清理、停止、移除或优化；所有系统修改仍保留一次明确确认和操作后复检。
+- 新增已忽略应用元数据、搜索与 Logo、单次确认执行、直接操作和来源恢复的回归覆盖。
+
 ## 0.6.29 - 2026-07-30
 
 ### English

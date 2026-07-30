@@ -122,6 +122,7 @@ export interface ScanResult {
   system: SystemSnapshot
   candidates: ScanCandidate[]
   applications: InstalledApplication[]
+  ignoredApplications: InstalledApplication[]
   terminal: {
     shell: string
     baselineMs: number | null

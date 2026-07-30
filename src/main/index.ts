@@ -69,6 +69,7 @@ let registeredActions = new Map<string, RegisteredAction>()
 let registeredRevealTargets = new Map<string, string>()
 let registeredTerminalFixes = new Map<string, RegisteredTerminalFix>()
 const applicationIconCache = new Map<string, string | null>()
+let registeredApplicationIconTargets = new Map<string, string>()
 let applicationIconQueue = Promise.resolve()
 let lastTerminalFixBackups = new Map<string, TerminalFixBackup>()
 let scanInProgress = false
@@ -729,6 +730,12 @@ async function performScan(
   scanInProgress = true
   try {
     const scannedBundle = await runFullScan(onProgress ?? (() => undefined), language)
+    registeredApplicationIconTargets = new Map(
+      scannedBundle.result.applications.flatMap((application) => {
+        const target = scannedBundle.revealTargets.get(application.id)
+        return target ? [[application.id, target] as const] : []
+      })
+    )
     const bundle = applyScanWhitelist(
       scannedBundle,
       appSettings.serviceWhitelist,
@@ -758,8 +765,11 @@ app.whenReady().then(async () => {
   ipcMain.handle('memento:get-version', () => app.getVersion())
   ipcMain.handle('memento:get-application-icon', async (_event, id: string) => {
     if (typeof id !== 'string' || id.length > 100) return null
-    const application = currentScanResult?.applications.find((item) => item.id === id)
-    const target = application ? registeredRevealTargets.get(id) : null
+    const application = [
+      ...(currentScanResult?.applications ?? []),
+      ...(currentScanResult?.ignoredApplications ?? [])
+    ].find((item) => item.id === id)
+    const target = application ? registeredApplicationIconTargets.get(id) : null
     if (!application || !target || !existsSync(target)) return null
     return readApplicationIcon(target)
   })
@@ -792,6 +802,7 @@ app.whenReady().then(async () => {
       currentScanResult = null
       registeredActions = new Map()
       registeredRevealTargets = new Map()
+      registeredApplicationIconTargets = new Map()
       registeredTerminalFixes = new Map()
       applicationIconCache.clear()
     }

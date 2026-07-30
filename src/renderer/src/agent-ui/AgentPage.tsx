@@ -1,4 +1,5 @@
 import {
+  ArrowLeft,
   ArrowUp,
   Check,
   CircleCheck,
@@ -121,10 +122,12 @@ export function AgentPage({
   providerConfigured,
   addingOperationId,
   openingApplicationId,
+  returnLabel,
   onSubmit,
   onNewTask,
   onOpenHistory,
   onOpenSettings,
+  onReturn,
   onOpenApplication,
   onAddPlanItem,
   onTogglePlanItem,
@@ -139,10 +142,12 @@ export function AgentPage({
   providerConfigured: boolean
   addingOperationId: string | null
   openingApplicationId: string | null
+  returnLabel: string | null
   onSubmit: (prompt: string) => void
   onNewTask: () => void
   onOpenHistory: () => void
   onOpenSettings: () => void
+  onReturn: () => void
   onOpenApplication: (id: string) => void
   onAddPlanItem: (id: string) => void
   onTogglePlanItem: (id: string) => void
@@ -185,6 +190,7 @@ export function AgentPage({
             )}</p>
           </div>
           <div className="session-menu">
+            {returnLabel && <button type="button" className="secondary-button return-origin-button" onClick={onReturn}><ArrowLeft size={15} />{text(`返回${returnLabel}`, `Back to ${returnLabel}`)}</button>}
             <button type="button" className="icon-button" onClick={onNewTask} disabled={busy} title={text('新任务', 'New task')} aria-label={text('新任务', 'New task')}>
               <SquarePen size={16} />
             </button>

@@ -48,6 +48,7 @@ describe('LocalAgentRuntime boundaries', () => {
         scope: 'shared', unused: false,
         action: { id: 'app-action', kind: 'trash', label: 'Uninstall', consequence: 'Move to Trash', reversible: true }
       }],
+      ignoredApplications: [],
       terminal: {
         shell: '/bin/zsh', baselineMs: 40, startupMs: 80, sampleCount: 3,
         configFiles: [],
@@ -86,6 +87,7 @@ describe('LocalAgentRuntime boundaries', () => {
         }]
       }],
       applications: [],
+      ignoredApplications: [],
       terminal: { shell: '/bin/zsh', baselineMs: 20, startupMs: 30, sampleCount: 3, configFiles: [], findings: [] },
       warnings: []
     }
