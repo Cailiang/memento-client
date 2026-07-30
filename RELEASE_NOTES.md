@@ -1,16 +1,16 @@
-# Memento Agent 0.6.36
+# Memento Agent 0.6.37
 
 ## 简体中文
 
-`0.6.36` 让清理位置更直观、后台服务分类更紧凑，并可直接从磁盘浏览把项目移到废纸篓。
+`0.6.37` 让终端诊断可以直接完成优化，并为并行 Agent 任务增加关闭功能。
 
 ### 主要变化
 
-- 每条清理建议直接显示路径，点击即可打开目录或在 Finder 中定位文件。
-- 后台服务使用水平分类切换，不再纵向堆叠多个分类区块。
-- 磁盘项目支持右键在 Finder 中显示或移到废纸篓，操作前会明确确认路径、类型和容量。
-- 移除后自动重新扫描磁盘；卷根、系统顶层目录和整个用户主目录不允许从浏览器移除。
-- 所有磁盘操作只接受本轮扫描注册的项目 ID，并拒绝符号链接和越界路径。
+- 终端诊断顶部新增“一键优化”，一次执行本轮全部安全修复。
+- 优化前自动备份 shell 配置，拒绝扫描后发生变化的文件，并在写入前校验 zsh 语法。
+- 完成后自动重新体检，执行进度展示真实修复数量和结果。
+- 单项终端问题把“直接优化”作为主要操作，AI 分析作为可选辅助。
+- Agent 并行任务标签新增关闭按钮；关闭不删除历史，运行中的任务仍在后台继续。
 
 ### 安装说明
 
@@ -18,15 +18,15 @@
 
 ## English
 
-`0.6.36` makes cleanup locations visible, compacts service categories, and allows scanned disk items to move directly to Trash.
+`0.6.37` turns terminal diagnostics into direct optimization and adds close controls to concurrent Agent tasks.
 
 ### Highlights
 
-- Every cleanup finding shows a clickable registered path that opens the folder or reveals the file in Finder.
-- Background services use a horizontal category switcher instead of stacked sections.
-- Disk items expose a right-click menu for Finder reveal or Move to Trash, followed by explicit path, type, and size confirmation.
-- The disk scan refreshes after removal; the volume root, top-level system folders, and the whole user home folder cannot be removed from the browser.
-- Disk actions accept only IDs registered by the current scan and reject symbolic links and out-of-volume paths.
+- Terminal diagnostics now offer one-click optimization for every safe fix registered by the current scan.
+- Shell files are backed up automatically, changed files are rejected, and zsh syntax is validated before replacement.
+- Memento scans again after completion and reports the real number of fixes and results.
+- Per-finding Optimize is the primary action while AI analysis remains optional.
+- Concurrent Agent task tabs can be closed without deleting history; running tasks continue in the background.
 
 ### Installation
 

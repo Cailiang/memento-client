@@ -126,6 +126,7 @@ export function AgentPage({
   returnLabel,
   onSubmit,
   onSelectWorkspaceRun,
+  onCloseWorkspaceRun,
   onNewTask,
   onOpenHistory,
   onOpenSettings,
@@ -148,6 +149,7 @@ export function AgentPage({
   returnLabel: string | null
   onSubmit: (prompt: string) => void
   onSelectWorkspaceRun: (run: AgentRunRecord) => void
+  onCloseWorkspaceRun: (runId: string) => void
   onNewTask: () => void
   onOpenHistory: () => void
   onOpenSettings: () => void
@@ -216,15 +218,18 @@ export function AgentPage({
                 const taskBusy = runIsBusy(workspaceRun)
                 const taskActive = workspaceRun.id === run?.id
                 return (
-                  <button type="button" className={`agent-task-item ${taskActive ? 'is-active' : ''}`} aria-current={taskActive ? 'true' : undefined} key={workspaceRun.id} onClick={() => onSelectWorkspaceRun(workspaceRun)}>
-                    <span>{taskBusy
-                      ? <LoaderCircle className="spinner" size={14} />
-                      : workspaceRun.status === 'failed'
-                        ? <X size={14} />
-                        : <CircleCheck size={14} />}</span>
-                    <strong>{workspaceRun.prompt}</strong>
-                    <small>{runStatusLabel(workspaceRun.status, language)}</small>
-                  </button>
+                  <div className={`agent-task-item ${taskActive ? 'is-active' : ''}`} key={workspaceRun.id}>
+                    <button type="button" className="agent-task-select" aria-current={taskActive ? 'true' : undefined} onClick={() => onSelectWorkspaceRun(workspaceRun)}>
+                      <span>{taskBusy
+                        ? <LoaderCircle className="spinner" size={14} />
+                        : workspaceRun.status === 'failed'
+                          ? <X size={14} />
+                          : <CircleCheck size={14} />}</span>
+                      <strong>{workspaceRun.prompt}</strong>
+                      <small>{runStatusLabel(workspaceRun.status, language)}</small>
+                    </button>
+                    <button type="button" className="agent-task-close" onClick={() => onCloseWorkspaceRun(workspaceRun.id)} title={text('关闭任务', 'Close task')} aria-label={text(`关闭任务：${workspaceRun.prompt}`, `Close task: ${workspaceRun.prompt}`)}><X size={13} /></button>
+                  </div>
                 )
               })}
             </div>

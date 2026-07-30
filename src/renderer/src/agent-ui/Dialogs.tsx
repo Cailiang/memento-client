@@ -78,6 +78,7 @@ function DialogFrame({
 
 export interface DirectActionRequest {
   id: string
+  ids?: string[]
   kind: 'action' | 'terminal-fix'
   subject: string
   label: string
@@ -109,7 +110,7 @@ export function DirectActionConfirmDialog({
         <div className="confirm-row">
           <span>{action.reversible ? <ShieldCheck size={13} /> : <CircleAlert size={13} />}</span>
           <div><strong>{action.subject}</strong><small>{action.consequence}</small></div>
-          <span className={`risk-label ${action.reversible ? 'safe' : 'review'}`}>{action.estimatedBytes ? formatBytes(action.estimatedBytes) : text('操作', 'Action')}</span>
+          <span className={`risk-label ${action.reversible ? 'safe' : 'review'}`}>{action.estimatedBytes ? formatBytes(action.estimatedBytes) : action.ids && action.ids.length > 1 ? text(`${action.ids.length} 项`, `${action.ids.length} items`) : text('操作', 'Action')}</span>
         </div>
       </div>
     </DialogFrame>

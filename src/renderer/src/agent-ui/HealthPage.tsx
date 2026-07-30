@@ -144,6 +144,7 @@ export function HealthPage({
   onAgentPrompt,
   onDirectAction,
   onDirectTerminalFix,
+  onOptimizeTerminal,
   onIgnore,
   onManageIgnored
 }: {
@@ -170,6 +171,7 @@ export function HealthPage({
   onAgentPrompt: (prompt: string, origin: HealthAgentOrigin) => void
   onDirectAction: (candidate: ScanCandidate, operation: CandidateOperation) => void
   onDirectTerminalFix: (finding: ScanResult['terminal']['findings'][number]) => void
+  onOptimizeTerminal: (findings: ScanResult['terminal']['findings']) => void
   onIgnore: (candidate: ScanCandidate) => void
   onManageIgnored: (kind: 'storage' | 'services') => void
 }): React.JSX.Element {
@@ -303,7 +305,7 @@ export function HealthPage({
 
       {tab === 'terminal' && (
         <div className="health-panel is-active">
-          <div className="section-toolbar"><strong>{text('启动性能', 'Startup performance')}</strong><span>{text(`当前 shell：${result?.terminal.shell ?? '--'}`, `Current shell: ${result?.terminal.shell ?? '--'}`)}</span></div>
+          <div className="section-toolbar terminal-toolbar"><div><strong>{text('启动性能', 'Startup performance')}</strong><span>{text(`当前 shell：${result?.terminal.shell ?? '--'}`, `Current shell: ${result?.terminal.shell ?? '--'}`)}</span></div>{terminalFixes.length > 0 && <button type="button" className="primary-button" onClick={() => onOptimizeTerminal(terminalFindings)} disabled={scanBusy}><Bolt size={14} />{text(`一键优化 ${terminalFixes.length} 项`, `Optimize ${terminalFixes.length} items`)}</button>}</div>
           <div className="data-list">
             {terminalFindings.map((finding) => (
               <div className="data-row" key={finding.id} data-focus-id={finding.id} tabIndex={-1}>
@@ -311,9 +313,9 @@ export function HealthPage({
                 <div className="row-main"><strong>{finding.title}</strong><small>{finding.detail}</small></div>
                 <div className="row-meta"><strong>{finding.durationMs !== undefined ? `${finding.durationMs} ms` : finding.severity}</strong><small>{finding.source ?? result?.terminal.shell}</small></div>
                 <div className="row-meta"><strong>{finding.fix ? text('1 个可选操作', '1 available action') : text('仅提供分析', 'Analysis only')}</strong><small>{finding.fix ? text('可直接执行或先分析', 'Run directly or analyze first') : text('不会修改系统', 'No system changes')}</small></div>
-                <div className="row-actions"><button type="button" className="secondary-button" onClick={() => askAgent(finding.fix
+                <div className="row-actions">{finding.fix && <button type="button" className="primary-button direct-action-button" onClick={() => onDirectTerminalFix(finding)}><Bolt size={14} />{text('直接优化', 'Optimize')}</button>}<button type="button" className="secondary-button" onClick={() => askAgent(finding.fix
                   ? text(`分析“${finding.title}”，说明性能影响和可撤销优化方案；不要直接修改，等我确认后再加入计划。`, `Analyze "${finding.title}", explain the performance impact and reversible fix, and wait for my confirmation before adding it to a plan.`)
-                  : text(`深入分析“${finding.title}”并告诉我怎样优化；不要修改系统。`, `Analyze "${finding.title}" and explain how to optimize it without changing the system.`), finding.id)}><Sparkles size={14} />{text('AI 分析', 'AI analysis')}</button>{finding.fix && <button type="button" className="secondary-button direct-action-button" onClick={() => onDirectTerminalFix(finding)}><Bolt size={14} />{text('直接优化', 'Optimize')}</button>}</div>
+                  : text(`深入分析“${finding.title}”并告诉我怎样优化；不要修改系统。`, `Analyze "${finding.title}" and explain how to optimize it without changing the system.`), finding.id)}><Sparkles size={14} />{text('AI 分析', 'AI analysis')}</button></div>
               </div>
             ))}
           </div>

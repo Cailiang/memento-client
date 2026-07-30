@@ -111,6 +111,10 @@ try {
   if (!await concurrentPage.locator('.message.user').filter({ hasText: '分析 Xcode 派生数据' }).count()) {
     failures.push('agent-concurrency: first analysis cannot be reopened')
   }
+  await taskItems.nth(1).locator('.agent-task-close').click()
+  if (await concurrentPage.locator('.agent-task-switcher').count()) {
+    failures.push('agent-concurrency: closed task remains in the workspace switcher')
+  }
   await concurrentPage.screenshot({ path: '/tmp/memento-interaction-agent-concurrency.png' })
   await concurrentPage.close()
 
@@ -236,6 +240,17 @@ try {
   await page.waitForTimeout(1_000)
 
   await page.getByRole('tab', { name: /终端诊断/ }).click()
+  const optimizeAllTerminal = page.getByRole('button', { name: /一键优化 \d+ 项/ })
+  if (!await optimizeAllTerminal.isVisible()) failures.push('health/terminal: one-click optimization is missing')
+  else {
+    await optimizeAllTerminal.click()
+    const terminalBatchDialog = page.getByRole('dialog', { name: /一键优化/ })
+    await terminalBatchDialog.waitFor()
+    if (!await terminalBatchDialog.getByText(/自动备份相关 shell 配置/).count()) {
+      failures.push('health/terminal: batch optimization does not explain backup and verification')
+    }
+    await terminalBatchDialog.getByRole('button', { name: '取消' }).click()
+  }
   await page.locator('.health-panel.is-active .row-actions > .secondary-button').first().click()
   const healthAnalysisPrompt = await page.locator('.message.user .message-body').last().textContent()
   if (!healthAnalysisPrompt || !/不要(?:直接)?修改/.test(healthAnalysisPrompt)) {

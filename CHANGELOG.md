@@ -8,6 +8,24 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.37 - 2026-07-30
+
+### English
+
+- Added one-click terminal optimization that batches every registered safe fix from the current scan, backs up affected shell files, validates zsh syntax, and automatically scans again to verify the result.
+- Promoted per-finding Optimize actions ahead of optional AI analysis so terminal findings with deterministic fixes can be resolved directly.
+- Reused the existing confirmation and execution progress workflow for terminal batches, including accurate item counts, grouped per-file writes, stale-content rejection, and backup-based recovery support.
+- Added independent close controls to concurrent Agent task tabs. Closing removes a task only from the current workspace, preserves history, lets running work continue in the background, and selects a neighboring task when the active tab closes.
+- Added UI smoke coverage for terminal batch confirmation and task-tab closure without history deletion.
+
+### 简体中文
+
+- 终端诊断新增一键优化：合并执行本轮扫描注册的全部安全修复，自动备份受影响的 shell 配置、校验 zsh 语法，并在完成后重新体检验证。
+- 单项问题把“直接优化”提升到 AI 分析之前，具备确定性修复的问题可以直接解决。
+- 终端批量操作复用现有确认和执行进度流程，准确显示项目数量，按配置文件合并写入，拒绝已变化的内容，并保留基于备份的恢复能力。
+- 并行 Agent 任务标签新增独立关闭按钮。关闭只移出当前工作区，不删除历史；运行中任务继续在后台执行，关闭当前标签时自动选择相邻任务。
+- UI 冒烟新增终端批量确认和任务标签关闭且不删除历史的覆盖。
+
 ## 0.6.36 - 2026-07-30
 
 ### English

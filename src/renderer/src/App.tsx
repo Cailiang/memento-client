@@ -759,38 +759,58 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     })
   }
 
+  const requestTerminalFixBatch = (findings: TerminalFinding[]): void => {
+    const fixes = findings.flatMap((finding) => finding.fix ? [finding.fix] : [])
+    if (!fixes.length) return
+    if (scanBusy) {
+      setToast(appText('请等待当前体检完成后再操作', 'Wait for the current scan to finish before running an action.'))
+      return
+    }
+    setPendingDirectAction({
+      id: fixes[0].id,
+      ids: fixes.map((fix) => fix.id),
+      kind: 'terminal-fix',
+      subject: appText(`${fixes.length} 项终端启动问题`, `${fixes.length} terminal startup issues`),
+      label: appText(`一键优化 ${fixes.length} 项`, `Optimize ${fixes.length} items`),
+      consequence: appText('自动备份相关 shell 配置，执行全部可安全应用的优化，校验语法后重新体检。', 'Back up the relevant shell configuration, apply every safe optimization, validate syntax, and scan again.'),
+      reversible: true,
+      estimatedBytes: 0
+    })
+  }
+
   const executeDirectAction = async (): Promise<void> => {
     if (!pendingDirectAction) return
     const action = pendingDirectAction
+    const actionIds = action.ids?.length ? action.ids : [action.id]
     setPendingDirectAction(null)
     setExecutionState({
       phase: 'executing',
-      itemCount: 1,
+      itemCount: actionIds.length,
       completedCount: 0,
       progress: 8,
-      itemIds: [action.id],
+      itemIds: actionIds,
       detail: appText(`正在执行“${action.label}”。`, `Running "${action.label}".`)
     })
     await waitForNextPaint()
     try {
       const results = window.memento
         ? action.kind === 'terminal-fix'
-          ? (await window.memento.runTerminalFixes([action.id])).results
+          ? (await window.memento.runTerminalFixes(actionIds)).results
           : await window.memento.runActions([action.id])
         : await new Promise<Array<{ id: string; ok: boolean; message: string }>>((resolve) => {
-            window.setTimeout(() => resolve([{
-              id: action.id,
+            window.setTimeout(() => resolve(actionIds.map((id) => ({
+              id,
               ok: true,
               message: appText('操作完成', 'Action completed')
-            }]), 520)
+            }))), 520)
           })
       const completedCount = results.filter((item) => item.ok).length
       setExecutionState({
         phase: 'verifying',
-        itemCount: 1,
+        itemCount: actionIds.length,
         completedCount,
         progress: 44,
-        itemIds: [action.id],
+        itemIds: actionIds,
         detail: appText('正在重新体检并验证结果。', 'Scanning again to verify the result.')
       })
       setScanBusy(true)
@@ -801,10 +821,10 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       const failure = results.find((item) => !item.ok)
       setExecutionState({
         phase: failure ? 'failed' : 'completed',
-        itemCount: 1,
+        itemCount: actionIds.length,
         completedCount,
         progress: 100,
-        itemIds: [action.id],
+        itemIds: actionIds,
         detail: failure?.message ?? appText(
           `“${action.label}”已完成，复检结果正常。`,
           `"${action.label}" completed and verification passed.`
@@ -816,10 +836,10 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
         : appText('操作或复检未能完成', 'The action or verification did not complete.')
       setExecutionState({
         phase: 'failed',
-        itemCount: 1,
+        itemCount: actionIds.length,
         completedCount: 0,
         progress: 100,
-        itemIds: [action.id],
+        itemIds: actionIds,
         detail: message
       })
       setToast(message)
@@ -1219,6 +1239,21 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     setRunStatusMessage('')
     setView('agent')
   }
+
+  const closeWorkspaceRun = (runId: string): void => {
+    const remaining = workspaceRuns.filter((run) => run.id !== runId)
+    setWorkspaceRunIds((current) => current.filter((id) => id !== runId))
+    if (activeRun?.id !== runId) return
+    const fallback = remaining.at(-1) ?? null
+    if (fallback) {
+      selectWorkspaceRun(fallback)
+      return
+    }
+    setActiveRun(null)
+    activeRunId.current = null
+    setSelectedPlanIds(new Set())
+    setRunStatusMessage('')
+  }
   const agentOriginLabel = agentOrigin?.view === 'apps'
     ? appText('应用管理', 'Applications')
     : agentOrigin?.view === 'health'
@@ -1253,8 +1288,8 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       onNavigate={setView}
       onOpenUpdate={openUpdatePage}
     >
-      {view === 'agent' && <AgentPage scan={result} run={activeRun} conversationRuns={conversationRuns} workspaceRuns={workspaceRuns} statusMessage={runStatusMessage} selectedPlanIds={selectedPlanIds} providerConfigured={Boolean(defaultProvider)} addingOperationId={addingOperationId} openingApplicationId={openingApplicationId} returnLabel={agentOriginLabel} onSubmit={startAgentRun} onSelectWorkspaceRun={selectWorkspaceRun} onNewTask={() => { setActiveRun(null); activeRunId.current = null; setSelectedPlanIds(new Set()); setRunStatusMessage(''); setAgentOrigin(null) }} onOpenHistory={() => setView('history')} onOpenSettings={() => setView('settings')} onReturn={returnToAgentOrigin} onOpenApplication={openAgentApplication} onAddPlanItem={(id) => void addAgentPlanItem(id)} onTogglePlanItem={(id) => setSelectedPlanIds((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next })} onExecutePlan={() => void executePlan()} onDiscardPlan={discardPlan} />}
-      {view === 'health' && <HealthPage result={result} settings={settings} scanBusy={scanBusy} progress={progress} tab={healthTab} storageMode={storageMode} diskUsage={diskUsage} diskUsageProgress={diskUsageProgress} diskUsageBusy={diskUsageBusy} diskUsageError={diskUsageError} restoreTarget={restoreTarget?.view === 'health' ? restoreTarget : null} onRestoreComplete={() => setRestoreTarget(null)} onScan={() => void scanNow()} onTabChange={setHealthTab} onStorageModeChange={changeStorageMode} onDiskUsageScan={() => void scanDiskUsage()} onDiskUsageCancel={cancelDiskUsageScan} onRevealDiskUsageNode={revealDiskUsageNode} onTrashDiskUsageNode={setPendingDiskUsageTrash} onRevealCandidate={revealCandidate} onAgentPrompt={(prompt, origin: HealthAgentOrigin) => startAgentRun(prompt, { origin: { view: 'health', ...origin } })} onDirectAction={requestDirectAction} onDirectTerminalFix={requestDirectTerminalFix} onIgnore={setPendingIgnore} onManageIgnored={openIgnoredManager} />}
+      {view === 'agent' && <AgentPage scan={result} run={activeRun} conversationRuns={conversationRuns} workspaceRuns={workspaceRuns} statusMessage={runStatusMessage} selectedPlanIds={selectedPlanIds} providerConfigured={Boolean(defaultProvider)} addingOperationId={addingOperationId} openingApplicationId={openingApplicationId} returnLabel={agentOriginLabel} onSubmit={startAgentRun} onSelectWorkspaceRun={selectWorkspaceRun} onCloseWorkspaceRun={closeWorkspaceRun} onNewTask={() => { setActiveRun(null); activeRunId.current = null; setSelectedPlanIds(new Set()); setRunStatusMessage(''); setAgentOrigin(null) }} onOpenHistory={() => setView('history')} onOpenSettings={() => setView('settings')} onReturn={returnToAgentOrigin} onOpenApplication={openAgentApplication} onAddPlanItem={(id) => void addAgentPlanItem(id)} onTogglePlanItem={(id) => setSelectedPlanIds((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next })} onExecutePlan={() => void executePlan()} onDiscardPlan={discardPlan} />}
+      {view === 'health' && <HealthPage result={result} settings={settings} scanBusy={scanBusy} progress={progress} tab={healthTab} storageMode={storageMode} diskUsage={diskUsage} diskUsageProgress={diskUsageProgress} diskUsageBusy={diskUsageBusy} diskUsageError={diskUsageError} restoreTarget={restoreTarget?.view === 'health' ? restoreTarget : null} onRestoreComplete={() => setRestoreTarget(null)} onScan={() => void scanNow()} onTabChange={setHealthTab} onStorageModeChange={changeStorageMode} onDiskUsageScan={() => void scanDiskUsage()} onDiskUsageCancel={cancelDiskUsageScan} onRevealDiskUsageNode={revealDiskUsageNode} onTrashDiskUsageNode={setPendingDiskUsageTrash} onRevealCandidate={revealCandidate} onAgentPrompt={(prompt, origin: HealthAgentOrigin) => startAgentRun(prompt, { origin: { view: 'health', ...origin } })} onDirectAction={requestDirectAction} onDirectTerminalFix={requestDirectTerminalFix} onOptimizeTerminal={requestTerminalFixBatch} onIgnore={setPendingIgnore} onManageIgnored={openIgnoredManager} />}
       {view === 'apps' && <ApplicationsPage applications={result?.applications ?? []} openingId={openingApplicationId} removingId={removingApplicationId} restoreTarget={restoreTarget?.view === 'apps' ? restoreTarget : null} onRestoreComplete={() => setRestoreTarget(null)} ignoredCount={settings.applicationWhitelist.length} onOpen={(application) => void openApplication(application)} onUninstall={setPendingUninstall} onIgnore={setPendingApplicationIgnore} onManageIgnored={() => openIgnoredManager('applications')} onAgentPrompt={(prompt, origin) => startAgentRun(prompt, { isolated: true, origin: { view: 'apps', ...origin } })} />}
       {view === 'history' && <HistoryPage runs={runs} onOpenRun={(run) => { setActiveRun(run); activeRunId.current = run.id; setSelectedPlanIds(new Set()); setView('agent') }} onDeleteRun={setPendingHistoryDelete} />}
       {view === 'settings' && <SettingsPage settings={settings} providers={providers} appVersion={appVersion} updateState={updateState} onUpdateSettings={updateSettings} onDiscoverModels={discoverProviderModels} onSaveProvider={saveProvider} onTestProvider={testProvider} onDeleteProvider={deleteProvider} onSetDefaultProvider={setDefaultProvider} onImportCcSwitch={importCcSwitchProviders} onCheckUpdates={checkForUpdates} onManageIgnored={() => openIgnoredManager()} onToast={setToast} />}
