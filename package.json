@@ -1,6 +1,6 @@
 {
   "name": "memento",
-  "version": "0.6.42",
+  "version": "0.6.43",
   "private": true,
   "author": {
     "name": "Cailiang",
@@ -54,7 +54,7 @@
     "vitest": "^3.2.7"
   },
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.13.0"
   },
   "build": {
     "appId": "com.fcl.memento",

@@ -70,7 +70,7 @@ Agent 正文通过受限的 Markdown 管线渲染标题、粗体、列表、代�
 环境要求：
 
 - 完整扫描、清理和 DMG 校验需要 macOS
-- Node.js 22.12 或更高版本
+- Node.js 22.13 或更高版本（内置 SQLite 无需实验开关）
 - npm
 
 ```bash

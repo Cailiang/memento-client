@@ -70,7 +70,7 @@ The key is decrypted only in the Electron main process when a provider request i
 Requirements:
 
 - macOS for full scanning, cleanup, and DMG verification
-- Node.js 22.12 or later
+- Node.js 22.13 or later (required for built-in SQLite without an experimental flag)
 - npm
 
 ```bash

@@ -8,6 +8,22 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.43 - 2026-07-30
+
+### English
+
+- Raised the minimum development runtime to Node.js 22.13, where built-in SQLite no longer requires the experimental flag.
+- Changed release runners to the latest patched Node.js 22.x runtime and added an explicit SQLite availability check before tests and platform builds.
+- Preserved the failed `v0.6.42` tag instead of rewriting release history; `v0.6.43` is the corrected automated multi-platform release.
+- Updated the setup, development, release, changelog, and bilingual release documentation for the corrected runtime requirement.
+
+### 简体中文
+
+- 将最低开发运行时提高到 Node.js 22.13，该版本的内置 SQLite 不再需要实验开关。
+- 发布 runner 改用最新补丁版 Node.js 22.x，并在测试和各平台构建前显式检查 SQLite 可用性。
+- 保留失败的 `v0.6.42` 标签而不改写发布历史；`v0.6.43` 是修正后的自动化多平台版本。
+- 同步更新环境配置、开发说明、发布流程、变更日志和双语发布说明中的运行时要求。
+
 ## 0.6.42 - 2026-07-30
 
 ### English
