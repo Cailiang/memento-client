@@ -186,6 +186,7 @@ export function DiskUsageBrowser({
               <button
                 type="button"
                 className={`disk-node ${column.selectedId === node.id ? 'is-selected' : ''}`}
+                data-node-id={node.id}
                 key={node.id}
                 title={`${node.location} · ${formatBytes(node.sizeBytes)}`}
                 onClick={() => setSelectedIds((current) => [

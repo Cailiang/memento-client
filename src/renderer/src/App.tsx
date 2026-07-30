@@ -50,6 +50,7 @@ import { HistoryPage } from './agent-ui/HistoryPage'
 import { SettingsPage } from './agent-ui/SettingsPage'
 import { type AgentViewKey, Shell } from './agent-ui/Shell'
 import { localizedDemoDiskUsageResult, localizedDemoResult } from './demo'
+import { withoutDiskUsageNode } from './disk-usage-tree'
 import { I18nProvider } from './i18n'
 
 const DEMO_PROVIDER: AgentProvider = {
@@ -489,9 +490,10 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     try {
       if (window.memento) await window.memento.trashDiskUsageNode(node.id)
       else await new Promise((resolve) => window.setTimeout(resolve, 420))
+      setDiskUsage((current) => current ? withoutDiskUsageNode(current, node.id) : current)
       setPendingDiskUsageTrash(null)
       setToast(appText(`“${node.name}”已移到废纸篓`, `"${node.name}" was moved to Trash.`))
-      await scanDiskUsage()
+      if (window.memento) void scanDiskUsage()
     } catch (error) {
       setToast(error instanceof Error ? error.message : appText('无法将磁盘项目移到废纸篓', 'Could not move the disk item to Trash.'))
     } finally {

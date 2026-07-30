@@ -8,6 +8,22 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.40 - 2026-07-30
+
+### English
+
+- Fixed Gemini 3.1 Pro connection tests by using its supported `LOW` thinking level instead of `MINIMAL`; the probe still requires a real tool call and tool-result continuation.
+- Removed a successfully trashed disk-browser item from the current column immediately, then kept the full disk rescan in the background to reconcile capacity and hierarchy without leaving stale UI behind.
+- Added focused immutable-tree tests and UI smoke coverage that confirms a trashed disk node actually detaches from the rendered browser.
+- Updated the English and Simplified Chinese project READMEs, local Agent development guide, release notes, package metadata, and Gemini proxy authentication documentation.
+
+### 简体中文
+
+- 修复 Gemini 3.1 Pro 连接测试：使用模型支持的 `LOW` 推理级别替代 `MINIMAL`，同时继续要求真实完成工具调用和工具结果续传。
+- 磁盘浏览项目成功移到废纸篓后立即从当前分栏移除，完整磁盘重扫改在后台校准容量和层级，不再让旧项目残留在界面中。
+- 新增不可变磁盘树单测与 UI 冒烟覆盖，确认删除后的节点确实从渲染列表脱离。
+- 更新中英文项目 README、本地 Agent 开发说明、发布说明、包元数据和 Gemini 代理认证文档。
+
 ## 0.6.39 - 2026-07-30
 
 ### English

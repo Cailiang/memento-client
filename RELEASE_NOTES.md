@@ -1,16 +1,16 @@
-# Memento Agent 0.6.39
+# Memento Agent 0.6.40
 
 ## 简体中文
 
-`0.6.39` 修复独立分析会话、Gemini 高推理模型连接测试和受保护磁盘项目删除，并重新设计计划执行动效。
+`0.6.40` 修复 Gemini 3.1 Pro 连接探针和磁盘浏览删除后的列表刷新。
 
 ### 主要变化
 
-- 从电脑体检发起的分析会进入各自独立会话，并行任务不会混合消息和计划。
-- 后台任务完成时不会抢走用户当前选择的会话。
-- 计划执行改为“执行、复检、完成”三阶段状态管线，跟随真实进度并适配手机与减少动态效果设置。
-- Gemini 高推理模型的工具调用探针不再被过小的输出限制提前截断。
-- 磁盘浏览删除受保护诊断报告时，原生废纸篓失败后会安全降级，并仅在权限不足时请求管理员授权。
+- Gemini 3 系列连接探针使用模型支持的 `LOW` 推理级别，不再发送 Gemini 3.1 Pro 拒绝的 `MINIMAL`。
+- 连接成功仍要求模型真实调用工具并处理工具结果，不会把普通文本响应误判为成功。
+- 磁盘项目成功移到废纸篓后立即从当前分栏消失。
+- 完整磁盘重扫在后台继续进行，用真实文件系统状态校准容量和层级。
+- 中英文 README 与本地开发文档已同步当前 Gemini 代理和磁盘删除行为。
 
 ### 安装说明
 
@@ -18,15 +18,15 @@
 
 ## English
 
-`0.6.39` fixes isolated Agent conversations, Gemini high-reasoning connection tests, protected disk-item removal, and redesigns confirmed-plan motion.
+`0.6.40` fixes the Gemini 3.1 Pro connection probe and stale disk-browser rows after Trash succeeds.
 
 ### Highlights
 
-- Analyses launched from Computer Health now open independent conversations, so concurrent tasks do not mix messages or plans.
-- Background completion no longer steals focus from the conversation selected by the user.
-- Confirmed-plan execution now uses a real Run, Verify, Done status pipeline with mobile and reduced-motion support.
-- Gemini high-reasoning models receive enough probe output budget to complete the required tool call.
-- Protected diagnostic reports use a guarded Trash fallback, requesting administrator authorization only when filesystem permissions require it.
+- Gemini 3 connection probes use the supported `LOW` thinking level instead of the `MINIMAL` level rejected by Gemini 3.1 Pro.
+- A successful connection still requires an actual tool call and tool-result continuation; a plain-text response does not pass.
+- Disk items disappear from the current column immediately after a successful move to Trash.
+- A full disk scan continues in the background to reconcile real capacity and hierarchy.
+- English and Simplified Chinese project documentation now reflects the current Gemini proxy and disk-removal behavior.
 
 ### Installation
 

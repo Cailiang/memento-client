@@ -20,9 +20,11 @@ export function providerTestToolChoice(stepNumber: number): 'required' | 'none' 
 }
 
 export function providerTestReasoning(
-  providerType: PrivateAgentProvider['type']
-): 'none' | undefined {
-  return providerType === 'google' ? 'none' : undefined
+  provider: Pick<PrivateAgentProvider, 'type' | 'model'>
+): 'low' | undefined {
+  return provider.type === 'google' && /(^|\/)gemini-3(?:[.-]|$)/i.test(provider.model)
+    ? 'low'
+    : undefined
 }
 
 export function createProviderModel(provider: PrivateAgentProvider): LanguageModel {
@@ -79,7 +81,7 @@ export async function testProviderConnection(
     }),
     stopWhen: stepCountIs(2),
     maxOutputTokens: PROVIDER_TEST_MAX_OUTPUT_TOKENS,
-    reasoning: providerTestReasoning(provider.type),
+    reasoning: providerTestReasoning(provider),
     temperature: 0
   })
   await agent.generate({

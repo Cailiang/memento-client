@@ -140,6 +140,7 @@ try {
   }
   await diskPage.getByRole('button', { name: '全屏浏览' }).click()
   const trashTarget = diskPage.locator('.disk-column').last().locator('.disk-node').first()
+  const trashTargetId = await trashTarget.getAttribute('data-node-id')
   await trashTarget.click({ button: 'right' })
   const diskContextMenu = diskPage.locator('.disk-context-menu')
   await diskContextMenu.waitFor()
@@ -149,7 +150,12 @@ try {
   if (!await diskTrashDialog.getByText(/整个目录|文件会移到废纸篓/).count()) {
     failures.push('disk-browser: Trash confirmation does not explain the removal scope')
   }
-  await diskTrashDialog.getByRole('button', { name: '取消' }).click()
+  await diskTrashDialog.getByRole('button', { name: '移到废纸篓', exact: true }).click()
+  if (trashTargetId) {
+    await diskPage.locator(`.disk-node[data-node-id="${trashTargetId}"]`).waitFor({ state: 'detached' })
+  } else {
+    failures.push('disk-browser: selected Trash target did not expose its registered ID')
+  }
   await diskPage.getByRole('button', { name: '退出全屏' }).click()
   await diskPage.screenshot({ path: '/tmp/memento-interaction-disk-browser.png' })
   await diskPage.setViewportSize({ width: 390, height: 844 })
