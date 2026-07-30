@@ -1,6 +1,5 @@
 import {
   Activity,
-  Archive,
   Box,
   Ellipsis,
   EyeOff,
@@ -26,13 +25,6 @@ function operations(candidate: ScanCandidate): CandidateOperation[] {
   return candidate.action ? [{ id: candidate.id, ...candidate.action }] : []
 }
 
-function candidatePrompt(candidate: ScanCandidate): string {
-  const operation = operations(candidate)[0]
-  return operation
-    ? `检查 ${candidate.name}，说明影响，并把“${operation.label}”加入需要我确认的处理计划`
-    : `深入分析 ${candidate.name}，告诉我是否需要处理`
-}
-
 function CandidateRow({
   candidate,
   onAgentPrompt,
@@ -45,7 +37,7 @@ function CandidateRow({
   const { text } = useI18n()
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
-  const operation = operations(candidate)[0]
+  const operationCount = operations(candidate).length
   const Icon = candidate.section === 'services'
     ? RadioTower
     : candidate.name.toLowerCase().includes('xcode')
@@ -68,10 +60,18 @@ function CandidateRow({
       <span className="row-icon"><Icon size={16} /></span>
       <div className="row-main"><strong>{candidate.name}</strong><small>{candidate.description}</small></div>
       <div className="row-meta"><strong>{candidate.sizeBytes ? formatBytes(candidate.sizeBytes) : candidate.status}</strong><small>{candidate.ageDays !== undefined ? text(`${candidate.ageDays} 天`, `${candidate.ageDays} days`) : candidate.subtitle}</small></div>
-      <div className="row-meta"><strong>{candidate.risk === 'safe' ? text('可安全处理', 'Safe to handle') : candidate.risk === 'protected' ? text('仅分析', 'Analysis only') : text('需要确认', 'Needs review')}</strong><small>{operation ? operation.consequence : candidate.status}</small></div>
+      <div className="row-meta"><strong>{operationCount ? text(`${operationCount} 个可选操作`, `${operationCount} available ${operationCount === 1 ? 'action' : 'actions'}`) : text('仅提供分析', 'Analysis only')}</strong><small>{operationCount ? text('AI 分析后再选择', 'Choose after AI analysis') : text('不会修改系统', 'No system changes')}</small></div>
       <div className="row-actions">
-        <button type="button" className={operation ? 'secondary-button' : 'quiet-button'} onClick={() => onAgentPrompt(candidatePrompt(candidate))}>
-          {operation ? text('处理', 'Handle') : text('问 Agent', 'Ask Agent')}
+        <button type="button" className="secondary-button" onClick={() => onAgentPrompt(operationCount
+          ? text(
+              `分析“${candidate.name}”，说明它的用途、当前状态、影响和风险，并比较全部 ${operationCount} 个可选操作。不要直接执行或默认选择操作，等我明确选择后再加入确认计划。`,
+              `Analyze "${candidate.name}", explain its purpose, current state, impact, and risks, then compare all ${operationCount} available actions. Do not execute or select an action until I explicitly choose one.`
+            )
+          : text(
+              `分析“${candidate.name}”，说明它的用途、当前状态、影响和是否需要关注；不要修改系统。`,
+              `Analyze "${candidate.name}" and explain its purpose, current state, impact, and whether it needs attention. Do not change the system.`
+            ))}>
+          <Sparkles size={14} />{text('AI 分析', 'AI analysis')}
         </button>
         <div className="row-menu" ref={menuRef}>
           <button type="button" className="icon-button" onClick={() => setMenuOpen((value) => !value)} aria-haspopup="menu" aria-expanded={menuOpen} title={text('更多操作', 'More actions')} aria-label={text(`${candidate.name}的更多操作`, `More actions for ${candidate.name}`)}>
@@ -125,7 +125,7 @@ export function HealthPage({
     <section className="page content-page is-active">
       <div className="page-command-bar">
         <span className="page-command-summary">{result
-          ? text(`最后检查于 ${formatDateTime(result.completedAt, language)}，${findingCount} 项内容值得处理。`, `Last checked ${formatDateTime(result.completedAt, language)}. ${findingCount} items need attention.`)
+          ? text(`最后检查于 ${formatDateTime(result.completedAt, language)}，${findingCount} 项内容值得关注。`, `Last checked ${formatDateTime(result.completedAt, language)}. ${findingCount} items need attention.`)
           : text('尚未完成体检', 'No health scan yet')}</span>
         <div className="page-command-actions">
           <button type="button" className="secondary-button" onClick={() => onAgentPrompt(text('全面检查电脑状态并准备处理计划', 'Inspect the computer and prepare a plan'))}>
@@ -147,9 +147,9 @@ export function HealthPage({
       )}
 
       <div className="health-band">
-        <div className="health-score"><strong>{score}</strong><span>{score >= 85 ? text('设备状态良好', 'Device is healthy') : text('建议完成处理', 'Action recommended')}</span></div>
+        <div className="health-score"><strong>{score}</strong><span>{score >= 85 ? text('设备状态良好', 'Device is healthy') : text('建议进一步检查', 'Further review recommended')}</span></div>
         <div className="health-metric"><span>{text('可释放空间', 'Reclaimable')}</span><strong>{formatBytes(reclaimable)}</strong><small>{text(`${storage.length} 个建议项目`, `${storage.length} findings`)}</small></div>
-        <div className="health-metric"><span>{text('后台服务', 'Services')}</span><strong>{services.length}</strong><small>{text(`${services.filter((item) => operations(item).length).length} 个可处理`, `${services.filter((item) => operations(item).length).length} actionable`)}</small></div>
+        <div className="health-metric"><span>{text('后台服务', 'Services')}</span><strong>{services.length}</strong><small>{text(`${services.filter((item) => operations(item).length).length} 个建议项`, `${services.filter((item) => operations(item).length).length} findings`)}</small></div>
         <div className="health-metric"><span>{text('终端启动', 'Terminal startup')}</span><strong>{result?.terminal.startupMs === null || result?.terminal.startupMs === undefined ? '--' : `${result.terminal.startupMs} ms`}</strong><small>{text(`${terminalFixes.length} 项可以自动优化`, `${terminalFixes.length} automatic fixes`)}</small></div>
       </div>
 
@@ -165,8 +165,8 @@ export function HealthPage({
 
       {tab === 'storage' && (
         <div className="health-panel is-active">
-          <div className="section-toolbar"><strong>{text('可处理内容', 'Actionable items')}</strong><button type="button" className="ignored-count-button" onClick={() => onManageIgnored('storage')}><EyeOff size={14} />{text(`已忽略 ${settings.storageWhitelist.length} 项`, `${settings.storageWhitelist.length} ignored`)}</button></div>
-          <div className="data-list">{storage.length ? storage.map((candidate) => <CandidateRow key={candidate.id} candidate={candidate} onAgentPrompt={onAgentPrompt} onIgnore={onIgnore} />) : <div className="module-empty">{text('没有发现需要处理的存储项目', 'No storage findings')}</div>}</div>
+          <div className="section-toolbar"><strong>{text('空间建议', 'Storage findings')}</strong><button type="button" className="ignored-count-button" onClick={() => onManageIgnored('storage')}><EyeOff size={14} />{text(`已忽略 ${settings.storageWhitelist.length} 项`, `${settings.storageWhitelist.length} ignored`)}</button></div>
+          <div className="data-list">{storage.length ? storage.map((candidate) => <CandidateRow key={candidate.id} candidate={candidate} onAgentPrompt={onAgentPrompt} onIgnore={onIgnore} />) : <div className="module-empty">{text('没有发现存储建议', 'No storage findings')}</div>}</div>
         </div>
       )}
 
@@ -186,8 +186,10 @@ export function HealthPage({
                 <span className="row-icon">{finding.fix ? <Route size={16} /> : <Timer size={16} />}</span>
                 <div className="row-main"><strong>{finding.title}</strong><small>{finding.detail}</small></div>
                 <div className="row-meta"><strong>{finding.durationMs !== undefined ? `${finding.durationMs} ms` : finding.severity}</strong><small>{finding.source ?? result?.terminal.shell}</small></div>
-                <div className="row-meta"><strong>{finding.fix ? text('可自动优化', 'Automatic fix') : text('需要分析', 'Needs analysis')}</strong><small>{finding.fix ? text('支持撤销', 'Undo supported') : text('不自动修改', 'No automatic changes')}</small></div>
-                <div className="row-actions"><button type="button" className="secondary-button" onClick={() => onAgentPrompt(finding.fix ? `检查“${finding.title}”并把可撤销修复加入处理计划` : `深入分析“${finding.title}”并告诉我怎样优化`)}>{finding.fix ? text('处理', 'Handle') : text('问 Agent', 'Ask Agent')}</button></div>
+                <div className="row-meta"><strong>{finding.fix ? text('1 个可选操作', '1 available action') : text('仅提供分析', 'Analysis only')}</strong><small>{finding.fix ? text('AI 分析后再选择', 'Choose after AI analysis') : text('不会修改系统', 'No system changes')}</small></div>
+                <div className="row-actions"><button type="button" className="secondary-button" onClick={() => onAgentPrompt(finding.fix
+                  ? text(`分析“${finding.title}”，说明性能影响和可撤销优化方案；不要直接修改，等我确认后再加入计划。`, `Analyze "${finding.title}", explain the performance impact and reversible fix, and wait for my confirmation before adding it to a plan.`)
+                  : text(`深入分析“${finding.title}”并告诉我怎样优化；不要修改系统。`, `Analyze "${finding.title}" and explain how to optimize it without changing the system.`))}><Sparkles size={14} />{text('AI 分析', 'AI analysis')}</button></div>
               </div>
             ))}
           </div>

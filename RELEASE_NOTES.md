@@ -1,18 +1,17 @@
-# Memento Agent 0.6.28
+# Memento Agent 0.6.29
 
 ## 简体中文
 
-`0.6.28` 自动接入本机 CC Switch 供应商，并提高常用页面的可读性与信息密度。
+`0.6.29` 让忽略项、电脑体检分析动作和 Agent 回复变得更直观。
 
 ### 主要变化
 
-- 启动时自动检测 `~/.cc-switch/cc-switch.db` 及 CC Switch 自定义配置目录，并导入可用的 Claude、Codex 和 Gemini 供应商。
-- 导入会识别 Anthropic、OpenAI Chat、OpenAI Responses 和 Gemini API 格式；无密钥占位配置会跳过，重复启动或相同手工配置不会重复添加。
-- CC Switch 数据库只读打开。密钥只在 Electron 主进程读取，并立即使用 Memento 既有 AES-256-GCM 方案重新加密保存。
-- 顶部工具栏新增持续可见的版本号，本版本显示为 `v0.6.28`。
-- 电脑体检、应用管理和任务记录改用紧凑状态/操作栏；设置页直接进入实际设置内容，不再重复显示大标题和说明。
-- Agent 回复、分析进度、结构化结果、电脑体检条目、应用卡片、任务记录和设置表单文字已整体提高到更易读的字号。
-- 新增 CC Switch 三类配置、自定义路径、TOML 解析、去重、加密以及四视口紧凑布局测试。
+- 应用管理顶部新增“已忽略 N 项”，点击后直接查看或恢复被忽略的应用；设置中仍保留统一管理入口。
+- 电脑体检中的“处理 / 问 Agent”统一改为“AI 分析”，明确点击只会分析，不会立即删除或修改系统。
+- 体检列表不再混用“可安全处理 / 需要确认”与相同按钮，改为显示每项有几个可选操作，并提示用户在 AI 分析后选择。
+- AI 分析会比较该项目的全部可选操作，不会默认选择第一项或直接加入执行计划。
+- Agent 正文现在正确解析粗体、项目符号、编号列表、换行、代码和表格；模型提供的原始 HTML 不会执行。
+- 新增 Markdown 渲染安全测试和应用忽略入口、体检动作的四视口回归检查。
 
 ### 安装说明
 
@@ -20,17 +19,16 @@
 
 ## English
 
-`0.6.28` automatically imports local CC Switch providers and improves readability across the primary work areas.
+`0.6.29` makes ignored items, Computer Health analysis, and Agent responses easier to understand.
 
 ### Highlights
 
-- Memento detects `~/.cc-switch/cc-switch.db` and CC Switch's custom configuration directory at startup, then imports usable Claude, Codex, and Gemini providers.
-- Import maps Anthropic, OpenAI Chat, OpenAI Responses, and Gemini API formats. Credential-free placeholders are skipped, and repeated startup or matching manual providers do not create duplicates.
-- The CC Switch database is opened read-only. Credentials are read only in the Electron main process and immediately re-encrypted with Memento's existing AES-256-GCM storage.
-- The persistent top toolbar now shows the exact build version, `v0.6.28` for this release.
-- Computer Health, Applications, and Task History use compact status/action rows; Settings opens directly into useful controls without a redundant title block.
-- Agent responses, progress, structured results, health findings, application cards, task history, and settings forms now use more readable text sizes.
-- Added coverage for all three CC Switch formats, custom paths, TOML parsing, de-duplication, encryption, and compact four-viewport layouts.
+- Application Management now shows an “N ignored” control that opens ignored applications directly; Settings still provides the combined manager.
+- Computer Health uses AI analysis instead of ambiguous Handle and Ask Agent labels, making it clear that a click does not delete or change anything.
+- Health rows show the number of available actions and tell the user to choose after analysis instead of mixing Safe to handle and Needs review with the same button.
+- Analysis compares every available operation without selecting the first operation or adding it to an execution plan automatically.
+- Agent prose now renders bold text, bullets, numbered lists, line breaks, code, and tables correctly; model-provided raw HTML is never executed.
+- Added Markdown safety coverage and four-viewport regression checks for ignored applications and health analysis actions.
 
 ### Installation
 

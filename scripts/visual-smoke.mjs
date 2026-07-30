@@ -114,6 +114,19 @@ try {
   await page.locator('.nav-button[title="电脑体检"]').click()
   for (const tab of ['存储空间', '后台服务', '终端诊断']) {
     await page.getByRole('tab', { name: new RegExp(tab) }).click()
+    const actionLabels = await page.locator('.health-panel.is-active .row-actions > .secondary-button').allTextContents()
+    if (!actionLabels.length || actionLabels.some((label) => label.trim() !== 'AI 分析')) {
+      failures.push(`health/${tab}: analysis actions are ambiguous ${JSON.stringify(actionLabels)}`)
+    }
+    const recommendationLabels = await page.locator('.health-panel.is-active .data-row .row-meta strong').allTextContents()
+    if (recommendationLabels.some((label) => ['可安全处理', '需要确认'].includes(label.trim()))) {
+      failures.push(`health/${tab}: obsolete risk/action labels are still visible`)
+    }
+  }
+  await page.locator('.health-panel.is-active .row-actions > .secondary-button').first().click()
+  const healthAnalysisPrompt = await page.locator('.message.user .message-body').last().textContent()
+  if (!healthAnalysisPrompt?.includes('不要直接修改')) {
+    failures.push(`health: analysis action did not preserve the no-change boundary ${JSON.stringify(healthAnalysisPrompt)}`)
   }
   await page.locator('.nav-button[title="应用管理"]').click()
   await page.locator('select[aria-label="筛选应用"]').selectOption('system')
@@ -134,6 +147,14 @@ try {
   await claudeCard.locator('.app-ignore-button').click()
   await page.getByRole('dialog', { name: /忽略 Claude Code URL Handler/ }).locator('.primary-button').click()
   await claudeCard.waitFor({ state: 'detached' })
+  await page.getByRole('button', { name: '已忽略 1 项', exact: true }).click()
+  const applicationIgnoredDialog = page.getByRole('dialog', { name: '忽略列表' })
+  const applicationIgnoredTab = applicationIgnoredDialog.getByRole('tab', { name: /应用/ })
+  if (await applicationIgnoredTab.getAttribute('aria-selected') !== 'true') {
+    failures.push('applications: direct ignored-items entry did not open the Applications tab')
+  }
+  await page.screenshot({ path: '/tmp/memento-interaction-application-ignored.png' })
+  await applicationIgnoredDialog.getByRole('button', { name: '完成' }).click()
   await page.locator('.nav-button[title="设置"]').click()
   await page.getByRole('button', { name: '管理', exact: true }).click()
   await page.getByRole('tab', { name: /应用/ }).click()

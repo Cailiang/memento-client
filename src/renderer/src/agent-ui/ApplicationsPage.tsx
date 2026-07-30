@@ -80,17 +80,21 @@ export function ApplicationsPage({
   applications,
   openingId,
   removingId,
+  ignoredCount,
   onOpen,
   onUninstall,
   onIgnore,
+  onManageIgnored,
   onAgentPrompt
 }: {
   applications: InstalledApplication[]
   openingId: string | null
   removingId: string | null
+  ignoredCount: number
   onOpen: (application: InstalledApplication) => void
   onUninstall: (application: InstalledApplication) => void
   onIgnore: (application: InstalledApplication) => void
+  onManageIgnored: () => void
   onAgentPrompt: (prompt: string) => void
 }): React.JSX.Element {
   const { language, text } = useI18n()
@@ -109,6 +113,9 @@ export function ApplicationsPage({
       <div className="page-command-bar">
         <span className="page-command-summary">{text(`共 ${applications.length} 个应用，其中 ${manageable.length} 个可卸载，占用 ${formatBytes(totalBytes)}`, `${applications.length} applications, ${manageable.length} uninstallable, using ${formatBytes(totalBytes)}`)}</span>
         <div className="page-command-actions">
+          <button type="button" className="secondary-button" onClick={onManageIgnored}>
+            <EyeOff size={16} />{text(`已忽略 ${ignoredCount} 项`, `${ignoredCount} ignored`)}
+          </button>
           <button type="button" className="secondary-button" onClick={() => onAgentPrompt(text('帮我检查长期没用的应用和可以安全清理的应用残留', 'Find unused applications and safe application leftovers'))}>
             <Sparkles size={16} />{text('Agent 分析', 'Agent analysis')}
           </button>

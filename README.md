@@ -14,7 +14,7 @@ The application is rebuilt around the approved interactive prototype at [`../pro
 - **Task history:** reopen, export, or permanently delete local Agent runs and their tool-call records.
 - **Settings:** manage multiple model providers, window behavior, ignored items, color theme, and language.
 
-Storage, background-service, and application findings can be ignored. Ignored items are removed from scan results, registered operations, and the data exposed to Agent tools until detection is restored in Settings.
+Storage, background-service, and application findings can be ignored. Ignored items are removed from scan results, registered operations, and the data exposed to Agent tools. Each relevant work page opens its own ignored category directly, while Settings retains the combined manager.
 
 ## Local Agent
 
@@ -32,6 +32,8 @@ Each configuration contains a name, API type, base URL, API key, and selected mo
 On startup, Memento also detects the local CC Switch database at `~/.cc-switch/cc-switch.db` or its configured custom directory. Usable Claude, Codex, and Gemini entries are imported idempotently and mapped by API format. Credential-free placeholders are skipped. The CC Switch database is opened read-only; imported credentials stay in the main process and are re-encrypted in Memento's own provider store.
 
 Conversation IDs, focused entities, and pending plans are persisted locally. Follow-ups such as “this service” resolve to the latest exact focus instead of starting another unrelated inventory. Per-application analysis includes its exact Bundle ID, path, executable, background-only role, and registered URL schemes. The application language controls all Agent-visible text; switching language refreshes the scan snapshot before another run.
+
+Agent prose is rendered with a constrained Markdown pipeline for readable headings, emphasis, lists, code, blockquotes, and tables. Raw HTML is disabled; structured result controls continue to come only from trusted React components and registered local operations.
 
 ## Execution Boundary
 

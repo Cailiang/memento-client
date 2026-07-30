@@ -157,7 +157,9 @@ The production Renderer consists of one shell and five prototype-aligned pages u
 - Conversation turns remain visible together, while SQLite keeps their compact focus and pending-plan context available to subsequent runs.
 - Task-history deletion is confirmed in the Renderer and handled in the main process. Deleting `agent_runs` cascades to `tool_calls`; active runs are rejected, and completed system changes are not undone.
 - Structured application results use a logo grid with last-used time and size; storage, service, and terminal results use compact rows. Their buttons reference only registered application or operation IDs.
-- Model text is rendered as text. The Renderer never uses `dangerouslySetInnerHTML` or model-generated HTML.
+- Model prose is parsed by `react-markdown` with GFM and soft-line-break support. Common model bullet characters are normalized into semantic lists, raw HTML remains disabled, and links are rendered as inert labels. The Renderer never uses `dangerouslySetInnerHTML` or model-generated HTML.
+- Health rows expose analysis as AI analysis, summarize the count of registered operations, and wait for the user to choose an operation from the trusted structured result before anything enters the confirmation plan.
+- Storage, service, and application pages open their own ignored-item tab directly; Settings retains the combined manager.
 - Preload initialization must not touch the DOM before `DOMContentLoaded`; losing the preload API silently activates browser demo data instead of real device data.
 
 Web development mode uses deterministic demo scan data and an in-memory demo Provider so every page and dialog can be visually tested without touching the computer.

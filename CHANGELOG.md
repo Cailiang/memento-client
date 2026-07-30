@@ -8,6 +8,26 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.29 - 2026-07-30
+
+### English
+
+- Added a visible ignored-applications entry to Application Management that opens the shared ignored-items dialog directly on its Applications tab.
+- Renamed Computer Health's ambiguous Handle and Ask Agent row actions to AI analysis, with a Sparkles icon and prompts that explicitly prevent execution or automatic plan selection.
+- Replaced the mixed Safe to handle and Needs review labels with the number of available operations plus a clear “choose after AI analysis” explanation; analysis-only findings explicitly state that no system changes occur.
+- Changed health-item prompts to compare every registered operation instead of silently choosing the first operation for the confirmation plan.
+- Added safe Markdown rendering for Agent prose, including semantic bullet and numbered lists, bold text, line breaks, code, blockquotes, and tables while keeping raw HTML disabled.
+- Added Markdown security/semantics coverage and browser checks for direct ignored-app access and unambiguous health actions.
+
+### 简体中文
+
+- 应用管理顶部新增清晰可见的“已忽略 N 项”入口，点击后直接打开忽略列表的“应用”标签。
+- 电脑体检中含义模糊的“处理”和“问 Agent”统一改为带图标的“AI 分析”，提示词明确禁止直接执行或自动选择计划操作。
+- 移除混在分析入口旁的“可安全处理 / 需要确认”，改为显示可选操作数量和“AI 分析后再选择”；只读发现会明确显示“不会修改系统”。
+- 体检项目会让 Agent 比较该项目的全部已注册操作，不再默认把第一项加入确认计划。
+- Agent 正文新增安全 Markdown 渲染，支持语义化项目符号、编号列表、粗体、换行、代码、引用和表格，同时禁用原始 HTML。
+- 新增 Markdown 安全与语义测试，以及应用忽略入口和体检分析文案的浏览器回归检查。
+
 ## 0.6.28 - 2026-07-29
 
 ### English

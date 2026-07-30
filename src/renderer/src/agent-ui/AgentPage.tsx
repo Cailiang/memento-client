@@ -18,6 +18,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { AgentRunRecord } from '../../../shared/agent-types'
 import type { ScanResult } from '../../../shared/types'
 import { useI18n } from '../i18n'
+import { AgentMarkdown } from './AgentMarkdown'
 import { AgentResults } from './AgentResults'
 import { formatBytes, runStatusLabel } from './utils'
 
@@ -244,7 +245,7 @@ export function AgentPage({
                       </div>
                     )}
                     {(conversationRun.presentation?.summary || conversationRun.response) && (
-                      <p>{conversationRun.presentation?.summary ?? conversationRun.response}</p>
+                      <AgentMarkdown>{conversationRun.presentation?.summary ?? conversationRun.response ?? ''}</AgentMarkdown>
                     )}
                     {conversationRun.presentation && (
                       <AgentResults
