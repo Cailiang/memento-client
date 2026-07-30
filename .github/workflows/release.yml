@@ -88,7 +88,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           path: artifacts
       - name: Collect packages and checksums
@@ -98,7 +98,8 @@ jobs:
           find artifacts -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.AppImage' -o -name '*.deb' \) -exec cp {} dist/ \;
           test "$(find dist -maxdepth 1 -type f | wc -l | tr -d ' ')" = "8"
           cd dist
-          find . -maxdepth 1 -type f -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+          find . -maxdepth 1 -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.AppImage' -o -name '*.deb' \) -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+          test "$(wc -l < SHA256SUMS.txt | tr -d ' ')" = "8"
       - name: Publish bilingual GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
