@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   parseDiskFree,
   parseDuKilobytes,
+  parseLaunchctlEntries,
   parseLaunchctlLabels,
   parseMetadataValue
 } from './parsers'
@@ -40,6 +41,10 @@ describe('macOS command parsers', () => {
     expect([...parseLaunchctlLabels(output)]).toEqual([
       'homebrew.mxcl.redis',
       'com.example.agent'
+    ])
+    expect([...parseLaunchctlEntries(output)]).toEqual([
+      ['homebrew.mxcl.redis', 214],
+      ['com.example.agent', null]
     ])
   })
 })

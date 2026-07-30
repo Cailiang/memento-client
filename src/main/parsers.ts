@@ -20,11 +20,19 @@ export function parseMetadataValue(output: string, key: string): string | null {
 }
 
 export function parseLaunchctlLabels(output: string): Set<string> {
-  return new Set(
-    output
-      .split('\n')
-      .slice(1)
-      .map((line) => line.trim().split(/\s+/).at(-1))
-      .filter((label): label is string => Boolean(label))
-  )
+  return new Set(parseLaunchctlEntries(output).keys())
+}
+
+export function parseLaunchctlEntries(output: string): Map<string, number | null> {
+  return new Map(output
+    .split('\n')
+    .slice(1)
+    .map((line): [string, number | null] | null => {
+      const columns = line.trim().split(/\s+/)
+      const label = columns.at(-1)
+      if (!label) return null
+      const pid = Number.parseInt(columns[0] ?? '', 10)
+      return [label, Number.isFinite(pid) ? pid : null]
+    })
+    .filter((entry): entry is [string, number | null] => entry !== null))
 }

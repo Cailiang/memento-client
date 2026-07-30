@@ -44,6 +44,17 @@ export interface ScanCandidate {
   evidence: string[]
   action?: CandidateAction
   operations?: CandidateOperation[]
+  serviceAnomalies?: ServiceAnomalyKind[]
+  serviceMetrics?: ServiceRuntimeMetrics
+}
+
+export type ServiceAnomalyKind = 'orphaned' | 'resource' | 'long-running' | 'failed' | 'stale'
+
+export interface ServiceRuntimeMetrics {
+  pid?: number
+  cpuPercent?: number
+  memoryBytes?: number
+  runningSeconds?: number
 }
 
 export type ApplicationScope = 'user' | 'shared' | 'system'

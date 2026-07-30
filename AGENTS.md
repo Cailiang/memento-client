@@ -2,7 +2,7 @@
 
 The `agent` branch is a from-scratch product rebuild. Reuse deterministic scanner and cleanup internals when they remain useful, but do not restore the old Renderer, hosted AI analysis, Memento Server, OAuth, or AI Gateway architecture.
 
-For every user-requested code or UI change in this repository:
+For every user-requested code or UI change in this repository, complete every item below before sending the final response. Do not defer packaging or wait for the user to remind you:
 
 1. Treat `../prototypes/memento-agent/index.html` as the approved source of truth for Memento Agent UI structure, copy, and interaction. Keep the production implementation strictly aligned with it unless the user approves a prototype change first.
 2. Bump the patch version in `package.json` and `package-lock.json`.

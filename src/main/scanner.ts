@@ -14,6 +14,8 @@ import type {
   ScanProgress,
   ScanResult,
   ScanSection,
+  ServiceAnomalyKind,
+  ServiceRuntimeMetrics,
   SystemSnapshot,
   TerminalConfigFile,
   TerminalFinding
@@ -22,7 +24,7 @@ import type { AppLanguage } from '../shared/app-settings'
 import {
   parseDiskFree,
   parseDuKilobytes,
-  parseLaunchctlLabels,
+  parseLaunchctlEntries,
   parseMetadataValue
 } from './parsers'
 import {
@@ -44,6 +46,9 @@ const execFileAsync = promisify(execFile)
 const HOME = os.homedir()
 const DAY_MS = 86_400_000
 export const APPLICATION_UNUSED_DAYS = 90
+const LONG_RUNNING_SERVICE_SECONDS = 30 * 24 * 60 * 60
+const HIGH_SERVICE_CPU_PERCENT = 20
+const HIGH_SERVICE_MEMORY_BYTES = 1024 * 1024 * 1024
 
 function t(language: AppLanguage, chinese: string, english: string): string {
   return language === 'en-US' ? english : chinese
@@ -116,6 +121,47 @@ async function run(
     env: { ...process.env, LC_ALL: 'C', HOMEBREW_NO_AUTO_UPDATE: '1' }
   })
   return { stdout: result.stdout, stderr: result.stderr }
+}
+
+function parseElapsedSeconds(value: string): number | undefined {
+  const match = value.trim().match(/^(?:(\d+)-)?(?:(\d+):)?(\d+):(\d+)$/)
+  if (!match) return undefined
+  const [, days = '0', hours = '0', minutes, seconds] = match
+  return Number(days) * 86_400 + Number(hours) * 3_600 + Number(minutes) * 60 + Number(seconds)
+}
+
+async function inspectServiceProcess(pid?: number | null): Promise<ServiceRuntimeMetrics | undefined> {
+  if (!pid || pid <= 0) return undefined
+  try {
+    const { stdout } = await run('/bin/ps', ['-p', String(pid), '-o', 'etime=,%cpu=,rss='])
+    const match = stdout.trim().match(/^(\S+)\s+([\d.]+)\s+(\d+)$/)
+    if (!match) return { pid }
+    return {
+      pid,
+      runningSeconds: parseElapsedSeconds(match[1]),
+      cpuPercent: Number.parseFloat(match[2]),
+      memoryBytes: Number.parseInt(match[3], 10) * 1024
+    }
+  } catch {
+    return { pid }
+  }
+}
+
+export function classifyServiceAnomalies(input: {
+  loaded: boolean
+  programMissing?: boolean
+  ageDays?: number
+  failed?: boolean
+  metrics?: ServiceRuntimeMetrics
+}): ServiceAnomalyKind[] {
+  const anomalies: ServiceAnomalyKind[] = []
+  if (input.programMissing) anomalies.push('orphaned')
+  if (input.failed) anomalies.push('failed')
+  if ((input.metrics?.cpuPercent ?? 0) >= HIGH_SERVICE_CPU_PERCENT ||
+      (input.metrics?.memoryBytes ?? 0) >= HIGH_SERVICE_MEMORY_BYTES) anomalies.push('resource')
+  if ((input.metrics?.runningSeconds ?? 0) >= LONG_RUNNING_SERVICE_SECONDS) anomalies.push('long-running')
+  if (!input.loaded && (input.ageDays ?? 0) >= 180) anomalies.push('stale')
+  return anomalies
 }
 
 async function pathExists(target: string): Promise<boolean> {
@@ -261,10 +307,24 @@ async function scanBrewServices(
       pid?: number | null
     }>
 
-    return services
-      .filter((service) => service.status === 'started' || Boolean(service.pid))
-      .map((service) =>
-        registerCandidate(
+    return mapLimit(
+      services.filter((service) => service.status === 'started' || service.status === 'error' || Boolean(service.pid)),
+      5,
+      async (service) => {
+        const running = service.status === 'started' || Boolean(service.pid)
+        const metrics = await inspectServiceProcess(service.pid)
+        const serviceAnomalies = classifyServiceAnomalies({
+          loaded: running,
+          failed: service.status === 'error',
+          metrics
+        })
+        const runtimeEvidence = metrics?.runningSeconds
+          ? t(language, `已连续运行 ${Math.floor(metrics.runningSeconds / 86_400)} 天`, `Running continuously for ${Math.floor(metrics.runningSeconds / 86_400)} days`)
+          : null
+        const resourceEvidence = metrics?.cpuPercent !== undefined && metrics.memoryBytes !== undefined
+          ? t(language, `CPU ${metrics.cpuPercent.toFixed(1)}% · 内存 ${formatBytesForEvidence(metrics.memoryBytes)}`, `CPU ${metrics.cpuPercent.toFixed(1)}% · Memory ${formatBytesForEvidence(metrics.memoryBytes)}`)
+          : null
+        return registerCandidate(
           actions,
           {
             section: 'services',
@@ -272,21 +332,28 @@ async function scanBrewServices(
             subtitle: t(language, 'Homebrew 后台服务', 'Homebrew background service'),
             description: t(language, '登录后持续运行。停止后不会卸载软件，之后仍可重新启动。', 'Runs continuously after login. Stopping it does not uninstall the software, and it can be started again.'),
             risk: 'review',
-            status: service.pid ? t(language, `运行中，PID ${service.pid}`, `Running, PID ${service.pid}`) : t(language, '运行中', 'Running'),
+            status: service.status === 'error'
+              ? t(language, '启动异常', 'Startup failed')
+              : service.pid ? t(language, `运行中，PID ${service.pid}`, `Running, PID ${service.pid}`) : t(language, '运行中', 'Running'),
             evidence: [
               service.user ? t(language, `运行用户：${service.user}`, `User: ${service.user}`) : t(language, '由当前用户启动', 'Started by the current user'),
-              service.file ? t(language, `配置：${displayPath(service.file)}`, `Configuration: ${displayPath(service.file)}`) : t(language, '由 Homebrew 管理', 'Managed by Homebrew')
+              service.file ? t(language, `配置：${displayPath(service.file)}`, `Configuration: ${displayPath(service.file)}`) : t(language, '由 Homebrew 管理', 'Managed by Homebrew'),
+              ...(runtimeEvidence ? [runtimeEvidence] : []),
+              ...(resourceEvidence ? [resourceEvidence] : [])
             ],
-            action: {
+            serviceAnomalies,
+            serviceMetrics: metrics,
+            action: running ? {
               kind: 'stop-brew-service',
               label: t(language, '停止服务', 'Stop service'),
               consequence: t(language, '服务将立即停止，并取消登录时自动启动。', 'The service will stop immediately and no longer start automatically at login.'),
               reversible: true
-            }
+            } : undefined
           },
-          { kind: 'stop-brew-service', target: service.name }
+          running ? { kind: 'stop-brew-service', target: service.name } : undefined
         )
-      )
+      }
+    )
   } catch {
     return []
   }
@@ -359,11 +426,11 @@ async function scanLaunchAgents(
   language: AppLanguage
 ): Promise<ScanCandidate[]> {
   const roots = [path.join(HOME, 'Library/LaunchAgents'), '/Library/LaunchAgents']
-  let loadedLabels = new Set<string>()
+  let loadedEntries = new Map<string, number | null>()
 
   try {
     const { stdout } = await run('/bin/launchctl', ['list'])
-    loadedLabels = parseLaunchctlLabels(stdout)
+    loadedEntries = parseLaunchctlEntries(stdout)
   } catch {
     return []
   }
@@ -421,7 +488,8 @@ async function scanLaunchAgents(
     serviceDirectory,
     serviceLocation: inspectedServiceLocation
   }) => {
-    const isLoaded = loadedLabels.has(label)
+    const isLoaded = loadedEntries.has(label)
+    const metrics = await inspectServiceProcess(loadedEntries.get(label))
     const ageDays = ageInDays(stats.mtime)
     const evidence = [
       t(language, `配置：${displayPath(target)}`, `Configuration: ${displayPath(target)}`),
@@ -434,9 +502,11 @@ async function scanLaunchAgents(
 
     if (serviceLocation && !(await pathIsDirectory(serviceLocation))) serviceLocation = null
 
+    let programMissing = false
     if (program) {
       evidence.push(t(language, `程序：${displayPath(program)}`, `Program: ${displayPath(program)}`))
       if (!(await pathExists(program))) {
+        programMissing = true
         evidence.push(
           t(
             language,
@@ -446,6 +516,14 @@ async function scanLaunchAgents(
         )
       }
     }
+    const serviceAnomalies = classifyServiceAnomalies({
+      loaded: isLoaded,
+      programMissing,
+      ageDays,
+      metrics
+    })
+    if (metrics?.runningSeconds) evidence.push(t(language, `已连续运行 ${Math.floor(metrics.runningSeconds / 86_400)} 天`, `Running continuously for ${Math.floor(metrics.runningSeconds / 86_400)} days`))
+    if (metrics?.cpuPercent !== undefined && metrics.memoryBytes !== undefined) evidence.push(t(language, `CPU ${metrics.cpuPercent.toFixed(1)}% · 内存 ${formatBytesForEvidence(metrics.memoryBytes)}`, `CPU ${metrics.cpuPercent.toFixed(1)}% · Memory ${formatBytesForEvidence(metrics.memoryBytes)}`))
     if (dataRoot) evidence.push(t(language, `关联数据：${displayPath(dataRoot)}`, `Associated data: ${displayPath(dataRoot)}`))
     if (appPath && !(await pathExists(appPath))) appPath = null
     if (!serviceLocation) {
@@ -531,7 +609,7 @@ async function scanLaunchAgents(
         .filter((candidate) => isAllowedServiceCleanupTarget(candidate, HOME))
         .sort()
       const serviceTargets = inspectedEntries
-        .filter((entry) => entry.appPath === appPath && loadedLabels.has(entry.label))
+        .filter((entry) => entry.appPath === appPath && loadedEntries.has(entry.label))
         .map((entry) => entry.target)
         .filter((candidate) => isAllowedServiceCleanupTarget(candidate, HOME))
         .sort()
@@ -588,7 +666,7 @@ async function scanLaunchAgents(
         .filter((candidate) => isAllowedServiceCleanupTarget(candidate, HOME))
         .sort()
       const serviceTargets = dataEntries
-        .filter((entry) => loadedLabels.has(entry.label))
+        .filter((entry) => loadedEntries.has(entry.label))
         .map((entry) => entry.target)
         .filter((candidate) => isAllowedServiceCleanupTarget(candidate, HOME))
         .sort()
@@ -652,7 +730,7 @@ async function scanLaunchAgents(
         .filter((candidate) => isAllowedServiceCleanupTarget(candidate, HOME))
         .sort()
       const serviceTargets = directoryEntries
-        .filter((entry) => loadedLabels.has(entry.label))
+        .filter((entry) => loadedEntries.has(entry.label))
         .map((entry) => entry.target)
         .filter((candidate) => isAllowedServiceCleanupTarget(candidate, HOME))
         .sort()
@@ -720,6 +798,8 @@ async function scanLaunchAgents(
         ageDays,
         risk: 'review',
         status: isLoaded ? t(language, '已加载', 'Loaded') : t(language, '已停止', 'Stopped'),
+        serviceAnomalies,
+        serviceMetrics: metrics,
         location: serviceLocation ?? undefined,
         evidence
       },
@@ -1188,7 +1268,7 @@ async function findLargeUserFiles(): Promise<LargeUserFile[]> {
       }
     }
   }
-  return found.sort((left, right) => right.sizeBytes - left.sizeBytes).slice(0, 12)
+  return found.sort((left, right) => right.sizeBytes - left.sizeBytes)
 }
 
 async function scanLargeUserFiles(
@@ -1196,40 +1276,72 @@ async function scanLargeUserFiles(
   revealTargets: Map<string, string>,
   language: AppLanguage
 ): Promise<ScanCandidate[]> {
-  return (await findLargeUserFiles()).map((file) => registerCandidate(
-    actions,
-    {
-      section: 'storage',
-      name: path.basename(file.target),
-      subtitle: t(language, `${file.source} 中的大文件`, `Large file in ${file.source}`),
-      description: t(language, '这是用户目录中的大文件。Memento 不判断内容是否仍有用，只在你确认后将它移到废纸篓。', 'This is a large file in a user folder. Memento does not decide whether its contents are still useful and moves it to the Trash only after confirmation.'),
-      sizeBytes: file.sizeBytes,
-      ageDays: ageInDays(file.modifiedAt),
-      risk: 'review',
-      status: t(language, '手动确认', 'Manual review'),
-      location: displayPath(file.target),
-      evidence: [
-        t(language, `占用 ${formatBytesForEvidence(file.sizeBytes)}`, `Size: ${formatBytesForEvidence(file.sizeBytes)}`),
-        t(language, `最近修改于 ${ageInDays(file.modifiedAt)} 天前`, `Last modified ${ageInDays(file.modifiedAt)} days ago`)
-      ],
+  const files = await findLargeUserFiles()
+  const filesByDirectory = new Map<string, LargeUserFile[]>()
+  for (const file of files) {
+    const directory = path.dirname(file.target)
+    filesByDirectory.set(directory, [...(filesByDirectory.get(directory) ?? []), file])
+  }
+  const groups = [...filesByDirectory.entries()]
+    .map(([directory, groupedFiles]) => ({
+      directory,
+      files: groupedFiles,
+      sizeBytes: groupedFiles.reduce((sum, file) => sum + file.sizeBytes, 0),
+      modifiedAt: new Date(Math.max(...groupedFiles.map((file) => file.modifiedAtMs)))
+    }))
+    .sort((left, right) => right.sizeBytes - left.sizeBytes)
+    .slice(0, 12)
+
+  return groups.map((group) => {
+    const singleFile = group.files.length === 1 ? group.files[0] : null
+    const source = group.files[0].source
+    const target = singleFile?.target ?? group.directory
+    const registeredOperations: RegisteredOperation[] = group.files.map((file) => ({
       action: {
         kind: 'trash-large-file',
-        label: t(language, '移到废纸篓', 'Move to Trash'),
-        consequence: t(language, '文件会移到当前用户的废纸篓，不会直接永久删除；确认无误后可在 Finder 清空废纸篓。', 'The file moves to the current user’s Trash and is not deleted permanently. Empty the Trash in Finder after reviewing it.'),
+        label: singleFile
+          ? t(language, '移到废纸篓', 'Move to Trash')
+          : t(language, `移走 ${path.basename(file.target)}`, `Trash ${path.basename(file.target)}`),
+        consequence: t(language, `文件 ${path.basename(file.target)} 会移到当前用户的废纸篓，不会直接永久删除。`, `${path.basename(file.target)} moves to the current user's Trash and is not deleted permanently.`),
         reversible: true,
         estimatedBytes: file.sizeBytes
+      },
+      registeredAction: {
+        kind: 'trash-large-file',
+        target: file.target,
+        expectedSizeBytes: file.sizeBytes,
+        expectedModifiedAtMs: file.modifiedAtMs
       }
+    }))
+    return registerCandidate(
+      actions,
+      {
+      section: 'storage',
+      name: path.basename(target),
+      subtitle: singleFile
+        ? t(language, `${source} 中的大文件`, `Large file in ${source}`)
+        : t(language, `${source} 中含 ${group.files.length} 个大文件的目录`, `Folder with ${group.files.length} large files in ${source}`),
+      description: singleFile
+        ? t(language, '这是用户目录中的大文件。Memento 不判断内容是否仍有用，只在你确认后将它移到废纸篓。', 'This is a large file in a user folder. Memento does not decide whether its contents are still useful and moves it to the Trash only after confirmation.')
+        : t(language, '同一目录中的大文件已合并为一条建议。可以一次忽略整个目录，清理时仍逐个选择文件，不会直接删除目录。', 'Large files in the same folder are grouped into one finding. You can ignore the folder once, while cleanup remains file-by-file and never deletes the folder itself.'),
+      sizeBytes: group.sizeBytes,
+      ageDays: ageInDays(group.modifiedAt),
+      risk: 'review',
+      status: t(language, '手动确认', 'Manual review'),
+      location: displayPath(target),
+      evidence: [
+        t(language, `合计占用 ${formatBytesForEvidence(group.sizeBytes)}`, `Combined size: ${formatBytesForEvidence(group.sizeBytes)}`),
+        singleFile
+          ? t(language, `最近修改于 ${ageInDays(group.modifiedAt)} 天前`, `Last modified ${ageInDays(group.modifiedAt)} days ago`)
+          : t(language, `${group.files.length} 个文件达到大文件建议标准`, `${group.files.length} files meet the large-file finding threshold`)
+      ]
     },
-    {
-      kind: 'trash-large-file',
-      target: file.target,
-      expectedSizeBytes: file.sizeBytes,
-      expectedModifiedAtMs: file.modifiedAtMs
-    },
-    [],
-    revealTargets,
-    file.target
-  ))
+      undefined,
+      registeredOperations,
+      revealTargets,
+      target
+    )
+  })
 }
 
 async function scanBrewVersions(

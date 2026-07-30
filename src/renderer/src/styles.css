@@ -383,6 +383,10 @@ select { -webkit-app-region: no-drag; }
 .disk-current-path { max-width: min(560px, 86vw); overflow: hidden; color: var(--text-tertiary); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .disk-browser-empty button { margin-top: 5px; }
 .disk-usage-surface { min-height: 430px; border: 1px solid var(--line); background: var(--surface); }
+.disk-usage-surface.is-fullscreen { position: fixed; z-index: 40; inset: 0; display: grid; grid-template-rows: auto auto 3px minmax(0, 1fr) auto; min-height: 100dvh; border: 0; background: var(--surface); }
+.disk-usage-surface.is-fullscreen .disk-columns { height: auto; }
+.disk-scan-actions { display: flex; align-items: center; gap: 7px; }
+.disk-scan-actions .icon-button { width: 30px; height: 30px; }
 .disk-scan-status { display: grid; min-height: 46px; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 9px; padding: 0 10px; border-bottom: 1px solid var(--line); }
 .disk-scan-status-mark { display: grid; width: 26px; height: 26px; place-items: center; border-radius: 6px; color: var(--text-tertiary); background: var(--surface-strong); }
 .disk-scan-status.is-scanning .disk-scan-status-mark { color: var(--accent); background: var(--accent-soft); }
@@ -422,6 +426,10 @@ select { -webkit-app-region: no-drag; }
 .disk-omitted-row { display: flex; min-height: 34px; align-items: center; justify-content: space-between; gap: 8px; padding: 0 9px; color: var(--text-tertiary); background: var(--surface-subtle); font-size: 10px; }
 .disk-column-empty { padding: 24px 10px; color: var(--text-tertiary); font-size: 10px; text-align: center; }
 .disk-browser-foot { display: flex; min-height: 34px; align-items: center; justify-content: space-between; gap: 12px; padding: 0 10px; border-top: 1px solid var(--line); color: var(--text-tertiary); font-size: 10px; }
+.service-groups { display: grid; gap: 18px; }
+.service-group > header { display: flex; min-height: 38px; align-items: center; gap: 8px; color: var(--text-secondary); }
+.service-group > header strong { font-size: 12px; }
+.service-group > header span { min-width: 20px; padding: 2px 5px; border-radius: 4px; color: var(--text-tertiary); background: var(--surface-strong); font-size: 10px; font-variant-numeric: tabular-nums; text-align: center; }
 .ignored-count-button { display: inline-flex; min-height: 30px; align-items: center; gap: 6px; padding: 0 7px; border: 0; border-radius: 6px; color: var(--text-tertiary); background: transparent; font-size: 11px; font-weight: 650; }
 .ignored-count-button:hover { color: var(--text); background: var(--surface-strong); }
 .data-list { border-top: 1px solid var(--line); }

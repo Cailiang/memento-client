@@ -170,6 +170,20 @@ export function HealthPage({
   const pageRef = useRef<HTMLElement>(null)
   const storage = result?.candidates.filter((item) => item.section === 'storage') ?? []
   const services = result?.candidates.filter((item) => item.section === 'services') ?? []
+  const serviceGroups = ([
+    ['orphaned', text('残留启动项', 'Orphaned startup items')],
+    ['failed', text('启动异常', 'Startup failures')],
+    ['resource', text('资源占用异常', 'High resource usage')],
+    ['long-running', text('长期运行', 'Long-running')],
+    ['stale', text('长期未使用', 'Stale items')],
+    ['other', text('其他启动项', 'Other startup items')]
+  ] as const).map(([kind, label]) => ({
+    kind,
+    label,
+    items: services.filter((service) => kind === 'other'
+      ? !(service.serviceAnomalies?.length)
+      : service.serviceAnomalies?.[0] === kind)
+  })).filter((group) => group.items.length > 0)
   const reclaimable = storage.reduce((sum, item) => sum + (operations(item).length ? item.sizeBytes ?? 0 : 0), 0)
   const terminalFindings = result?.terminal.findings ?? []
   const terminalFixes = terminalFindings.filter((item) => item.fix)
@@ -270,7 +284,7 @@ export function HealthPage({
       {tab === 'services' && (
         <div className="health-panel is-active">
           <div className="section-toolbar"><strong>{text('常驻与启动项', 'Background and startup items')}</strong><button type="button" className="ignored-count-button" onClick={() => onManageIgnored('services')}><EyeOff size={14} />{text(`已忽略 ${settings.serviceWhitelist.length} 项`, `${settings.serviceWhitelist.length} ignored`)}</button></div>
-          <div className="data-list">{services.length ? services.map((candidate) => <CandidateRow key={candidate.id} candidate={candidate} onAgentPrompt={askAgent} onDirectAction={onDirectAction} onIgnore={onIgnore} />) : <div className="module-empty">{text('没有发现异常后台服务', 'No service findings')}</div>}</div>
+          {serviceGroups.length ? <div className="service-groups">{serviceGroups.map((group) => <section className="service-group" key={group.kind}><header><strong>{group.label}</strong><span>{group.items.length}</span></header><div className="data-list">{group.items.map((candidate) => <CandidateRow key={candidate.id} candidate={candidate} onAgentPrompt={askAgent} onDirectAction={onDirectAction} onIgnore={onIgnore} />)}</div></section>)}</div> : <div className="module-empty">{text('没有发现异常后台服务', 'No service findings')}</div>}
         </div>
       )}
 

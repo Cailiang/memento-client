@@ -115,6 +115,8 @@ function candidateResult(candidate: ScanCandidate): AgentResultItem {
     sizeBytes: candidate.sizeBytes ?? 0,
     location: candidate.location ?? null,
     evidence: candidate.evidence.slice(0, 6),
+    serviceAnomalies: candidate.serviceAnomalies,
+    serviceMetrics: candidate.serviceMetrics,
     operations: candidateOperations(candidate).map((operation) => (
       resultOperation(operation, candidate.sizeBytes)
     ))
@@ -218,6 +220,8 @@ function compactCandidate(candidate: ScanCandidate): Record<string, unknown> {
     ageDays: candidate.ageDays,
     risk: candidate.risk,
     status: candidate.status,
+    serviceAnomalies: candidate.serviceAnomalies,
+    serviceMetrics: candidate.serviceMetrics,
     evidence: candidate.evidence.slice(0, 6),
     operations: candidateOperations(candidate).map((operation) => ({
       id: operation.id,

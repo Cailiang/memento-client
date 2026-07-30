@@ -5,6 +5,8 @@ import {
   FolderOpen,
   HardDrive,
   LoaderCircle,
+  Maximize2,
+  Minimize2,
   RefreshCw,
   Square
 } from 'lucide-react'
@@ -54,11 +56,21 @@ export function DiskUsageBrowser({
 }): React.JSX.Element {
   const { language, text } = useI18n()
   const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [fullscreen, setFullscreen] = useState(false)
   const columnsRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setSelectedIds([])
   }, [result?.scanId])
+
+  useEffect(() => {
+    if (!fullscreen) return
+    const close = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setFullscreen(false)
+    }
+    document.addEventListener('keydown', close)
+    return () => document.removeEventListener('keydown', close)
+  }, [fullscreen])
 
   const { columns, selected } = useMemo(() => {
     if (!result) return { columns: [] as DiskColumn[], selected: null }
@@ -111,7 +123,7 @@ export function DiskUsageBrowser({
     ? Math.min(100, Math.max(0, (selectedNode.sizeBytes / result.root.sizeBytes) * 100))
     : 0
   return (
-    <div className="disk-usage-surface">
+    <div className={`disk-usage-surface ${fullscreen ? 'is-fullscreen' : ''}`}>
       <div className={`disk-scan-status ${busy ? 'is-scanning' : ''}`} role="status" aria-live="polite">
         <span className="disk-scan-status-mark">{busy ? <LoaderCircle className="spinner" size={15} /> : <HardDrive size={15} />}</span>
         <div><strong>{busy
@@ -125,9 +137,14 @@ export function DiskUsageBrowser({
               `${result.scannedEntries.toLocaleString()} 个项目 · 跳过 ${result.inaccessibleEntries.toLocaleString()} 个无权限位置`,
               `${result.scannedEntries.toLocaleString()} items · ${result.inaccessibleEntries.toLocaleString()} inaccessible locations skipped`
             )}</small></div>
-        <button type="button" className="secondary-button" onClick={busy ? onCancel : onScan}>
-          {busy ? <><Square size={13} />{text('停止', 'Stop')}</> : <><RefreshCw size={14} />{text('重新扫描', 'Scan again')}</>}
-        </button>
+        <div className="disk-scan-actions">
+          <button type="button" className="icon-button" onClick={() => setFullscreen((value) => !value)} title={fullscreen ? text('退出全屏', 'Exit fullscreen') : text('全屏浏览', 'Browse fullscreen')} aria-label={fullscreen ? text('退出全屏', 'Exit fullscreen') : text('全屏浏览', 'Browse fullscreen')}>
+            {fullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+          </button>
+          <button type="button" className="secondary-button" onClick={busy ? onCancel : onScan}>
+            {busy ? <><Square size={13} />{text('停止', 'Stop')}</> : <><RefreshCw size={14} />{text('重新扫描', 'Scan again')}</>}
+          </button>
+        </div>
       </div>
 
       <div className="disk-browser-head">

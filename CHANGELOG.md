@@ -8,6 +8,26 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.35 - 2026-07-30
+
+### English
+
+- Grouped multiple large files in the same user folder into one cleanup finding. Ignoring the finding now covers the folder once, while cleanup remains explicitly file-by-file and never removes the whole folder.
+- Added background-service anomaly categories for orphaned startup items, startup failures, high CPU or memory usage, services running continuously for at least 30 days, and stopped configurations unchanged for at least 180 days.
+- Added read-only PID, CPU, memory, and elapsed-runtime sampling to service evidence and Agent context without expanding automatic cleanup permissions.
+- Included failed Homebrew services as analysis findings while retaining direct stop actions only for running services.
+- Added a fullscreen disk browser with a dedicated toggle, complete viewport coverage, and Escape-key exit.
+- Added parser and anomaly-threshold tests, and verified the production build, real-device scan, Electron startup, responsive UI, and Intel x64 installer.
+
+### 简体中文
+
+- 同一用户目录中的多个大文件现在合并为一条清理建议；忽略一次即可覆盖该目录，但清理仍需逐个选择文件，绝不会直接移除整个目录。
+- 后台服务新增异常分类：残留启动项、启动失败、CPU 或内存占用异常、连续运行至少 30 天，以及停止且配置至少 180 天未变化的项目。
+- 服务证据和 Agent 上下文新增只读 PID、CPU、内存和连续运行时长采样，不扩大自动清理权限。
+- Homebrew 启动失败的服务现在会作为分析项展示；只有正在运行的服务才提供直接停止操作。
+- 磁盘浏览新增全屏切换，完整覆盖视口并支持 Esc 退出。
+- 补充解析和异常阈值测试，并验证生产构建、真实设备扫描、Electron 启动、响应式界面和 Intel x64 安装包。
+
 ## 0.6.34 - 2026-07-30
 
 ### English

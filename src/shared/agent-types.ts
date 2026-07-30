@@ -103,6 +103,13 @@ export interface AgentCandidateResultItem {
   sizeBytes: number
   location: string | null
   evidence: string[]
+  serviceAnomalies?: string[]
+  serviceMetrics?: {
+    pid?: number
+    cpuPercent?: number
+    memoryBytes?: number
+    runningSeconds?: number
+  }
   operations: AgentResultOperation[]
 }
 
