@@ -90,7 +90,7 @@ The connection test creates a two-step `ToolLoopAgent` run with a `connection_pr
 
 `.github/workflows/release.yml` is the only supported path for publishing GitHub Release binaries. It uses the latest Node.js 22.x release, verifies that built-in SQLite is available, validates that a pushed tag exactly matches package metadata, runs unit tests and type checking, then builds six native runner targets: macOS x64 and arm64, Windows x64 and arm64, and Linux x64 and arm64. The resulting two DMGs, two NSIS executables, two AppImages, and two DEBs are collected into one release. `SHA256SUMS.txt` is restricted to exactly those eight packages and never includes itself.
 
-Tag-triggered runs create or safely update the bilingual GitHub Release from `RELEASE_NOTES.md`. Manual dispatches run the same validation and build matrix but intentionally stop at temporary Actions artifacts. Packages remain unsigned until signing secrets and platform credentials are explicitly configured. The end-to-end operator checklist is in [`docs/RELEASING.md`](RELEASING.md).
+Tag-triggered runs create or safely update the bilingual GitHub Release from `RELEASE_NOTES.md`. Artifact transfer uses the current Node.js 24-based upload and download actions. Manual dispatches run the same validation and build matrix but intentionally stop at temporary Actions artifacts. Packages remain unsigned until signing secrets and platform credentials are explicitly configured. The end-to-end operator checklist is in [`docs/RELEASING.md`](RELEASING.md).
 
 ## 5. Agent Run
 

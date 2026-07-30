@@ -8,20 +8,36 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.45 - 2026-07-30
+
+### English
+
+- Upgraded artifact upload and download steps to `actions/upload-artifact@v7` and `actions/download-artifact@v8`.
+- Removed the remaining Node.js 20 action-runtime deprecation annotations from all six platform build jobs.
+- Retained the verified eight-package checksum manifest and cross-platform release matrix unchanged.
+- Updated release metadata and operator documentation for the current GitHub Actions artifact runtime.
+
+### 简体中文
+
+- 将产物上传与下载步骤升级到 `actions/upload-artifact@v7` 和 `actions/download-artifact@v8`。
+- 移除六个平台构建任务中剩余的 Node.js 20 action 运行时弃用注解。
+- 保持已验证的 8 安装包校验清单与跨平台发布矩阵不变。
+- 同步更新当前 GitHub Actions 产物运行时对应的版本元数据和操作文档。
+
 ## 0.6.44 - 2026-07-30
 
 ### English
 
 - Restricted `SHA256SUMS.txt` generation to the eight platform packages so the checksum manifest no longer includes an invalid self-reference.
 - Added an explicit eight-line checksum-manifest assertion before publishing a GitHub Release.
-- Upgraded the release artifact download action to its Node.js 24-based major version, removing the GitHub Actions Node.js 20 deprecation warning.
+- Upgraded the release artifact download action to a Node.js 24-based major version, removing the deprecation warning from the publishing job.
 - Updated release metadata and operator documentation for the corrected publication pipeline.
 
 ### 简体中文
 
 - 将 `SHA256SUMS.txt` 的生成范围限制为 8 个平台安装包，校验清单不再包含无效的自身引用。
 - 发布 GitHub Release 前新增校验清单必须恰好为 8 行的断言。
-- 将发布产物下载 action 升级到基于 Node.js 24 的主版本，消除 GitHub Actions 的 Node.js 20 弃用警告。
+- 将发布产物下载 action 升级到基于 Node.js 24 的主版本，消除发布任务中的 Node.js 20 弃用警告。
 - 同步更新修正后发布流程的版本元数据与操作文档。
 
 ## 0.6.43 - 2026-07-30
