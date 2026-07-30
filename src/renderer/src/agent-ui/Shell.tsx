@@ -2,14 +2,16 @@ import {
   Activity,
   AppWindow,
   Archive,
+  Download,
   History,
   Monitor,
-  ScanLine,
   Settings2,
-  SlidersHorizontal,
-  Sparkles
+  Sparkles,
+  X
 } from 'lucide-react'
+import { useState } from 'react'
 import type { AgentProvider } from '../../../shared/agent-types'
+import type { AppUpdateState } from '../../../shared/types'
 import { useI18n } from '../i18n'
 
 export type AgentViewKey = 'agent' | 'health' | 'apps' | 'history' | 'settings'
@@ -20,11 +22,11 @@ export function Shell({
   healthCount,
   applicationCount,
   appVersion,
+  updateState,
   hostname,
   osVersion,
-  scanBusy,
   onNavigate,
-  onQuickScan,
+  onOpenUpdate,
   children
 }: {
   activeView: AgentViewKey
@@ -32,14 +34,15 @@ export function Shell({
   healthCount: number
   applicationCount: number
   appVersion: string
+  updateState: AppUpdateState | null
   hostname: string
   osVersion: string
-  scanBusy: boolean
   onNavigate: (view: AgentViewKey) => void
-  onQuickScan: () => void
+  onOpenUpdate: () => void
   children: React.ReactNode
 }): React.JSX.Element {
   const { text } = useI18n()
+  const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState<string | null>(null)
   const navigation: Array<{
     id: AgentViewKey
     label: [string, string]
@@ -60,7 +63,7 @@ export function Shell({
           <span className="brand-mark"><Archive size={18} /></span>
           <div className="brand-copy">
             <strong>Memento</strong>
-            <span>Local Agent</span>
+            <span className="brand-version">v{appVersion}</span>
           </div>
         </div>
 
@@ -109,28 +112,23 @@ export function Shell({
               <small>{text(`macOS ${osVersion || '--'} · 本地 Agent`, `macOS ${osVersion || '--'} · Local Agent`)}</small>
             </div>
           </div>
-          <div className="topbar-actions">
-            <span className="topbar-clock">{new Intl.DateTimeFormat('zh-CN', {
-              month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
-            }).format(new Date())}</span>
-            <span className="topbar-version" title={text('当前版本', 'Current version')}>v{appVersion}</span>
-            <button type="button" className="secondary-button" onClick={onQuickScan} disabled={scanBusy}>
-              <ScanLine size={16} className={scanBusy ? 'spinner' : ''} />
-              <span>{scanBusy ? text('体检中', 'Scanning') : text('快速体检', 'Quick scan')}</span>
-            </button>
-            <button
-              type="button"
-              className="icon-button"
-              onClick={() => onNavigate('settings')}
-              title={text('设置', 'Settings')}
-              aria-label={text('打开设置', 'Open settings')}
-            >
-              <SlidersHorizontal size={16} />
-            </button>
-          </div>
         </header>
         <main className="page-stack">{children}</main>
       </div>
+      {updateState?.updateAvailable && updateState.latestVersion &&
+        dismissedUpdateVersion !== updateState.latestVersion && (
+        <aside className="update-notice" role="status">
+          <span><Download size={17} /></span>
+          <div>
+            <strong>{text(`发现新版本 v${updateState.latestVersion}`, `Memento v${updateState.latestVersion} is available`)}</strong>
+            <small>{text('可前往发布页面下载安装', 'Open the release page to download and install it.')}</small>
+          </div>
+          <div className="update-notice-actions">
+            <button type="button" className="secondary-button" onClick={onOpenUpdate}>{text('查看', 'View')}</button>
+            <button type="button" className="icon-button" onClick={() => setDismissedUpdateVersion(updateState.latestVersion)} title={text('稍后提醒', 'Remind me later')} aria-label={text('稍后提醒', 'Remind me later')}><X size={15} /></button>
+          </div>
+        </aside>
+      )}
     </div>
   )
 }

@@ -8,6 +8,24 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.31 - 2026-07-30
+
+### English
+
+- Removed the clock, duplicate version badge, Quick Scan, and Settings actions from the upper-right toolbar; the exact build version now replaces “Local Agent” below the Memento name.
+- Added a GitHub Releases update check shortly after launch and every hour, with trusted-link validation, semantic version comparison, a native notification, a compact in-app notice, and a manual Settings check.
+- Changed CC Switch discovery to a one-time automatic import recorded in SQLite, so user-deleted providers remain deleted across launches; Settings now offers an explicit re-import action with detected and imported counts.
+- Moved provider connection state back to a short status label and added wrapping, selectable error alerts that retain the failed endpoint and bounded server response without exposing credential query parameters.
+- Updated the interactive HTML prototype, unit coverage, browser smoke checks, Electron smoke selectors, product documentation, and release documentation for the new behavior.
+
+### 简体中文
+
+- 移除顶部右侧的时钟、重复版本标签、快捷体检和设置操作；准确版本号改为显示在 Memento 名称下，替换无意义的“Local Agent”。
+- 新增启动后及每小时一次的 GitHub Releases 更新检查，包含可信链接校验、语义版本比较、系统通知、紧凑应用内提醒和设置中的手动检查。
+- CC Switch 改为使用 SQLite 标记的一次性自动导入，用户删除的供应商不会在下次启动时恢复；设置中新增明确的手动重新导入，并反馈检测与导入数量。
+- 供应商连接状态恢复为短标签，完整错误改用可换行、可选中的告警区展示，同时保留失败地址和有限长度的服务端响应，并去除凭据查询参数。
+- 同步更新交互 HTML 原型、单元测试、浏览器冒烟检查、Electron 版本选择器、产品文档和发布文档。
+
 ## 0.6.30 - 2026-07-30
 
 ### English

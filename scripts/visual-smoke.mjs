@@ -72,9 +72,12 @@ try {
       if (overflow.document > 1 || overflow.body > 1) {
         failures.push(`${viewportName}/${pageName}: horizontal overflow ${JSON.stringify(overflow)}`)
       }
-      const visibleVersion = await page.locator('.topbar-version').textContent()
+      const visibleVersion = await page.locator('.brand-version').textContent()
       if (visibleVersion !== `v${expectedVersion}`) {
         failures.push(`${viewportName}/${pageName}: wrong visible version ${JSON.stringify(visibleVersion)}`)
+      }
+      if (await page.locator('.topbar-actions').count()) {
+        failures.push(`${viewportName}/${pageName}: removed topbar actions are still rendered`)
       }
       if (pageName !== 'agent' && await page.locator('.page-heading').count()) {
         failures.push(`${viewportName}/${pageName}: redundant page heading is still rendered`)
@@ -82,6 +85,17 @@ try {
       await page.close()
     }
   }
+
+  const settingsPage = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+  await settingsPage.goto(baseUrl, { waitUntil: 'networkidle' })
+  await settingsPage.locator('.nav-button[title="设置"]').click()
+  if (!await settingsPage.getByRole('button', { name: '重新导入 CC Switch' }).isVisible()) {
+    failures.push('settings: manual CC Switch import is missing')
+  }
+  if (!await settingsPage.getByRole('button', { name: '立即检查' }).isVisible()) {
+    failures.push('settings: manual update check is missing')
+  }
+  await settingsPage.close()
 
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   await page.goto(baseUrl, { waitUntil: 'networkidle' })

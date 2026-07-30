@@ -139,16 +139,37 @@ function modelsEndpoint(input: PrivateModelDiscoveryInput, baseUrl: string): URL
   return endpoint
 }
 
-function responseError(status: number): Error {
+function responseSummary(source: string): string {
+  const compact = source.replace(/\s+/g, ' ').trim()
+  if (!compact) return ''
+  try {
+    const payload = JSON.parse(compact) as Record<string, unknown>
+    const nested = payload.error && typeof payload.error === 'object'
+      ? payload.error as Record<string, unknown>
+      : null
+    const message = nested?.message ?? payload.message ?? payload.error
+    if (typeof message === 'string' && message.trim()) return message.trim().slice(0, 1_600)
+  } catch {
+    // Plain-text gateway errors are still useful diagnostics.
+  }
+  return compact.slice(0, 1_600)
+}
+
+async function responseError(response: Response, requestUrl: URL): Promise<Error> {
+  const status = response.status
+  const displayUrl = new URL(requestUrl)
+  displayUrl.searchParams.delete('key')
+  const responseDetail = responseSummary(await response.text().catch(() => ''))
+  const context = `请求地址：${displayUrl.toString()}${responseDetail ? `。服务响应：${responseDetail}` : ''}`
   if (status === 401 || status === 403) {
-    return new Error('请求密钥无效，或没有读取模型列表的权限')
+    return new Error(`请求密钥无效，或没有读取模型列表的权限（HTTP ${status}）。${context}`)
   }
   if (status === 404 || status === 405) {
-    return new Error('服务没有提供模型列表接口')
+    return new Error(`服务没有提供模型列表接口（HTTP ${status}）。${context}`)
   }
-  if (status === 429) return new Error('模型服务请求过于频繁，请稍后重试')
-  if (status >= 500) return new Error('模型服务暂时不可用，请稍后重试')
-  return new Error(`获取模型列表失败（HTTP ${status}）`)
+  if (status === 429) return new Error(`模型服务请求过于频繁，请稍后重试（HTTP 429）。${context}`)
+  if (status >= 500) return new Error(`模型服务暂时不可用，请稍后重试（HTTP ${status}）。${context}`)
+  return new Error(`获取模型列表失败（HTTP ${status}）。${context}`)
 }
 
 export async function discoverProviderModels(
@@ -160,12 +181,13 @@ export async function discoverProviderModels(
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const response = await fetchProvider(modelsEndpoint(input, resolvedBaseUrl), {
+    const endpoint = modelsEndpoint(input, resolvedBaseUrl)
+    const response = await fetchProvider(endpoint, {
       method: 'GET',
       headers: discoveryHeaders(input),
       signal: controller.signal
     })
-    if (!response.ok) throw responseError(response.status)
+    if (!response.ok) throw await responseError(response, endpoint)
     let payload: unknown
     try {
       payload = await response.json()

@@ -96,4 +96,16 @@ describe('model provider configuration', () => {
     await expect(discoverProviderModels(discoveryInput(), fetchProvider, 5))
       .rejects.toThrow('获取模型列表超时')
   })
+
+  it('keeps the failed endpoint and server response visible for troubleshooting', async () => {
+    const fetchProvider = vi.fn(async () => new Response(JSON.stringify({
+      error: { message: 'Unknown antigravity route' }
+    }), { status: 404 }))
+    await expect(discoverProviderModels({
+      ...discoveryInput(),
+      baseUrl: 'https://code.tczor.cn/antigravity'
+    }, fetchProvider)).rejects.toThrow(
+      '请求地址：https://code.tczor.cn/antigravity/models。服务响应：Unknown antigravity route'
+    )
+  })
 })

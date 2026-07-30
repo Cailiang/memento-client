@@ -16,10 +16,12 @@ import type {
   AgentProvider,
   AgentProviderModelsResult,
   AgentProviderTestResult,
+  CcSwitchImportResult,
   DiscoverAgentModelsInput,
   SaveAgentProviderInput
 } from '../../../shared/agent-types'
 import type { AppLanguage, AppSettings, AppTheme, UpdateAppSettingsInput } from '../../../shared/app-settings'
+import type { AppUpdateState } from '../../../shared/types'
 import { useI18n } from '../i18n'
 
 const PROVIDER_LABELS: Record<AgentProvider['type'], [string, string]> = {
@@ -54,23 +56,31 @@ function blankProvider(): SaveAgentProviderInput {
 export function SettingsPage({
   settings,
   providers,
+  appVersion,
+  updateState,
   onUpdateSettings,
   onDiscoverModels,
   onSaveProvider,
   onTestProvider,
   onDeleteProvider,
   onSetDefaultProvider,
+  onImportCcSwitch,
+  onCheckUpdates,
   onManageIgnored,
   onToast
 }: {
   settings: AppSettings
   providers: AgentProvider[]
+  appVersion: string
+  updateState: AppUpdateState | null
   onUpdateSettings: (input: UpdateAppSettingsInput) => Promise<void>
   onDiscoverModels: (input: DiscoverAgentModelsInput) => Promise<AgentProviderModelsResult>
   onSaveProvider: (input: SaveAgentProviderInput) => Promise<AgentProvider>
   onTestProvider: (input: SaveAgentProviderInput) => Promise<AgentProviderTestResult>
   onDeleteProvider: (id: string) => Promise<void>
   onSetDefaultProvider: (id: string) => Promise<void>
+  onImportCcSwitch: () => Promise<CcSwitchImportResult>
+  onCheckUpdates: () => Promise<void>
   onManageIgnored: () => void
   onToast: (message: string) => void
 }): React.JSX.Element {
@@ -86,6 +96,8 @@ export function SettingsPage({
   const [modelState, setModelState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
   const [modelMessage, setModelMessage] = useState<string | null>(null)
   const [manualModel, setManualModel] = useState(false)
+  const [ccSwitchBusy, setCcSwitchBusy] = useState(false)
+  const [updateBusy, setUpdateBusy] = useState(false)
   const discoverySequence = useRef(0)
 
   useEffect(() => {
@@ -224,11 +236,57 @@ export function SettingsPage({
     })
   }
 
+  const importCcSwitch = async (): Promise<void> => {
+    setCcSwitchBusy(true)
+    try {
+      await onImportCcSwitch()
+    } catch {
+      // App owns the user-facing error toast.
+    } finally {
+      setCcSwitchBusy(false)
+    }
+  }
+
+  const checkUpdates = async (): Promise<void> => {
+    setUpdateBusy(true)
+    try {
+      await onCheckUpdates()
+    } finally {
+      setUpdateBusy(false)
+    }
+  }
+
+  const connectionLabel = busy === 'test'
+    ? text('测试中', 'Testing')
+    : connectionOk === true
+      ? text('已连接', 'Connected')
+      : connectionOk === false
+        ? text('测试失败', 'Test failed')
+        : selected?.connectionState === 'connected'
+          ? text('已连接', 'Connected')
+          : selected?.connectionState === 'failed'
+            ? text('测试失败', 'Test failed')
+            : text('未测试', 'Not tested')
+  const connectionClass = connectionOk === true || (!connectionMessage && selected?.connectionState === 'connected')
+    ? 'safe'
+    : connectionOk === false || (!connectionMessage && selected?.connectionState === 'failed')
+      ? 'review'
+      : ''
+  const updateDescription = updateBusy
+    ? text('正在检查新版本…', 'Checking for updates…')
+    : updateState?.updateAvailable && updateState.latestVersion
+      ? text(`发现新版本 v${updateState.latestVersion}`, `Memento v${updateState.latestVersion} is available`)
+      : updateState?.error
+        ? text('上次检查失败，可手动重试', 'The last check failed. Try again manually.')
+        : updateState?.checkedAt
+          ? text('已是最新版本', 'Memento is up to date.')
+          : text('等待首次自动检查', 'Waiting for the first automatic check')
+
   return (
     <section className="page content-page is-active">
       <div className="settings-layout">
         <section className="settings-section provider-settings-section">
-          <div className="settings-label"><h2>{text('模型供应商', 'Model providers')}</h2><p>{text('可保存多个供应商；检测到本地 CC Switch 后会自动同步可用配置。', 'Save multiple providers. Available local CC Switch configurations are synchronized automatically.')}</p></div>
+          <div className="settings-label"><h2>{text('模型供应商', 'Model providers')}</h2><p>{text('首次启动自动导入 CC Switch，之后由你决定何时重新导入。', 'CC Switch is imported once on first launch. Re-import it manually when needed.')}</p><button type="button" className="secondary-button" disabled={ccSwitchBusy} onClick={() => void importCcSwitch()}>{ccSwitchBusy ? <LoaderCircle className="spinner" size={14} /> : <RefreshCw size={14} />}{ccSwitchBusy ? text('正在导入', 'Importing') : text('重新导入 CC Switch', 'Re-import CC Switch')}</button></div>
           <div className="provider-manager">
             <aside className="provider-list-pane" aria-label={text('已配置供应商', 'Configured providers')}>
               <div className="provider-list-header"><span>{text(`${providers.length} 个配置`, `${providers.length} configured`)}</span><button type="button" className="icon-button" onClick={selectNew} title={text('添加供应商', 'Add provider')} aria-label={text('添加供应商', 'Add provider')}><Plus size={15} /></button></div>
@@ -247,9 +305,11 @@ export function SettingsPage({
             <div className="provider-editor">
               <div className="provider-editor-header">
                 <div><strong>{draft.name || text('新供应商', 'New provider')}</strong><small>{text(...PROVIDER_LABELS[draft.type])}</small></div>
-                <span className={`risk-label ${connectionOk === true || (!connectionMessage && selected?.connectionState === 'connected') ? 'safe' : connectionOk === false || (!connectionMessage && selected?.connectionState === 'failed') ? 'review' : ''}`}>{connectionMessage ?? (selected?.connectionState === 'connected' ? text('已连接', 'Connected') : selected?.connectionState === 'failed' ? text('测试失败', 'Test failed') : text('未测试', 'Not tested'))}</span>
+                <span className={`risk-label ${connectionClass}`}>{connectionLabel}</span>
               </div>
               <form className="provider-form" onSubmit={(event) => { event.preventDefault(); void save() }}>
+                {connectionOk === false && connectionMessage && <div className="provider-error-panel" role="alert"><strong>{text('连接测试失败', 'Connection test failed')}</strong><p>{connectionMessage}</p></div>}
+                {modelState === 'error' && modelMessage && <div className="provider-error-panel" role="alert"><strong>{text('模型列表获取失败', 'Could not fetch models')}</strong><p>{modelMessage}</p></div>}
                 <div className="field"><label htmlFor="provider-name">{text('名称', 'Name')}</label><input id="provider-name" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} autoComplete="off" /></div>
                 <div className="field"><label htmlFor="provider-type">{text('接口类型', 'API type')}</label><select id="provider-type" value={draft.type} onChange={(event) => { const type = event.target.value as AgentProvider['type']; setDraft({ ...draft, type, baseUrl: draft.baseUrl || PROVIDER_URLS[type] }) }}><option value="openai-compatible">OpenAI {text('兼容', 'compatible')}</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="google">Google Gemini</option></select></div>
                 <div className="field is-wide"><label htmlFor="provider-url">{text('服务地址', 'Base URL')}</label><input id="provider-url" type="url" value={draft.baseUrl} onChange={(event) => setDraft({ ...draft, baseUrl: event.target.value })} placeholder={draft.type === 'openai-compatible' ? 'https://api.example.com/v1' : PROVIDER_URLS[draft.type]} /></div>
@@ -260,7 +320,7 @@ export function SettingsPage({
                     {availableModels.map((model) => <option key={model} value={model}>{model}</option>)}
                   </select>}
                   <button type="button" className="icon-button" onClick={() => void discoverModels({ id: draft.id, type: draft.type, baseUrl: draft.baseUrl, apiKey: draft.apiKey })} disabled={!discoveryReady || modelState === 'loading'} title={text('重新获取模型', 'Refresh models')} aria-label={text('重新获取模型', 'Refresh models')}><RefreshCw className={modelState === 'loading' ? 'spinner' : ''} size={14} /></button>
-                </div><div className={`field-help ${modelState === 'error' ? 'is-error' : ''}`} role={modelState === 'error' ? 'alert' : 'status'}>{modelState === 'loading' && <LoaderCircle className="spinner" size={11} />}<span>{modelMessage}</span>{modelState === 'error' && <button type="button" onClick={() => setManualModel(true)}>{text('手动填写', 'Enter manually')}</button>}</div></div>
+                </div><div className={`field-help ${modelState === 'error' ? 'is-error' : ''}`} role="status">{modelState === 'loading' && <LoaderCircle className="spinner" size={11} />}<span>{modelState === 'error' ? text('获取失败，完整信息见上方', 'Fetch failed. See the full error above.') : modelMessage}</span>{modelState === 'error' && <button type="button" onClick={() => setManualModel(true)}>{text('手动填写', 'Enter manually')}</button>}</div></div>
                 <div className="provider-form-actions">
                   <div>
                     <button type="button" className="quiet-button" disabled={!selected || selected.isDefault || busy !== null} onClick={() => { if (!selected) return; setBusy('default'); void onSetDefaultProvider(selected.id).catch(() => undefined).finally(() => setBusy(null)) }}><CircleCheck size={15} />{selected?.isDefault ? text('当前默认', 'Current default') : text('设为默认', 'Set default')}</button>
@@ -274,6 +334,11 @@ export function SettingsPage({
               </form>
             </div>
           </div>
+        </section>
+
+        <section className="settings-section">
+          <div className="settings-label"><h2>{text('软件更新', 'Software update')}</h2><p>{text('Memento 每小时自动检查一次新版本。', 'Memento checks for a new version every hour.')}</p></div>
+          <div className="setting-row"><span><strong>{text(`当前版本 v${appVersion}`, `Current version v${appVersion}`)}</strong><small>{updateDescription}</small></span><button type="button" className="secondary-button" disabled={updateBusy} onClick={() => void checkUpdates()}>{updateBusy ? <LoaderCircle className="spinner" size={14} /> : <RefreshCw size={14} />}{updateBusy ? text('检查中', 'Checking') : text('立即检查', 'Check now')}</button></div>
         </section>
 
         <section className="settings-section">

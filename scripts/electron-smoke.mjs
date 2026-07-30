@@ -29,7 +29,7 @@ try {
     applications: document.querySelectorAll('.app-card').length,
     loadedIcons: document.querySelectorAll('.app-logo img').length,
     summary: document.querySelector('.page-command-summary')?.textContent ?? '',
-    visibleVersion: document.querySelector('.topbar-version')?.textContent ?? ''
+    visibleVersion: document.querySelector('.brand-version')?.textContent ?? ''
   }))
   result.importedCcSwitchProviders = providers.filter((provider) => provider.id.startsWith('cc-switch-')).length
   if (result.applications < 1 || result.loadedIcons < 1) {

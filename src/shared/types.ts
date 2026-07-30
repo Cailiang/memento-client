@@ -153,8 +153,20 @@ export interface TerminalFixRunResult {
   canUndo: boolean
 }
 
+export interface AppUpdateState {
+  currentVersion: string
+  latestVersion: string | null
+  updateAvailable: boolean
+  releaseUrl: string | null
+  checkedAt: string | null
+  error: string | null
+}
+
 export interface MementoApi extends MementoAgentApi, MementoSettingsApi {
   getVersion: () => Promise<string>
+  getUpdateState: () => Promise<AppUpdateState>
+  checkForUpdates: () => Promise<AppUpdateState>
+  openUpdatePage: () => Promise<void>
   scan: (language?: import('./app-settings').AppLanguage) => Promise<ScanResult>
   getApplicationIcon: (id: string) => Promise<string | null>
   openApplication: (id: string) => Promise<void>
@@ -163,5 +175,6 @@ export interface MementoApi extends MementoAgentApi, MementoSettingsApi {
   undoTerminalFixes: () => Promise<ActionResult[]>
   revealCandidateLocation: (id: string) => Promise<void>
   onScanProgress: (callback: (progress: ScanProgress) => void) => () => void
+  onUpdateState: (callback: (state: AppUpdateState) => void) => () => void
   platform: NodeJS.Platform
 }

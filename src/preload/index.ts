@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { AgentRunEvent } from '../shared/agent-types'
-import type { MementoApi, ScanProgress } from '../shared/types'
+import type { AppUpdateState, MementoApi, ScanProgress } from '../shared/types'
 
 const bootTheme = process.argv
   .find((argument) => argument.startsWith('--memento-theme='))
@@ -25,6 +25,9 @@ if (bootTheme && allowedBootThemes.has(bootTheme)) {
 
 const api: MementoApi = {
   getVersion: () => ipcRenderer.invoke('memento:get-version'),
+  getUpdateState: () => ipcRenderer.invoke('memento:update:get'),
+  checkForUpdates: () => ipcRenderer.invoke('memento:update:check'),
+  openUpdatePage: () => ipcRenderer.invoke('memento:update:open'),
   getAppSettings: () => ipcRenderer.invoke('memento:settings:get'),
   updateAppSettings: (input) => ipcRenderer.invoke('memento:settings:update', input),
   scan: (language) => ipcRenderer.invoke('memento:scan', language),
@@ -40,6 +43,7 @@ const api: MementoApi = {
   deleteAgentProvider: (id) => ipcRenderer.invoke('memento:agent:providers:delete', id),
   setDefaultAgentProvider: (id) => ipcRenderer.invoke('memento:agent:providers:set-default', id),
   testAgentProvider: (input) => ipcRenderer.invoke('memento:agent:providers:test', input),
+  importCcSwitchProviders: () => ipcRenderer.invoke('memento:agent:providers:import-cc-switch'),
   startAgentRun: (input) => ipcRenderer.invoke('memento:agent:runs:start', input),
   cancelAgentRun: (runId) => ipcRenderer.invoke('memento:agent:runs:cancel', runId),
   addAgentPlanItems: (input) => ipcRenderer.invoke('memento:agent:plans:add', input),
@@ -60,6 +64,13 @@ const api: MementoApi = {
     }
     ipcRenderer.on('memento:scan-progress', listener)
     return () => ipcRenderer.removeListener('memento:scan-progress', listener)
+  },
+  onUpdateState: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: AppUpdateState): void => {
+      callback(state)
+    }
+    ipcRenderer.on('memento:update-state', listener)
+    return () => ipcRenderer.removeListener('memento:update-state', listener)
   },
   platform: process.platform
 }

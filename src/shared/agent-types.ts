@@ -52,6 +52,12 @@ export interface AgentProviderTestResult {
   testedAt: string
 }
 
+export interface CcSwitchImportResult {
+  databaseFound: boolean
+  detected: number
+  imported: number
+}
+
 export type AgentRunStatus =
   | 'preparing'
   | 'analyzing'
@@ -216,6 +222,7 @@ export interface MementoAgentApi {
   deleteAgentProvider: (id: string) => Promise<void>
   setDefaultAgentProvider: (id: string) => Promise<AgentProvider[]>
   testAgentProvider: (input: SaveAgentProviderInput) => Promise<AgentProviderTestResult>
+  importCcSwitchProviders: () => Promise<CcSwitchImportResult>
   startAgentRun: (input: StartAgentRunInput) => Promise<AgentRunRecord>
   cancelAgentRun: (runId: string) => Promise<void>
   addAgentPlanItems: (input: AddAgentPlanItemsInput) => Promise<AgentRunRecord>

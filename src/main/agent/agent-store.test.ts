@@ -137,6 +137,19 @@ describe('AgentStore', () => {
     store.close()
   })
 
+  it('persists completion of the one-time CC Switch auto import', () => {
+    const directory = temporaryDirectory()
+    const store = new AgentStore(directory)
+    expect(store.hasCompletedCcSwitchAutoImport()).toBe(false)
+    store.markCcSwitchAutoImportCompleted()
+    expect(store.hasCompletedCcSwitchAutoImport()).toBe(true)
+    store.close()
+
+    const reopened = new AgentStore(directory)
+    expect(reopened.hasCompletedCcSwitchAutoImport()).toBe(true)
+    reopened.close()
+  })
+
   it('migrates legacy settings and persists runs in SQLite', () => {
     const directory = temporaryDirectory()
     writeFileSync(path.join(directory, 'app-settings.json'), JSON.stringify({

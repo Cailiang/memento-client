@@ -192,6 +192,23 @@ export class AgentStore {
     return next
   }
 
+  hasCompletedCcSwitchAutoImport(): boolean {
+    const row = this.database.prepare(`
+      SELECT value_json FROM app_settings WHERE key = 'cc_switch_auto_import_v1'
+    `).get() as { value_json: string } | undefined
+    return row?.value_json === 'true'
+  }
+
+  markCcSwitchAutoImportCompleted(): void {
+    this.database.prepare(`
+      INSERT INTO app_settings (key, value_json, updated_at)
+      VALUES ('cc_switch_auto_import_v1', 'true', ?)
+      ON CONFLICT(key) DO UPDATE SET
+        value_json = excluded.value_json,
+        updated_at = excluded.updated_at
+    `).run(now())
+  }
+
   listProviders(): AgentProvider[] {
     const rows = this.database.prepare(`
       SELECT * FROM ai_providers

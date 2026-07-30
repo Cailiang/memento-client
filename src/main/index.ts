@@ -4,6 +4,7 @@ import {
   ipcMain,
   Menu,
   nativeImage,
+  Notification,
   shell,
   Tray,
   type MenuItemConstructorOptions
@@ -16,12 +17,14 @@ import path from 'node:path'
 import { promisify } from 'node:util'
 import type {
   ActionResult,
+  AppUpdateState,
   ScanProgress,
   ScanResult,
   TerminalFixRunResult
 } from '../shared/types'
 import type {
   AddAgentPlanItemsInput,
+  CcSwitchImportResult,
   DiscoverAgentModelsInput,
   ExecuteAgentPlanInput,
   SaveAgentProviderInput,
@@ -57,6 +60,7 @@ import {
   isAllowedStorageCleanupTarget
 } from './storage-cleanup'
 import { brewCleanupVersionTargets, isSafeBrewVersion } from './brew-cleanup'
+import { fetchUpdateState } from './update-checker'
 import {
   applyTerminalFixGroup,
   restoreTerminalBackup,
@@ -80,6 +84,9 @@ let appSettings: AppSettings = { ...DEFAULT_APP_SETTINGS }
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let isQuitting = false
+let updateTimer: NodeJS.Timeout | null = null
+let lastNotifiedVersion: string | null = null
+let updateState: AppUpdateState | null = null
 
 function mainText(chinese: string, english: string): string {
   return appSettings.language === 'en-US' ? english : chinese
@@ -88,6 +95,62 @@ function mainText(chinese: string, english: string): string {
 function mainDisplayPath(target: string): string {
   const home = os.homedir()
   return target.startsWith(home) ? `~${target.slice(home.length)}` : target
+}
+
+function importCcSwitchProviders(): CcSwitchImportResult {
+  const databasePath = findCcSwitchDatabase(app.getPath('home'), app.getPath('appData'))
+  if (!databasePath) return { databaseFound: false, detected: 0, imported: 0 }
+  const candidates = readCcSwitchProviders(databasePath)
+  return {
+    databaseFound: true,
+    detected: candidates.length,
+    imported: agentStore!.syncCcSwitchProviders(candidates)
+  }
+}
+
+function emptyUpdateState(): AppUpdateState {
+  return {
+    currentVersion: app.getVersion(),
+    latestVersion: null,
+    updateAvailable: false,
+    releaseUrl: null,
+    checkedAt: null,
+    error: null
+  }
+}
+
+async function openUpdatePage(): Promise<void> {
+  const releaseUrl = updateState?.releaseUrl
+  if (!releaseUrl?.startsWith('https://github.com/Cailiang/memento-client/releases/')) {
+    throw new Error(mainText('当前没有可打开的新版本页面', 'No update page is currently available.'))
+  }
+  await shell.openExternal(releaseUrl)
+}
+
+async function checkForAppUpdate(showSystemNotification: boolean): Promise<AppUpdateState> {
+  updateState = await fetchUpdateState(app.getVersion())
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('memento:update-state', updateState)
+  }
+  if (
+    showSystemNotification &&
+    updateState.updateAvailable &&
+    updateState.latestVersion &&
+    updateState.latestVersion !== lastNotifiedVersion &&
+    Notification.isSupported()
+  ) {
+    lastNotifiedVersion = updateState.latestVersion
+    const notification = new Notification({
+      title: mainText('Memento 有新版本', 'A Memento update is available'),
+      body: mainText(
+        `v${updateState.latestVersion} 已发布，点击查看安装包。`,
+        `v${updateState.latestVersion} is available. Click to view the installer.`
+      )
+    })
+    notification.on('click', () => void openUpdatePage().catch(() => undefined))
+    notification.show()
+  }
+  return updateState
 }
 
 async function readApplicationIcon(target: string): Promise<string | null> {
@@ -754,15 +817,21 @@ async function performScan(
 
 app.whenReady().then(async () => {
   agentStore = new AgentStore(app.getPath('userData'))
-  const ccSwitchDatabase = findCcSwitchDatabase(app.getPath('home'), app.getPath('appData'))
-  if (ccSwitchDatabase) {
-    agentStore.syncCcSwitchProviders(readCcSwitchProviders(ccSwitchDatabase))
+  if (!agentStore.hasCompletedCcSwitchAutoImport()) {
+    try {
+      importCcSwitchProviders()
+    } finally {
+      agentStore.markCcSwitchAutoImportCompleted()
+    }
   }
   agentRuntime = new LocalAgentRuntime(agentStore)
   appSettings = agentStore.getAppSettings()
   applyWindowSettings()
 
   ipcMain.handle('memento:get-version', () => app.getVersion())
+  ipcMain.handle('memento:update:get', () => updateState ?? emptyUpdateState())
+  ipcMain.handle('memento:update:check', () => checkForAppUpdate(false))
+  ipcMain.handle('memento:update:open', () => openUpdatePage())
   ipcMain.handle('memento:get-application-icon', async (_event, id: string) => {
     if (typeof id !== 'string' || id.length > 100) return null
     const application = [
@@ -837,6 +906,7 @@ app.whenReady().then(async () => {
   )
 
   ipcMain.handle('memento:agent:providers:list', () => agentStore!.listProviders())
+  ipcMain.handle('memento:agent:providers:import-cc-switch', () => importCcSwitchProviders())
   ipcMain.handle('memento:agent:providers:models', async (_event, input: DiscoverAgentModelsInput) => {
     const provider = agentStore!.resolveModelDiscoveryInput(input)
     try {
@@ -985,6 +1055,14 @@ app.whenReady().then(async () => {
   ipcMain.handle('memento:run-actions', (_event, ids: string[]) => executeActionBatch(ids))
 
   createWindow()
+  const initialUpdateCheck = setTimeout(() => {
+    void checkForAppUpdate(true)
+  }, 3_000)
+  initialUpdateCheck.unref()
+  updateTimer = setInterval(() => {
+    void checkForAppUpdate(true)
+  }, 60 * 60 * 1_000)
+  updateTimer.unref()
   app.on('activate', () => {
     showMainWindow()
   })
@@ -992,6 +1070,8 @@ app.whenReady().then(async () => {
 
 app.on('before-quit', () => {
   isQuitting = true
+  if (updateTimer) clearInterval(updateTimer)
+  updateTimer = null
   agentStore?.close()
   agentStore = null
 })

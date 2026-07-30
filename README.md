@@ -12,7 +12,7 @@ The application is rebuilt around the approved interactive prototype at [`../pro
 - **Computer health:** inspect storage, background services, and terminal startup without opening redundant detail pages.
 - **Applications:** browse user and read-only system apps in a real-logo grid, see usage and bundle metadata, ask Agent about one exact app, open it, ignore it, or move an uninstallable app to Trash after confirmation.
 - **Task history:** reopen, export, or permanently delete local Agent runs and their tool-call records.
-- **Settings:** manage multiple model providers, window behavior, ignored items, color theme, and language.
+- **Settings:** manage multiple model providers, software updates, window behavior, ignored items, color theme, and language.
 
 Storage, background-service, and application findings can be ignored. Ignored items are removed from scan results, registered operations, and the data exposed to Agent tools. Each relevant work page opens its own ignored category directly, while Settings retains the combined manager.
 
@@ -29,7 +29,9 @@ Users can save multiple providers and choose one default model:
 
 Each configuration contains a name, API type, base URL, API key, and selected model. Once a URL and credential are available, Memento normalizes the API base and automatically fetches the model list. Image, audio, realtime, embedding, moderation, and other clearly incompatible entries are kept out of the Agent model picker. Existing encrypted credentials can be reused while editing. A separate connection test verifies model access and tool calling, not just plain text generation.
 
-On startup, Memento also detects the local CC Switch database at `~/.cc-switch/cc-switch.db` or its configured custom directory. Usable Claude, Codex, and Gemini entries are imported idempotently and mapped by API format. Credential-free placeholders are skipped. The CC Switch database is opened read-only; imported credentials stay in the main process and are re-encrypted in Memento's own provider store.
+On the first launch after this importer is introduced, Memento detects the local CC Switch database at `~/.cc-switch/cc-switch.db` or its configured custom directory. Usable Claude, Codex, and Gemini entries are imported once and mapped by API format. The completed attempt is recorded in SQLite, so a provider the user later deletes does not return at the next launch. Settings provides an explicit **Re-import CC Switch** action whenever the user wants to read it again. Credential-free placeholders are skipped. The CC Switch database is opened read-only; imported credentials stay in the main process and are re-encrypted in Memento's own provider store.
+
+Memento checks the latest stable GitHub Release shortly after launch and every hour. A newer version triggers a native notification and a compact in-app notice that opens the trusted repository release page; Settings also provides a manual check. Local packages remain unsigned and are never installed without the user downloading and opening them.
 
 Conversation IDs, focused entities, and pending plans are persisted locally. Follow-ups such as “this service” resolve to the latest exact focus instead of starting another unrelated inventory. Per-application analysis includes its exact Bundle ID, path, executable, background-only role, and registered URL schemes. The application language controls all Agent-visible text; switching language refreshes the scan snapshot before another run.
 

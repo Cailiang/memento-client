@@ -8,6 +8,7 @@ import type {
   AgentProviderTestResult,
   AgentRunEvent,
   AgentRunRecord,
+  CcSwitchImportResult,
   DiscoverAgentModelsInput,
   SaveAgentProviderInput
 } from '../../shared/agent-types'
@@ -18,7 +19,7 @@ import {
   type AppSettings,
   type UpdateAppSettingsInput
 } from '../../shared/app-settings'
-import type { CandidateOperation, InstalledApplication, ScanCandidate, ScanProgress, ScanResult, TerminalFinding } from '../../shared/types'
+import type { AppUpdateState, CandidateOperation, InstalledApplication, ScanCandidate, ScanProgress, ScanResult, TerminalFinding } from '../../shared/types'
 import { AgentPage } from './agent-ui/AgentPage'
 import { ApplicationsPage } from './agent-ui/ApplicationsPage'
 import {
@@ -248,6 +249,7 @@ interface ExecutionState {
 
 function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSettings['language']) => void }): React.JSX.Element {
   const [appVersion, setAppVersion] = useState(__MEMENTO_VERSION__)
+  const [updateState, setUpdateState] = useState<AppUpdateState | null>(null)
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS)
   const [providers, setProviders] = useState<AgentProvider[]>([])
   const [runs, setRuns] = useState<AgentRunRecord[]>([])
@@ -322,6 +324,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
 
   useEffect(() => {
     const unsubscribeProgress = window.memento?.onScanProgress(setProgress)
+    const unsubscribeUpdate = window.memento?.onUpdateState(setUpdateState)
     const unsubscribeAgent = window.memento?.onAgentRunEvent((event: AgentRunEvent) => {
       if (event.type === 'status') {
         if (event.runId === activeRunId.current) {
@@ -361,6 +364,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     })
     return () => {
       unsubscribeProgress?.()
+      unsubscribeUpdate?.()
       unsubscribeAgent?.()
     }
   }, [])
@@ -370,11 +374,13 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     started.current = true
     void (async () => {
       try {
-        const [initialSettings, initialVersion] = await Promise.all([
+        const [initialSettings, initialVersion, initialUpdateState] = await Promise.all([
           window.memento ? window.memento.getAppSettings() : Promise.resolve(DEFAULT_APP_SETTINGS),
-          window.memento ? window.memento.getVersion() : Promise.resolve(__MEMENTO_VERSION__)
+          window.memento ? window.memento.getVersion() : Promise.resolve(__MEMENTO_VERSION__),
+          window.memento ? window.memento.getUpdateState() : Promise.resolve(null)
         ])
         setAppVersion(initialVersion)
+        setUpdateState(initialUpdateState)
         setSettings(initialSettings)
         onLanguageChange(initialSettings.language)
         document.documentElement.dataset.theme = initialSettings.theme
@@ -967,6 +973,56 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     }
   }
 
+  const importCcSwitchProviders = async (): Promise<CcSwitchImportResult> => {
+    try {
+      const imported = window.memento
+        ? await window.memento.importCcSwitchProviders()
+        : { databaseFound: true, detected: 1, imported: 1 }
+      await refreshProviders()
+      setToast(!imported.databaseFound
+        ? appText('没有找到本地 CC Switch 配置', 'No local CC Switch configuration was found.')
+        : imported.detected === 0
+          ? appText('CC Switch 中没有可导入的有效配置', 'CC Switch has no usable configuration to import.')
+          : appText(
+              `已读取 ${imported.detected} 个配置，新增或更新 ${imported.imported} 个`,
+              `${imported.detected} configurations read; ${imported.imported} added or updated.`
+            ))
+      return imported
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : appText('无法导入 CC Switch', 'Could not import CC Switch.'))
+      throw error
+    }
+  }
+
+  const checkForUpdates = async (): Promise<void> => {
+    try {
+      const next = window.memento
+        ? await window.memento.checkForUpdates()
+        : {
+            currentVersion: appVersion,
+            latestVersion: null,
+            updateAvailable: false,
+            releaseUrl: null,
+            checkedAt: new Date().toISOString(),
+            error: null
+          }
+      setUpdateState(next)
+      setToast(next.error
+        ? appText('检查更新失败，请稍后重试', 'Could not check for updates. Try again later.')
+        : next.updateAvailable && next.latestVersion
+          ? appText(`发现新版本 v${next.latestVersion}`, `Memento v${next.latestVersion} is available.`)
+          : appText('当前已是最新版本', 'Memento is up to date.'))
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : appText('无法检查更新', 'Could not check for updates.'))
+    }
+  }
+
+  const openUpdatePage = (): void => {
+    void window.memento?.openUpdatePage().catch((error) => {
+      setToast(error instanceof Error ? error.message : appText('无法打开版本页面', 'Could not open the release page.'))
+    })
+  }
+
   const healthCount = result
     ? result.candidates.filter((candidate) => candidate.section === 'storage' || candidate.section === 'services').length + result.terminal.findings.filter((finding) => finding.fix).length
     : 0
@@ -1008,17 +1064,17 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       healthCount={healthCount}
       applicationCount={result?.applications.length ?? 0}
       appVersion={appVersion}
+      updateState={updateState}
       hostname={result?.system.hostname ?? ''}
       osVersion={result?.system.osVersion ?? ''}
-      scanBusy={scanBusy}
       onNavigate={setView}
-      onQuickScan={() => { setView('health'); void scanNow() }}
+      onOpenUpdate={openUpdatePage}
     >
       {view === 'agent' && <AgentPage scan={result} run={activeRun} conversationRuns={conversationRuns} statusMessage={runStatusMessage} selectedPlanIds={selectedPlanIds} providerConfigured={Boolean(defaultProvider)} addingOperationId={addingOperationId} openingApplicationId={openingApplicationId} returnLabel={agentOriginLabel} onSubmit={startAgentRun} onNewTask={() => { setActiveRun(null); activeRunId.current = null; setSelectedPlanIds(new Set()); setRunStatusMessage(''); setAgentOrigin(null) }} onOpenHistory={() => setView('history')} onOpenSettings={() => setView('settings')} onReturn={returnToAgentOrigin} onOpenApplication={openAgentApplication} onAddPlanItem={(id) => void addAgentPlanItem(id)} onTogglePlanItem={(id) => setSelectedPlanIds((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next })} onExecutePlan={() => void executePlan()} onDiscardPlan={discardPlan} />}
       {view === 'health' && <HealthPage result={result} settings={settings} scanBusy={scanBusy} progress={progress} tab={healthTab} restoreTarget={restoreTarget?.view === 'health' ? restoreTarget : null} onRestoreComplete={() => setRestoreTarget(null)} onScan={() => void scanNow()} onTabChange={setHealthTab} onAgentPrompt={(prompt, origin: HealthAgentOrigin) => startAgentRun(prompt, { origin: { view: 'health', ...origin } })} onDirectAction={requestDirectAction} onDirectTerminalFix={requestDirectTerminalFix} onIgnore={setPendingIgnore} onManageIgnored={openIgnoredManager} />}
       {view === 'apps' && <ApplicationsPage applications={result?.applications ?? []} openingId={openingApplicationId} removingId={removingApplicationId} restoreTarget={restoreTarget?.view === 'apps' ? restoreTarget : null} onRestoreComplete={() => setRestoreTarget(null)} ignoredCount={settings.applicationWhitelist.length} onOpen={(application) => void openApplication(application)} onUninstall={setPendingUninstall} onIgnore={setPendingApplicationIgnore} onManageIgnored={() => openIgnoredManager('applications')} onAgentPrompt={(prompt, origin) => startAgentRun(prompt, { isolated: true, origin: { view: 'apps', ...origin } })} />}
       {view === 'history' && <HistoryPage runs={runs} onOpenRun={(run) => { setActiveRun(run); activeRunId.current = run.id; setSelectedPlanIds(new Set(run.plan.map((item) => item.id))); setView('agent') }} onDeleteRun={setPendingHistoryDelete} onToast={setToast} />}
-      {view === 'settings' && <SettingsPage settings={settings} providers={providers} onUpdateSettings={updateSettings} onDiscoverModels={discoverProviderModels} onSaveProvider={saveProvider} onTestProvider={testProvider} onDeleteProvider={deleteProvider} onSetDefaultProvider={setDefaultProvider} onManageIgnored={() => openIgnoredManager()} onToast={setToast} />}
+      {view === 'settings' && <SettingsPage settings={settings} providers={providers} appVersion={appVersion} updateState={updateState} onUpdateSettings={updateSettings} onDiscoverModels={discoverProviderModels} onSaveProvider={saveProvider} onTestProvider={testProvider} onDeleteProvider={deleteProvider} onSetDefaultProvider={setDefaultProvider} onImportCcSwitch={importCcSwitchProviders} onCheckUpdates={checkForUpdates} onManageIgnored={() => openIgnoredManager()} onToast={setToast} />}
 
       {pendingDirectAction && <DirectActionConfirmDialog action={pendingDirectAction} onClose={() => setPendingDirectAction(null)} onConfirm={() => void executeDirectAction()} />}
       {executionState && <ExecutionProgressDialog phase={executionState.phase} itemCount={executionState.itemCount} completedCount={executionState.completedCount} detail={executionState.detail} onClose={() => setExecutionState(null)} />}

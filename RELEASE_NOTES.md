@@ -1,17 +1,16 @@
-# Memento Agent 0.6.30
+# Memento Agent 0.6.31
 
 ## 简体中文
 
-`0.6.30` 缩短从发现问题到完成处理的路径，并让用户随时回到原来的工作位置。
+`0.6.31` 精简顶部信息，并让更新检查与外部供应商导入更符合用户预期。
 
 ### 主要变化
 
-- 忽略列表新增搜索；已忽略应用继续显示真实名称、Bundle ID、路径和应用 Logo，重启后也不会丢失。
-- Agent 中点击“确认并执行”后不再出现第二次确认，而是立即显示清理动画、阶段进度和真实复检状态。
-- 从存储空间、后台服务、终端诊断或应用管理进入 Agent 时，会记住标签、项目和滚动位置；顶部按钮可一键返回并高亮原位置。
-- 电脑体检新增“直接操作”：熟练用户可以直接清理、停止服务、移除启动项或优化终端，无需先做 AI 分析。
-- 直接操作仍只使用当前扫描注册的操作 ID，执行前确认一次，完成后自动重新体检。
-- 新增忽略应用元数据、搜索与 Logo、单次确认、直接操作和返回定位的回归测试。
+- 顶部右侧不再显示时钟、重复版本、快捷体检和设置按钮；版本号移到 Memento 名称下方。
+- 启动后及每小时自动检查 GitHub 最新稳定版本，发现新版本时显示系统通知和应用内提醒；设置中也可立即检查。
+- CC Switch 只在首次自动读取一次，完成状态保存在 SQLite；用户删除导入项后不会在下次启动时重新出现。
+- 设置新增“重新导入 CC Switch”，需要时可主动读取，并反馈检测到及新增或更新的配置数量。
+- 模型供应商的长错误不再挤在状态标签中；失败地址和服务响应会完整换行显示、可选中复制，并隐藏密钥查询参数。
 
 ### 安装说明
 
@@ -19,16 +18,15 @@
 
 ## English
 
-`0.6.30` shortens the path from finding an issue to completing the action while preserving the user's working position.
+`0.6.31` removes redundant toolbar information and makes update checks and external provider imports predictable.
 
 ### Highlights
 
-- Ignored items are searchable, and ignored applications retain their real name, Bundle ID, path, and app logo across scans and restarts.
-- Confirm and run in Agent no longer opens a second confirmation; it immediately shows a cleanup animation, stage progress, and real verification state.
-- Entering Agent from Storage, Services, Terminal, or Applications preserves the source tab, item, and scroll position for one-click return and focus restoration.
-- Computer Health now offers direct registered actions for experienced users who want to clean, stop, remove, or optimize without AI analysis first.
-- Direct actions still use only current-scan registered operation IDs, require one confirmation, and trigger an automatic verification scan.
-- Added regression coverage for ignored metadata, search and logos, single-confirmation execution, direct actions, and source restoration.
+- The clock, duplicate version badge, Quick Scan, and Settings actions were removed from the upper-right toolbar; the build version now sits below the Memento name.
+- Memento checks the latest stable GitHub release after startup and every hour, shows native and in-app notifications for updates, and supports a manual Settings check.
+- CC Switch is imported automatically only once and records completion in SQLite, so user-deleted imports no longer return on the next launch.
+- Settings now provides an explicit Re-import CC Switch action and reports detected and added-or-updated counts.
+- Long provider errors now render in wrapping, selectable alerts with the failed endpoint and server response while credential query parameters stay hidden.
 
 ### Installation
 
