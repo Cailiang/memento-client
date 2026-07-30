@@ -8,6 +8,24 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.38 - 2026-07-30
+
+### English
+
+- Fixed disk-browser removal while fullscreen: the Trash confirmation dialog now renders above the fullscreen browser instead of being hidden behind it.
+- Extended the UI smoke test to open the disk browser fullscreen, invoke Move to Trash from the context menu, and interact with the confirmation dialog.
+- Aligned custom Google Gemini provider URLs with Gemini CLI semantics by appending `/v1beta` when the address does not already include an API version.
+- Google model discovery and Agent requests now use the native `x-goog-api-key` authentication behavior for official and proxied Gemini endpoints.
+- Added regression coverage for custom Gemini proxy routing, authentication, explicit API versions, and diagnostic endpoint reporting.
+
+### 简体中文
+
+- 修复全屏磁盘浏览中的删除操作：移到废纸篓确认框现在显示在全屏浏览器之上，不会再被遮挡。
+- UI 冒烟测试现在会进入磁盘浏览全屏模式，通过右键菜单触发移到废纸篓，并实际操作确认框。
+- Google Gemini 自定义供应商地址与 Gemini CLI 语义对齐：地址未包含 API 版本时自动补充 `/v1beta`。
+- Google 模型发现和 Agent 请求对官方及代理 Gemini 接口统一使用原生 `x-goog-api-key` 认证方式。
+- 新增自定义 Gemini 代理路由、认证、显式 API 版本和诊断请求地址的回归覆盖。
+
 ## 0.6.37 - 2026-07-30
 
 ### English

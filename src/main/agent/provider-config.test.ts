@@ -59,7 +59,7 @@ describe('model provider configuration', () => {
     })
   })
 
-  it('uses bearer authorization for a Google-compatible proxy', async () => {
+  it('uses Gemini-native routing and authentication for a custom Google proxy', async () => {
     const fetchProvider = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) => new Response(JSON.stringify({
       models: [{ name: 'models/gemini-2.5-pro' }]
     }), { status: 200 }))
@@ -68,10 +68,15 @@ describe('model provider configuration', () => {
       baseUrl: 'https://code.tczor.cn/antigravity'
     }, fetchProvider)
 
-    expect(String(fetchProvider.mock.calls[0][0])).toBe('https://code.tczor.cn/antigravity/models')
+    expect(String(fetchProvider.mock.calls[0][0])).toBe('https://code.tczor.cn/antigravity/v1beta/models')
     expect(fetchProvider.mock.calls[0][1]?.headers).toMatchObject({
-      Authorization: 'Bearer secret-model-key'
+      'x-goog-api-key': 'secret-model-key'
     })
+  })
+
+  it('does not duplicate an explicit Google API version', () => {
+    expect(normalizeProviderBaseUrl('google', 'https://code.tczor.cn/antigravity/v1beta'))
+      .toBe('https://code.tczor.cn/antigravity/v1beta')
   })
 
   it('filters models that cannot run the text and tool-calling Agent', async () => {
@@ -121,10 +126,10 @@ describe('model provider configuration', () => {
       error: { message: 'Unknown antigravity route' }
     }), { status: 404 }))
     await expect(discoverProviderModels({
-      ...discoveryInput(),
+      ...discoveryInput('google'),
       baseUrl: 'https://code.tczor.cn/antigravity'
     }, fetchProvider)).rejects.toThrow(
-      '请求地址：https://code.tczor.cn/antigravity/models。服务响应：Unknown antigravity route'
+      '请求地址：https://code.tczor.cn/antigravity/v1beta/models。服务响应：Unknown antigravity route'
     )
   })
 })

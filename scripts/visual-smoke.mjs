@@ -131,6 +131,7 @@ try {
   if (await diskPage.locator('.disk-usage-surface [role="progressbar"]').count()) {
     failures.push('disk-browser: asynchronous scan uses a fake percentage progress bar')
   }
+  await diskPage.getByRole('button', { name: '全屏浏览' }).click()
   const trashTarget = diskPage.locator('.disk-column').last().locator('.disk-node').first()
   await trashTarget.click({ button: 'right' })
   const diskContextMenu = diskPage.locator('.disk-context-menu')
@@ -142,6 +143,7 @@ try {
     failures.push('disk-browser: Trash confirmation does not explain the removal scope')
   }
   await diskTrashDialog.getByRole('button', { name: '取消' }).click()
+  await diskPage.getByRole('button', { name: '退出全屏' }).click()
   await diskPage.screenshot({ path: '/tmp/memento-interaction-disk-browser.png' })
   await diskPage.setViewportSize({ width: 390, height: 844 })
   await diskPage.screenshot({ path: '/tmp/memento-interaction-disk-browser-mobile.png', fullPage: true })

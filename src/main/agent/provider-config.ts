@@ -50,6 +50,9 @@ export function normalizeProviderBaseUrl(type: AgentProviderType, value: string)
   const endpointSuffix = ENDPOINT_SUFFIXES.find((suffix) => lowercasePath.endsWith(suffix))
   if (endpointSuffix) pathname = pathname.slice(0, -endpointSuffix.length)
   if (!pathname || pathname === '/') pathname = DEFAULT_API_PATH[type]
+  else if (type === 'google' && !/\/v\d+(?:(?:alpha|beta)\d*)?$/i.test(pathname)) {
+    pathname = `${pathname}${DEFAULT_API_PATH.google}`
+  }
   parsed.pathname = pathname.replace(/\/+$/, '')
   return parsed.toString().replace(/\/+$/, '')
 }
@@ -118,15 +121,7 @@ function parseModels(
   return { models, excludedModelCount: unique.length - models.length }
 }
 
-export function isOfficialGoogleApiUrl(value: string | URL): boolean {
-  try {
-    return new URL(value).hostname.toLowerCase() === 'generativelanguage.googleapis.com'
-  } catch {
-    return false
-  }
-}
-
-function discoveryHeaders(input: PrivateModelDiscoveryInput, requestUrl: URL): HeadersInit {
+function discoveryHeaders(input: PrivateModelDiscoveryInput): HeadersInit {
   if (input.type === 'anthropic') {
     return {
       Accept: 'application/json',
@@ -135,9 +130,7 @@ function discoveryHeaders(input: PrivateModelDiscoveryInput, requestUrl: URL): H
     }
   }
   if (input.type === 'google') {
-    return isOfficialGoogleApiUrl(requestUrl)
-      ? { Accept: 'application/json', 'x-goog-api-key': input.apiKey }
-      : { Accept: 'application/json', Authorization: `Bearer ${input.apiKey}` }
+    return { Accept: 'application/json', 'x-goog-api-key': input.apiKey }
   }
   return {
     Accept: 'application/json',
@@ -194,7 +187,7 @@ export async function discoverProviderModels(
     const endpoint = modelsEndpoint(input, resolvedBaseUrl)
     const response = await fetchProvider(endpoint, {
       method: 'GET',
-      headers: discoveryHeaders(input, endpoint),
+      headers: discoveryHeaders(input),
       signal: controller.signal
     })
     if (!response.ok) throw await responseError(response, endpoint)
