@@ -42,6 +42,18 @@ export function diskUsageScanRoot(): string {
   return existsSync(dataVolume) ? dataVolume : path.parse(os.homedir()).root
 }
 
+export function withoutDiskUsageTargets(
+  targets: ReadonlyMap<string, string>,
+  removedTarget: string
+): Map<string, string> {
+  const normalizedTarget = path.resolve(removedTarget)
+  const descendantPrefix = `${normalizedTarget}${path.sep}`
+  return new Map([...targets].filter(([, target]) => {
+    const normalized = path.resolve(target)
+    return normalized !== normalizedTarget && !normalized.startsWith(descendantPrefix)
+  }))
+}
+
 export function parseDiskUsageLine(
   line: string,
   root: string,

@@ -98,6 +98,31 @@ describe('AgentStore', () => {
     store.close()
   })
 
+  it('migrates existing Antigravity Gemini proxies to the dedicated provider type', () => {
+    const directory = temporaryDirectory()
+    const store = new AgentStore(directory)
+    const saved = store.saveProvider({
+      name: 'Antigravity proxy',
+      type: 'google',
+      baseUrl: 'https://code.tczor.cn/antigravity',
+      model: 'gemini-3.1-pro-high',
+      apiKey: 'antigravity-secret'
+    })
+    store.close()
+
+    const database = new DatabaseSync(path.join(directory, 'memento.sqlite'))
+    database.prepare('UPDATE ai_providers SET type = ? WHERE id = ?').run('google', saved.id)
+    database.exec('PRAGMA user_version = 2')
+    database.close()
+
+    const migrated = new AgentStore(directory)
+    expect(migrated.listProviders()[0]).toMatchObject({
+      type: 'antigravity',
+      baseUrl: 'https://code.tczor.cn/antigravity/v1beta'
+    })
+    migrated.close()
+  })
+
   it('imports CC Switch providers idempotently and de-duplicates matching manual providers', () => {
     const directory = temporaryDirectory()
     const store = new AgentStore(directory)
@@ -177,7 +202,7 @@ describe('AgentStore', () => {
     expect(store.listRuns()).toEqual([])
 
     const database = new DatabaseSync(path.join(directory, 'memento.sqlite'))
-    expect(database.prepare('PRAGMA user_version').get()).toEqual({ user_version: 2 })
+    expect(database.prepare('PRAGMA user_version').get()).toEqual({ user_version: 3 })
     expect(database.prepare('SELECT COUNT(*) AS count FROM tool_calls').get()).toEqual({ count: 0 })
     database.close()
     store.close()

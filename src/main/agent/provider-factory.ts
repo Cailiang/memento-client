@@ -15,14 +15,19 @@ export const PROVIDER_TEST_TIMEOUT = {
 } as const
 export const PROVIDER_TEST_MAX_OUTPUT_TOKENS = 2_048
 
-export function providerTestToolChoice(stepNumber: number): 'required' | 'none' {
-  return stepNumber === 0 ? 'required' : 'none'
+export function providerTestToolChoice(
+  providerType: PrivateAgentProvider['type'],
+  stepNumber: number
+): 'auto' | 'required' | 'none' {
+  if (stepNumber > 0) return 'none'
+  return providerType === 'antigravity' ? 'auto' : 'required'
 }
 
 export function providerTestReasoning(
   provider: Pick<PrivateAgentProvider, 'type' | 'model'>
 ): 'low' | undefined {
-  return provider.type === 'google' && /(^|\/)gemini-3(?:[.-]|$)/i.test(provider.model)
+  return ['google', 'antigravity'].includes(provider.type) &&
+    /(^|\/)gemini-3(?:[.-]|$)/i.test(provider.model)
     ? 'low'
     : undefined
 }
@@ -40,6 +45,7 @@ export function createProviderModel(provider: PrivateAgentProvider): LanguageMod
         apiKey: provider.apiKey,
         baseURL
       })(provider.model)
+    case 'antigravity':
     case 'google':
       return createGoogleGenerativeAI({
         apiKey: provider.apiKey,
@@ -75,9 +81,9 @@ export async function testProviderConnection(
     model: createProviderModel(provider),
     instructions: 'You are a connection tester. Call connection_probe once, then answer with OK.',
     tools: { connection_probe: probe },
-    toolChoice: 'required',
+    toolChoice: providerTestToolChoice(provider.type, 0),
     prepareStep: ({ stepNumber }) => ({
-      toolChoice: providerTestToolChoice(stepNumber)
+      toolChoice: providerTestToolChoice(provider.type, stepNumber)
     }),
     stopWhen: stepCountIs(2),
     maxOutputTokens: PROVIDER_TEST_MAX_OUTPUT_TOKENS,

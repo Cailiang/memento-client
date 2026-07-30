@@ -111,6 +111,18 @@ describe('CC Switch provider import', () => {
       }
     })
     insertProvider(database, {
+      id: 'gemini-antigravity',
+      appType: 'gemini',
+      name: 'Antigravity Relay',
+      settings: {
+        env: {
+          GOOGLE_GEMINI_BASE_URL: 'https://code.tczor.cn/antigravity',
+          GEMINI_API_KEY: 'antigravity-test-key',
+          GEMINI_MODEL: 'gemini-3.1-pro-high'
+        }
+      }
+    })
+    insertProvider(database, {
       id: 'official-empty',
       appType: 'claude',
       name: 'Claude Official',
@@ -119,7 +131,7 @@ describe('CC Switch provider import', () => {
     database.close()
 
     const providers = readCcSwitchProviders(databasePath)
-    expect(providers).toHaveLength(3)
+    expect(providers).toHaveLength(4)
     expect(providers.map(({ apiKey: _apiKey, ...provider }) => provider)).toEqual([
       expect.objectContaining({
         name: 'Claude Relay',
@@ -135,6 +147,12 @@ describe('CC Switch provider import', () => {
         model: 'gpt-test'
       }),
       expect.objectContaining({
+        name: 'Antigravity Relay',
+        type: 'antigravity',
+        baseUrl: 'https://code.tczor.cn/antigravity',
+        model: 'gemini-3.1-pro-high'
+      }),
+      expect.objectContaining({
         name: 'Gemini Relay',
         type: 'google',
         baseUrl: 'https://gemini.example.com',
@@ -144,11 +162,13 @@ describe('CC Switch provider import', () => {
     expect(providers.map((provider) => provider.id)).toEqual([
       expect.stringMatching(/^cc-switch-claude-/),
       expect.stringMatching(/^cc-switch-codex-/),
+      expect.stringMatching(/^cc-switch-gemini-/),
       expect.stringMatching(/^cc-switch-gemini-/)
     ])
     expect(providers.map((provider) => provider.apiKey)).toEqual([
       'claude-test-key',
       'codex-test-key',
+      'antigravity-test-key',
       'gemini-test-key'
     ])
   })

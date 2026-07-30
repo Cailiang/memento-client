@@ -493,7 +493,6 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       setDiskUsage((current) => current ? withoutDiskUsageNode(current, node.id) : current)
       setPendingDiskUsageTrash(null)
       setToast(appText(`“${node.name}”已移到废纸篓`, `"${node.name}" was moved to Trash.`))
-      if (window.memento) void scanDiskUsage()
     } catch (error) {
       setToast(error instanceof Error ? error.message : appText('无法将磁盘项目移到废纸篓', 'Could not move the disk item to Trash.'))
     } finally {
@@ -1076,10 +1075,12 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     await new Promise<void>((resolve) => window.setTimeout(resolve, 520))
     const models = input.type === 'anthropic'
       ? ['claude-3-7-sonnet-latest', 'claude-sonnet-4-5']
-      : input.type === 'google'
+      : input.type === 'google' || input.type === 'antigravity'
         ? ['gemini-2.5-flash', 'gemini-2.5-pro']
         : ['deepseek-chat', 'deepseek-reasoner', 'gpt-4.1-mini']
-    const suffix = input.type === 'google' ? '/v1beta' : '/v1'
+    const suffix = input.type === 'google'
+      ? '/v1beta'
+      : input.type === 'antigravity' ? '/antigravity/v1beta' : '/v1'
     const parsed = new URL(input.baseUrl)
     const resolvedBaseUrl = parsed.pathname === '/'
       ? `${parsed.origin}${suffix}`

@@ -6,10 +6,28 @@ import {
   buildDiskUsageTree,
   DiskUsageScanner,
   parseDiskUsageLine,
-  validateDiskUsageTrashTarget
+  validateDiskUsageTrashTarget,
+  withoutDiskUsageTargets
 } from './disk-usage-scanner'
 
 describe('disk usage scanner', () => {
+  it('keeps sibling registrations available after removing a scanned subtree', () => {
+    const original = new Map([
+      ['root', '/volume'],
+      ['removed', '/volume/Users/tester/Downloads'],
+      ['removed-child', '/volume/Users/tester/Downloads/archive.dmg'],
+      ['sibling', '/volume/Users/tester/Movies']
+    ])
+
+    const updated = withoutDiskUsageTargets(original, '/volume/Users/tester/Downloads')
+
+    expect([...updated]).toEqual([
+      ['root', '/volume'],
+      ['sibling', '/volume/Users/tester/Movies']
+    ])
+    expect(original.size).toBe(4)
+  })
+
   it('allows only real descendants of the scanned root to move to Trash', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'memento-disk-trash-'))
     const home = path.join(root, 'Users', 'tester')

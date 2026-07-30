@@ -139,22 +139,24 @@ try {
     failures.push('disk-browser: asynchronous scan uses a fake percentage progress bar')
   }
   await diskPage.getByRole('button', { name: '全屏浏览' }).click()
-  const trashTarget = diskPage.locator('.disk-column').last().locator('.disk-node').first()
-  const trashTargetId = await trashTarget.getAttribute('data-node-id')
-  await trashTarget.click({ button: 'right' })
-  const diskContextMenu = diskPage.locator('.disk-context-menu')
-  await diskContextMenu.waitFor()
-  await diskContextMenu.getByRole('menuitem', { name: '移到废纸篓' }).click()
-  const diskTrashDialog = diskPage.getByRole('dialog', { name: /移到废纸篓/ })
-  await diskTrashDialog.waitFor()
-  if (!await diskTrashDialog.getByText(/整个目录|文件会移到废纸篓/).count()) {
-    failures.push('disk-browser: Trash confirmation does not explain the removal scope')
-  }
-  await diskTrashDialog.getByRole('button', { name: '移到废纸篓', exact: true }).click()
-  if (trashTargetId) {
-    await diskPage.locator(`.disk-node[data-node-id="${trashTargetId}"]`).waitFor({ state: 'detached' })
-  } else {
-    failures.push('disk-browser: selected Trash target did not expose its registered ID')
+  for (let removal = 0; removal < 2; removal += 1) {
+    const trashTarget = diskPage.locator('.disk-column').last().locator('.disk-node').first()
+    const trashTargetId = await trashTarget.getAttribute('data-node-id')
+    await trashTarget.click({ button: 'right' })
+    const diskContextMenu = diskPage.locator('.disk-context-menu')
+    await diskContextMenu.waitFor()
+    await diskContextMenu.getByRole('menuitem', { name: '移到废纸篓' }).click()
+    const diskTrashDialog = diskPage.getByRole('dialog', { name: /移到废纸篓/ })
+    await diskTrashDialog.waitFor()
+    if (!await diskTrashDialog.getByText(/整个目录|文件会移到废纸篓/).count()) {
+      failures.push('disk-browser: Trash confirmation does not explain the removal scope')
+    }
+    await diskTrashDialog.getByRole('button', { name: '移到废纸篓', exact: true }).click()
+    if (trashTargetId) {
+      await diskPage.locator(`.disk-node[data-node-id="${trashTargetId}"]`).waitFor({ state: 'detached' })
+    } else {
+      failures.push(`disk-browser: Trash target ${removal + 1} did not expose its registered ID`)
+    }
   }
   await diskPage.getByRole('button', { name: '退出全屏' }).click()
   await diskPage.screenshot({ path: '/tmp/memento-interaction-disk-browser.png' })
@@ -314,10 +316,13 @@ try {
   await page.getByRole('dialog', { name: '忽略列表' }).getByRole('button', { name: '完成' }).click()
   await page.locator('button[aria-label="添加供应商"]').click()
   await page.locator('#provider-name').fill('测试供应商')
-  await page.locator('#provider-url').fill('https://code.tczor.cn')
+  await page.locator('#provider-type').selectOption('antigravity')
+  if (await page.locator('#provider-url').inputValue() !== 'https://code.tczor.cn/antigravity/v1beta') {
+    failures.push('settings: Antigravity did not select its dedicated API base')
+  }
   await page.locator('#provider-key').fill('test-key')
   await page.locator('#provider-model').waitFor({ state: 'visible' })
-  await page.locator('#provider-model').selectOption('deepseek-chat', { timeout: 4_000 })
+  await page.locator('#provider-model').selectOption('gemini-2.5-pro', { timeout: 4_000 })
   await page.screenshot({ path: '/tmp/memento-interaction-provider-models.png' })
   await page.getByRole('button', { name: '保存', exact: true }).click()
   await page.getByText('测试供应商', { exact: true }).first().waitFor()

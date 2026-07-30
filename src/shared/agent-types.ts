@@ -5,6 +5,7 @@ export type AgentProviderType =
   | 'openai-compatible'
   | 'openai'
   | 'anthropic'
+  | 'antigravity'
   | 'google'
 
 export type AgentProviderConnectionState = 'untested' | 'connected' | 'failed'

@@ -27,7 +27,7 @@ function provider(type: PrivateAgentProvider['type']): PrivateAgentProvider {
 }
 
 describe('Agent provider factory', () => {
-  it.each(['openai-compatible', 'openai', 'anthropic', 'google'] as const)(
+  it.each(['openai-compatible', 'openai', 'anthropic', 'antigravity', 'google'] as const)(
     'creates a %s language model without making a request',
     (type) => {
       const model = createProviderModel(provider(type))
@@ -57,9 +57,11 @@ describe('Agent provider factory', () => {
   it('allows slower reasoning models to complete a two-step tool probe', () => {
     expect(PROVIDER_TEST_TIMEOUT).toEqual({ totalMs: 60_000, stepMs: 45_000 })
     expect(PROVIDER_TEST_MAX_OUTPUT_TOKENS).toBe(2_048)
-    expect(providerTestToolChoice(0)).toBe('required')
-    expect(providerTestToolChoice(1)).toBe('none')
+    expect(providerTestToolChoice('google', 0)).toBe('required')
+    expect(providerTestToolChoice('antigravity', 0)).toBe('auto')
+    expect(providerTestToolChoice('antigravity', 1)).toBe('none')
     expect(providerTestReasoning({ type: 'google', model: 'gemini-3.1-pro-high' })).toBe('low')
+    expect(providerTestReasoning({ type: 'antigravity', model: 'gemini-3.1-pro-high' })).toBe('low')
     expect(providerTestReasoning({ type: 'google', model: 'gemini-2.5-pro' })).toBeUndefined()
     expect(providerTestReasoning({ type: 'anthropic', model: 'claude-opus-4-6' })).toBeUndefined()
   })

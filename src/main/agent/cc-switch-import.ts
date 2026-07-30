@@ -77,6 +77,12 @@ function providerTypeForFormat(
   }
 }
 
+function providerTypeForEndpoint(type: AgentProviderType, baseUrl: string): AgentProviderType {
+  return type === 'google' && /\/antigravity(?:\/|$)/i.test(baseUrl)
+    ? 'antigravity'
+    : type
+}
+
 function deterministicProviderId(appType: string, sourceId: string): string {
   const digest = createHash('sha256')
     .update(`${appType}\0${sourceId}`)
@@ -108,7 +114,7 @@ function claudeCandidate(row: CcSwitchProviderRow): CcSwitchProviderCandidate | 
   return {
     id: deterministicProviderId(row.app_type, row.id),
     name: row.name,
-    type,
+    type: providerTypeForEndpoint(type, baseUrl),
     baseUrl,
     model,
     apiKey,
@@ -149,12 +155,13 @@ function geminiCandidate(row: CcSwitchProviderRow): CcSwitchProviderCandidate | 
   const environment = record(settings.env)
   const apiKey = firstText(environment, ['GEMINI_API_KEY', 'GOOGLE_API_KEY'])
   if (!apiKey) return null
+  const baseUrl = firstText(environment, ['GOOGLE_GEMINI_BASE_URL']) ||
+    'https://generativelanguage.googleapis.com/v1beta'
   return {
     id: deterministicProviderId(row.app_type, row.id),
     name: row.name,
-    type: 'google',
-    baseUrl: firstText(environment, ['GOOGLE_GEMINI_BASE_URL']) ||
-      'https://generativelanguage.googleapis.com/v1beta',
+    type: providerTypeForEndpoint('google', baseUrl),
+    baseUrl,
     model: firstText(environment, ['GEMINI_MODEL']) || text(settings.model) || 'gemini-2.5-pro',
     apiKey,
     isCurrent: row.is_current === 1

@@ -28,6 +28,7 @@ const PROVIDER_LABELS: Record<AgentProvider['type'], [string, string]> = {
   'openai-compatible': ['OpenAI 兼容接口', 'OpenAI-compatible'],
   openai: ['OpenAI', 'OpenAI'],
   anthropic: ['Anthropic', 'Anthropic'],
+  antigravity: ['Antigravity', 'Antigravity'],
   google: ['Google Gemini', 'Google Gemini']
 }
 
@@ -35,6 +36,7 @@ const PROVIDER_URLS: Record<AgentProvider['type'], string> = {
   'openai-compatible': '',
   openai: 'https://api.openai.com/v1',
   anthropic: 'https://api.anthropic.com/v1',
+  antigravity: 'https://code.tczor.cn/antigravity/v1beta',
   google: 'https://generativelanguage.googleapis.com/v1beta'
 }
 
@@ -311,7 +313,7 @@ export function SettingsPage({
                 {connectionOk === false && connectionMessage && <div className="provider-error-panel" role="alert"><strong>{text('连接测试失败', 'Connection test failed')}</strong><p>{connectionMessage}</p></div>}
                 {modelState === 'error' && modelMessage && <div className="provider-error-panel" role="alert"><strong>{text('模型列表获取失败', 'Could not fetch models')}</strong><p>{modelMessage}</p></div>}
                 <div className="field"><label htmlFor="provider-name">{text('名称', 'Name')}</label><input id="provider-name" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} autoComplete="off" /></div>
-                <div className="field"><label htmlFor="provider-type">{text('接口类型', 'API type')}</label><select id="provider-type" value={draft.type} onChange={(event) => { const type = event.target.value as AgentProvider['type']; setDraft({ ...draft, type, baseUrl: draft.baseUrl || PROVIDER_URLS[type] }) }}><option value="openai-compatible">OpenAI {text('兼容', 'compatible')}</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="google">Google Gemini</option></select></div>
+                <div className="field"><label htmlFor="provider-type">{text('接口类型', 'API type')}</label><select id="provider-type" value={draft.type} onChange={(event) => { const type = event.target.value as AgentProvider['type']; const baseUrl = !draft.baseUrl || draft.baseUrl === PROVIDER_URLS[draft.type] ? PROVIDER_URLS[type] : draft.baseUrl; setDraft({ ...draft, type, baseUrl }) }}><option value="openai-compatible">OpenAI {text('兼容', 'compatible')}</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="antigravity">Antigravity</option><option value="google">Google Gemini</option></select></div>
                 <div className="field is-wide"><label htmlFor="provider-url">{text('服务地址', 'Base URL')}</label><input id="provider-url" type="url" value={draft.baseUrl} onChange={(event) => setDraft({ ...draft, baseUrl: event.target.value })} placeholder={draft.type === 'openai-compatible' ? 'https://api.example.com/v1' : PROVIDER_URLS[draft.type]} /></div>
                 <div className="field"><label htmlFor="provider-key">{text('请求密钥', 'API key')}</label><div className="secret-field"><input id="provider-key" type={secretVisible ? 'text' : 'password'} value={draft.apiKey ?? ''} onChange={(event) => setDraft({ ...draft, apiKey: event.target.value })} placeholder={selected?.keyHint ?? 'sk-...'} autoComplete="new-password" /><button type="button" onClick={() => setSecretVisible((value) => !value)} title={text('显示或隐藏密钥', 'Show or hide key')} aria-label={text('显示或隐藏密钥', 'Show or hide key')}>{secretVisible ? <EyeOff size={15} /> : <Eye size={15} />}</button></div></div>
                 <div className="field model-field"><label htmlFor="provider-model">{text('模型', 'Model')}</label><div className="model-picker">

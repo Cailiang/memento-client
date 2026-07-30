@@ -68,7 +68,8 @@ import { reconcileScanCapabilities } from './scan-capability-reconciliation'
 import {
   diskUsageScanRoot,
   DiskUsageScanner,
-  validateDiskUsageTrashTarget
+  validateDiskUsageTrashTarget,
+  withoutDiskUsageTargets
 } from './disk-usage-scanner'
 import { fetchUpdateState } from './update-checker'
 import {
@@ -1059,7 +1060,7 @@ app.whenReady().then(async () => {
       throw new Error(mainText('这个磁盘项目不能从浏览器中移除', 'This disk item cannot be removed from the browser.'))
     }
     await trashDiskUsageTarget(validatedTarget)
-    registeredDiskUsageTargets = new Map()
+    registeredDiskUsageTargets = withoutDiskUsageTargets(registeredDiskUsageTargets, target)
   })
 
   ipcMain.handle('memento:agent:providers:list', () => agentStore!.listProviders())

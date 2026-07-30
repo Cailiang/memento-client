@@ -18,6 +18,7 @@ const DEFAULT_API_PATH: Record<AgentProviderType, string> = {
   'openai-compatible': '/v1',
   openai: '/v1',
   anthropic: '/v1',
+  antigravity: '/antigravity/v1beta',
   google: '/v1beta'
 }
 
@@ -27,6 +28,10 @@ const ENDPOINT_SUFFIXES = [
   '/messages',
   '/models'
 ]
+
+function usesGeminiProtocol(type: AgentProviderType): boolean {
+  return type === 'google' || type === 'antigravity'
+}
 
 export function normalizeProviderBaseUrl(type: AgentProviderType, value: string): string {
   const source = value.trim()
@@ -50,8 +55,11 @@ export function normalizeProviderBaseUrl(type: AgentProviderType, value: string)
   const endpointSuffix = ENDPOINT_SUFFIXES.find((suffix) => lowercasePath.endsWith(suffix))
   if (endpointSuffix) pathname = pathname.slice(0, -endpointSuffix.length)
   if (!pathname || pathname === '/') pathname = DEFAULT_API_PATH[type]
-  else if (type === 'google' && !/\/v\d+(?:(?:alpha|beta)\d*)?$/i.test(pathname)) {
-    pathname = `${pathname}${DEFAULT_API_PATH.google}`
+  else if (usesGeminiProtocol(type) && !/\/v\d+(?:(?:alpha|beta)\d*)?$/i.test(pathname)) {
+    if (type === 'antigravity' && !/(^|\/)antigravity$/i.test(pathname)) {
+      pathname = `${pathname}/antigravity`
+    }
+    pathname = `${pathname}/v1beta`
   }
   parsed.pathname = pathname.replace(/\/+$/, '')
   return parsed.toString().replace(/\/+$/, '')
@@ -78,7 +86,7 @@ export function isAgentCapableModel(
   const normalizedId = id.toLowerCase()
   if (NON_AGENT_MODEL_PATTERNS.some((pattern) => pattern.test(normalizedId))) return false
 
-  if (type === 'google') {
+  if (usesGeminiProtocol(type)) {
     const methods = stringArray(metadata.supportedGenerationMethods)
     if (methods?.length) {
       return methods.some((method) =>
@@ -101,14 +109,15 @@ function parseModels(
 ): { models: string[]; excludedModelCount: number } {
   if (!payload || typeof payload !== 'object') return { models: [], excludedModelCount: 0 }
   const record = payload as Record<string, unknown>
-  const entries = type === 'google' ? record.models : record.data
+  const geminiProtocol = usesGeminiProtocol(type)
+  const entries = geminiProtocol ? record.models : record.data
   if (!Array.isArray(entries)) return { models: [], excludedModelCount: 0 }
   const discovered = entries.flatMap((entry) => {
     if (!entry || typeof entry !== 'object') return []
     const item = entry as Record<string, unknown>
-    const value = type === 'google' ? item.name : item.id
+    const value = geminiProtocol ? item.name : item.id
     if (typeof value !== 'string' || !value.trim()) return []
-    const id = type === 'google' ? value.replace(/^models\//, '') : value
+    const id = geminiProtocol ? value.replace(/^models\//, '') : value
     return id.trim() ? [{ id: id.trim(), metadata: item }] : []
   })
   const unique = [...new Map(discovered.map((model) => [model.id, model])).values()]
@@ -129,7 +138,7 @@ function discoveryHeaders(input: PrivateModelDiscoveryInput): HeadersInit {
       'x-api-key': input.apiKey
     }
   }
-  if (input.type === 'google') {
+  if (usesGeminiProtocol(input.type)) {
     return { Accept: 'application/json', 'x-goog-api-key': input.apiKey }
   }
   return {

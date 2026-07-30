@@ -8,6 +8,24 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.41 - 2026-07-30
+
+### English
+
+- Added a dedicated Antigravity provider type for Sub2API's Gemini-native `/antigravity/v1beta` protocol, model discovery, and `x-goog-api-key` authentication without adding another SDK.
+- Made Antigravity connection probes use the gateway-compatible `VALIDATED` tool mode while still requiring a real tool callback and tool-result continuation; Gemini 3 probes retain `LOW` thinking.
+- Migrated existing Google provider rows whose URL contains `/antigravity`, and classified matching CC Switch imports as Antigravity automatically.
+- Stopped rescanning the full disk after every successful Trash operation. The removed subtree now disappears immediately, visible ancestor sizes update locally, and unrelated IDs from the same scan remain valid for consecutive removals.
+- Added provider migration, protocol, capability-registry, immutable-tree, and two-removal UI smoke coverage; updated all current project and release documentation.
+
+### 简体中文
+
+- 新增 Antigravity 独立接口类型，明确适配 Sub2API 的 Gemini 原生 `/antigravity/v1beta` 路由、模型发现和 `x-goog-api-key` 认证，无需引入另一套 SDK。
+- Antigravity 连接探针改用网关兼容的 `VALIDATED` 工具模式，同时仍要求真实执行工具回调和工具结果续传；Gemini 3 继续使用 `LOW` 推理级别。
+- 自动迁移服务地址包含 `/antigravity` 的已有 Google 配置，CC Switch 中匹配的配置也会自动归类为 Antigravity。
+- 停止在每次成功移到废纸篓后重扫整块磁盘；被删子树立即消失、可见祖先容量本地更新，同轮扫描的其他 ID 继续有效，可连续删除。
+- 新增供应商迁移、协议、能力注册表、不可变树和连续两次删除 UI 冒烟覆盖，并同步更新当前项目与发布文档。
+
 ## 0.6.40 - 2026-07-30
 
 ### English

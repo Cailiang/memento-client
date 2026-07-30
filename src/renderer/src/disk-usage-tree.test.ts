@@ -5,13 +5,14 @@ import { withoutDiskUsageNode } from './disk-usage-tree'
 function node(
   id: string,
   children: DiskUsageNode[] = [],
-  childCount = children.length
+  childCount = children.length,
+  sizeBytes = 100
 ): DiskUsageNode {
   return {
     id,
     name: id,
     location: `/${id}`,
-    sizeBytes: 100,
+    sizeBytes,
     kind: 'directory',
     childCount,
     omittedChildCount: Math.max(0, childCount - children.length),
@@ -35,9 +36,9 @@ function scan(root: DiskUsageNode): DiskUsageScanResult {
 
 describe('disk usage tree updates', () => {
   it('removes a nested visible node without mutating the scanned tree', () => {
-    const report = node('anyconnect')
-    const diagnostics = node('DiagnosticReports', [report], 3)
-    const original = scan(node('root', [node('Library', [diagnostics])]))
+    const report = node('anyconnect', [], 0, 25)
+    const diagnostics = node('DiagnosticReports', [report], 3, 80)
+    const original = scan(node('root', [node('Library', [diagnostics], 1, 90)], 1, 100))
 
     const updated = withoutDiskUsageNode(original, report.id)
 
@@ -45,8 +46,11 @@ describe('disk usage tree updates', () => {
     expect(updated.root.children[0].children[0]).toMatchObject({
       id: 'DiagnosticReports',
       childCount: 2,
+      sizeBytes: 55,
       children: []
     })
+    expect(updated.root).toMatchObject({ sizeBytes: 75 })
+    expect(updated.root.children[0]).toMatchObject({ sizeBytes: 65 })
     expect(original.root.children[0].children[0].children).toEqual([report])
   })
 

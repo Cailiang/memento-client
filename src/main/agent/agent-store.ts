@@ -71,6 +71,7 @@ const PROVIDER_TYPES = new Set<AgentProvider['type']>([
   'openai-compatible',
   'openai',
   'anthropic',
+  'antigravity',
   'google'
 ])
 
@@ -572,6 +573,20 @@ export class AgentStore {
         CREATE INDEX IF NOT EXISTS agent_runs_conversation_created
           ON agent_runs(conversation_id, created_at);
         PRAGMA user_version = 2;
+        COMMIT;
+      `)
+    }
+    if (versionRow.user_version < 3) {
+      this.database.exec(`
+        BEGIN IMMEDIATE;
+        UPDATE ai_providers
+        SET type = 'antigravity'
+        WHERE type = 'google'
+          AND (
+            lower(base_url) LIKE '%/antigravity'
+            OR lower(base_url) LIKE '%/antigravity/%'
+          );
+        PRAGMA user_version = 3;
         COMMIT;
       `)
     }

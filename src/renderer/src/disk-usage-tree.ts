@@ -3,29 +3,37 @@ import type { DiskUsageNode, DiskUsageScanResult } from '../../shared/types'
 interface RemovalResult {
   node: DiskUsageNode
   removed: boolean
+  removedSizeBytes: number
 }
 
 function removeChild(node: DiskUsageNode, nodeId: string): RemovalResult {
   let removed = false
+  let removedSizeBytes = 0
   let directRemovals = 0
   const children = node.children.flatMap((child) => {
     if (child.id === nodeId) {
       removed = true
+      removedSizeBytes += child.sizeBytes
       directRemovals += 1
       return []
     }
     const nested = removeChild(child, nodeId)
-    if (nested.removed) removed = true
+    if (nested.removed) {
+      removed = true
+      removedSizeBytes += nested.removedSizeBytes
+    }
     return [nested.node]
   })
-  if (!removed) return { node, removed: false }
+  if (!removed) return { node, removed: false, removedSizeBytes: 0 }
   return {
     node: {
       ...node,
+      sizeBytes: Math.max(0, node.sizeBytes - removedSizeBytes),
       childCount: Math.max(0, node.childCount - directRemovals),
       children
     },
-    removed: true
+    removed: true,
+    removedSizeBytes
   }
 }
 

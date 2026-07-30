@@ -25,6 +25,10 @@ describe('model provider configuration', () => {
       .toBe('https://code.tczor.cn/v1')
     expect(normalizeProviderBaseUrl('google', 'https://generativelanguage.googleapis.com'))
       .toBe('https://generativelanguage.googleapis.com/v1beta')
+    expect(normalizeProviderBaseUrl('antigravity', 'https://code.tczor.cn'))
+      .toBe('https://code.tczor.cn/antigravity/v1beta')
+    expect(normalizeProviderBaseUrl('antigravity', 'https://code.tczor.cn/antigravity'))
+      .toBe('https://code.tczor.cn/antigravity/v1beta')
   })
 
   it('fetches, deduplicates, and naturally sorts OpenAI-compatible models', async () => {
@@ -59,12 +63,12 @@ describe('model provider configuration', () => {
     })
   })
 
-  it('uses Gemini-native routing and authentication for a custom Google proxy', async () => {
+  it('uses Gemini-native routing and authentication for Antigravity', async () => {
     const fetchProvider = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) => new Response(JSON.stringify({
       models: [{ name: 'models/gemini-2.5-pro' }]
     }), { status: 200 }))
     await discoverProviderModels({
-      ...discoveryInput('google'),
+      ...discoveryInput('antigravity'),
       baseUrl: 'https://code.tczor.cn/antigravity'
     }, fetchProvider)
 
@@ -74,8 +78,8 @@ describe('model provider configuration', () => {
     })
   })
 
-  it('does not duplicate an explicit Google API version', () => {
-    expect(normalizeProviderBaseUrl('google', 'https://code.tczor.cn/antigravity/v1beta'))
+  it('does not duplicate an explicit Antigravity API version', () => {
+    expect(normalizeProviderBaseUrl('antigravity', 'https://code.tczor.cn/antigravity/v1beta'))
       .toBe('https://code.tczor.cn/antigravity/v1beta')
   })
 
@@ -126,7 +130,7 @@ describe('model provider configuration', () => {
       error: { message: 'Unknown antigravity route' }
     }), { status: 404 }))
     await expect(discoverProviderModels({
-      ...discoveryInput('google'),
+      ...discoveryInput('antigravity'),
       baseUrl: 'https://code.tczor.cn/antigravity'
     }, fetchProvider)).rejects.toThrow(
       '请求地址：https://code.tczor.cn/antigravity/v1beta/models。服务响应：Unknown antigravity route'
