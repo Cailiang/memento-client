@@ -57,9 +57,12 @@ import {
 } from './service-cleanup'
 import {
   deleteStorageTarget,
+  deleteStorageTargets,
   isAllowedStorageCleanupTarget
 } from './storage-cleanup'
+import { validateLargeFileCleanupTarget } from './large-file-cleanup'
 import { brewCleanupVersionTargets, isSafeBrewVersion } from './brew-cleanup'
+import { reconcileScanCapabilities } from './scan-capability-reconciliation'
 import { fetchUpdateState } from './update-checker'
 import {
   applyTerminalFixGroup,
@@ -521,6 +524,31 @@ async function executeRegisteredAction(action: RegisteredAction): Promise<void> 
     return
   }
 
+  if (action.kind === 'delete-storage-group') {
+    if (
+      !action.targets.length ||
+      !action.targets.includes(action.target) ||
+      action.targets.some((target) => !isAllowedStorageCleanupTarget(target, os.homedir()))
+    ) {
+      throw new Error(mainText('存储目标未通过本地安全校验，请重新扫描', 'A storage target did not pass local validation. Scan again.'))
+    }
+    await deleteStorageTargets(action.targets)
+    return
+  }
+
+  if (action.kind === 'trash-large-file') {
+    await validateLargeFileCleanupTarget(
+      action.target,
+      action.expectedSizeBytes,
+      action.expectedModifiedAtMs
+    )
+    await shell.trashItem(action.target)
+    if (existsSync(action.target)) {
+      throw new Error(mainText('大文件仍在原位置，请重新扫描', 'The large file is still in its original location. Scan again.'))
+    }
+    return
+  }
+
   if (action.kind === 'trash') {
     if (!existsSync(action.target)) throw new Error(mainText('项目已不存在，可能已经被移动或删除', 'The item no longer exists. It may have been moved or deleted.'))
     await trashApplication(action.target)
@@ -666,7 +694,7 @@ function updateRegisteredActionsAfterExecution(action: RegisteredAction): void {
   if (action.kind !== 'trash-launch-agent-config') return
   const removedTargets = new Set(action.targets)
   for (const [id, registered] of registeredActions) {
-    if (!('targets' in registered)) continue
+    if (!('serviceTargets' in registered)) continue
     registered.targets = registered.targets.filter((target) => !removedTargets.has(target))
     registered.serviceTargets = registered.serviceTargets.filter(
       (target) => !removedTargets.has(target)
@@ -792,7 +820,13 @@ async function performScan(
   if (scanInProgress) throw new Error(mainText('扫描正在进行中', 'A scan is already in progress.'))
   scanInProgress = true
   try {
-    const scannedBundle = await runFullScan(onProgress ?? (() => undefined), language)
+    const scannedBundle = reconcileScanCapabilities(
+      {
+        actions: registeredActions,
+        terminalFixes: registeredTerminalFixes
+      },
+      await runFullScan(onProgress ?? (() => undefined), language)
+    )
     registeredApplicationIconTargets = new Map(
       scannedBundle.result.applications.flatMap((application) => {
         const target = scannedBundle.revealTargets.get(application.id)
@@ -1026,9 +1060,11 @@ app.whenReady().then(async () => {
       const scan = await performScan(appSettings.language, (progress) => {
         if (!event.sender.isDestroyed()) event.sender.send('memento:scan-progress', progress)
       })
+      const combinedResults = new Map(run.results.map((result) => [result.id, result]))
+      results.forEach((result) => combinedResults.set(result.id, result))
       const completed = agentStore!.updateRun(run.id, {
         status: 'completed',
-        results,
+        results: [...combinedResults.values()],
         error: results.some((result) => !result.ok)
           ? mainText('部分操作未能完成', 'Some operations could not be completed.')
           : null

@@ -8,6 +8,8 @@ export type RiskLevel = 'safe' | 'review' | 'protected'
 export type ActionKind =
   | 'trash'
   | 'delete-storage'
+  | 'delete-storage-group'
+  | 'trash-large-file'
   | 'stop-brew-service'
   | 'stop-launch-agent'
   | 'trash-launch-agent-config'

@@ -145,4 +145,47 @@ describe('LocalAgentRuntime boundaries', () => {
     expect(store.getRun(run.id)).toMatchObject({ status: 'cancelled', plan: [], error: null })
     store.close()
   })
+
+  it('keeps completed results while allowing another observed action to be added', () => {
+    const store = new AgentStore(temporaryDirectory())
+    const provider = store.saveProvider({
+      name: 'Provider', type: 'openai-compatible', baseUrl: 'https://models.example.com/v1',
+      model: 'model', apiKey: 'secret'
+    })
+    const scan: ScanResult = {
+      scanId: 'scan-actions', startedAt: '', completedAt: '',
+      system: {
+        hostname: 'Mac', osVersion: '15.0', diskTotalBytes: 100, diskFreeBytes: 50,
+        memoryTotalBytes: 100, memoryUsedBytes: 50, uptimeSeconds: 100
+      },
+      candidates: [{
+        id: 'cache', section: 'storage', name: 'Caches', subtitle: '', description: '',
+        risk: 'safe', status: 'Reclaimable', evidence: [],
+        operations: [
+          { id: 'cache-one', kind: 'delete-storage', label: 'Clean one', consequence: 'Delete one', reversible: false },
+          { id: 'cache-two', kind: 'delete-storage', label: 'Clean two', consequence: 'Delete two', reversible: false }
+        ]
+      }],
+      applications: [], ignoredApplications: [],
+      terminal: { shell: '/bin/zsh', baselineMs: 20, startupMs: 30, sampleCount: 3, configFiles: [], findings: [] },
+      warnings: []
+    }
+    const run = store.createRun('Clean caches', provider)
+    store.updateRun(run.id, {
+      status: 'completed',
+      plan: availablePlanItems(scan).filter((item) => item.id === 'cache-one'),
+      results: [{ id: 'cache-one', ok: true, message: 'Done' }]
+    })
+
+    const updated = new LocalAgentRuntime(store).addPlanItems({
+      runId: run.id,
+      itemIds: ['cache-two']
+    }, scan)
+    expect(updated).toMatchObject({
+      status: 'awaiting-confirmation',
+      plan: [{ id: 'cache-one' }, { id: 'cache-two' }],
+      results: [{ id: 'cache-one', ok: true }]
+    })
+    store.close()
+  })
 })

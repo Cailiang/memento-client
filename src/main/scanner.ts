@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
 import { promises as fs } from 'node:fs'
+import type { Dirent, Stats } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
@@ -50,8 +51,19 @@ function t(language: AppLanguage, chinese: string, english: string): string {
 
 export type RegisteredAction =
   | {
-      kind: Exclude<ActionKind, 'trash-launch-agent-config' | 'trash-service-software' | 'trash-service-directory' | 'brew-cleanup'>
+      kind: Exclude<ActionKind, 'trash-launch-agent-config' | 'trash-service-software' | 'trash-service-directory' | 'brew-cleanup' | 'delete-storage-group' | 'trash-large-file'>
       target: string
+    }
+  | {
+      kind: 'delete-storage-group'
+      target: string
+      targets: string[]
+    }
+  | {
+      kind: 'trash-large-file'
+      target: string
+      expectedSizeBytes: number
+      expectedModifiedAtMs: number
     }
   | {
       kind: 'brew-cleanup'
@@ -740,6 +752,74 @@ interface StorageDefinition {
   action?: boolean
 }
 
+interface StorageGroupDefinition {
+  name: { zh: string; en: string }
+  description: { zh: string; en: string }
+  targets: string[]
+}
+
+const storageGroupDefinitions: StorageGroupDefinition[] = [
+  {
+    name: { zh: 'Claude 可重建缓存', en: 'Claude rebuildable caches' },
+    description: { zh: 'Claude Desktop 与 Claude Code 的网页、GPU、MCP 日志和下载缓存；不会删除登录、配置、对话或项目文件。', en: 'Web, GPU, MCP log, and download caches from Claude Desktop and Claude Code. Login, settings, conversations, and projects are preserved.' },
+    targets: [
+      path.join(HOME, 'Library/Caches/com.anthropic.claudefordesktop'),
+      path.join(HOME, 'Library/Caches/claude-cli-nodejs'),
+      path.join(HOME, 'Library/Application Support/Claude/Cache'),
+      path.join(HOME, 'Library/Application Support/Claude/Code Cache'),
+      path.join(HOME, 'Library/Application Support/Claude/GPUCache'),
+      path.join(HOME, 'Library/Application Support/Claude/Service Worker/CacheStorage'),
+      path.join(HOME, 'Library/Application Support/Claude/Shared Dictionary/cache'),
+      path.join(HOME, '.claude/cache')
+    ]
+  },
+  {
+    name: { zh: 'Codex 可重建缓存', en: 'Codex rebuildable caches' },
+    description: { zh: 'Codex App 与 Codex CLI 的浏览器、GPU、日志和临时缓存；不会删除配置、凭据、会话或项目文件。', en: 'Browser, GPU, log, and temporary caches from Codex App and Codex CLI. Settings, credentials, sessions, and projects are preserved.' },
+    targets: [
+      path.join(HOME, 'Library/Caches/Codex'),
+      path.join(HOME, 'Library/Caches/com.openai.codex'),
+      path.join(HOME, 'Library/Application Support/Codex/Default/Cache'),
+      path.join(HOME, 'Library/Application Support/Codex/Default/Code Cache'),
+      path.join(HOME, 'Library/Application Support/Codex/Default/GPUCache'),
+      path.join(HOME, 'Library/Application Support/Codex/codex-browser-app/Cache'),
+      path.join(HOME, 'Library/Application Support/Codex/codex-browser-app/Code Cache'),
+      path.join(HOME, 'Library/Application Support/Codex/codex-browser-app/GPUCache'),
+      path.join(HOME, 'Library/Application Support/Codex/GPUPersistentCache/GPUCache'),
+      path.join(HOME, '.codex/log'),
+      path.join(HOME, '.codex/tmp')
+    ]
+  },
+  {
+    name: { zh: 'Antigravity 可重建缓存', en: 'Antigravity rebuildable caches' },
+    description: { zh: 'Antigravity 的编辑器、扩展、网页和 GPU 缓存；不会删除工作区、账号或供应商配置。', en: 'Editor, extension, web, and GPU caches from Antigravity. Workspaces, accounts, and provider settings are preserved.' },
+    targets: [
+      path.join(HOME, 'Library/Caches/com.google.antigravity'),
+      path.join(HOME, 'Library/Caches/com.google.antigravity-ide'),
+      ...['Antigravity', 'Antigravity IDE'].flatMap((directory) => [
+        path.join(HOME, 'Library/Application Support', directory, 'Cache'),
+        path.join(HOME, 'Library/Application Support', directory, 'CachedData'),
+        path.join(HOME, 'Library/Application Support', directory, 'Code Cache'),
+        path.join(HOME, 'Library/Application Support', directory, 'GPUCache'),
+        path.join(HOME, 'Library/Application Support', directory, 'Service Worker/CacheStorage'),
+        path.join(HOME, 'Library/Application Support', directory, 'Shared Dictionary/cache')
+      ])
+    ]
+  },
+  {
+    name: { zh: 'Grok 可重建缓存', en: 'Grok rebuildable caches' },
+    description: { zh: 'Grok 客户端的网页与 GPU 缓存；不会删除登录、对话或设置。', en: 'Web and GPU caches from Grok clients. Login, conversations, and settings are preserved.' },
+    targets: [
+      path.join(HOME, 'Library/Caches/ai.x.grok'),
+      path.join(HOME, 'Library/Caches/com.xai.grok'),
+      path.join(HOME, 'Library/Application Support/Grok/Cache'),
+      path.join(HOME, 'Library/Application Support/Grok/Code Cache'),
+      path.join(HOME, 'Library/Application Support/Grok/GPUCache'),
+      path.join(HOME, 'Library/Application Support/Grok/Service Worker/CacheStorage')
+    ]
+  }
+]
+
 const storageDefinitions: StorageDefinition[] = [
   {
     name: { zh: 'Xcode DerivedData', en: 'Xcode DerivedData' },
@@ -758,6 +838,13 @@ const storageDefinitions: StorageDefinition[] = [
     name: { zh: 'iOS DeviceSupport', en: 'iOS DeviceSupport' },
     target: path.join(HOME, 'Library/Developer/Xcode/iOS DeviceSupport'),
     description: { zh: '连接过的 iOS 版本调试支持文件，可按需重新生成。', en: 'Debug support files for previously connected iOS versions. They can be regenerated when needed.' },
+    risk: 'safe',
+    action: true
+  },
+  {
+    name: { zh: 'iOS 模拟器缓存', en: 'iOS simulator caches' },
+    target: path.join(HOME, 'Library/Developer/CoreSimulator/Caches'),
+    description: { zh: '模拟器运行时生成的可重建缓存，不会删除模拟器设备或其中的应用数据。', en: 'Rebuildable simulator runtime caches. Simulator devices and their application data are preserved.' },
     risk: 'safe',
     action: true
   },
@@ -862,6 +949,60 @@ async function scanDefinedStorage(
   return inspected.filter((item): item is ScanCandidate => item !== null)
 }
 
+async function scanStorageGroups(
+  actions: Map<string, RegisteredAction>,
+  revealTargets: Map<string, string>,
+  language: AppLanguage
+): Promise<ScanCandidate[]> {
+  const inspected = await mapLimit(storageGroupDefinitions, 2, async (definition) => {
+    const existing = (await mapLimit(definition.targets, 4, async (target) => {
+      try {
+        const stats = await fs.lstat(target)
+        if (stats.isSymbolicLink()) return null
+        return { target, stats, sizeBytes: await getPathSize(target) }
+      } catch {
+        return null
+      }
+    })).filter((item): item is { target: string; stats: Stats; sizeBytes: number } => item !== null)
+    const sizeBytes = existing.reduce((sum, item) => sum + item.sizeBytes, 0)
+    if (!existing.length || sizeBytes < 5 * 1024 * 1024) return null
+    const targets = existing.map((item) => item.target)
+    const latestModifiedAt = new Date(Math.max(...existing.map((item) => item.stats.mtimeMs)))
+    return registerCandidate(
+      actions,
+      {
+        section: 'storage',
+        name: language === 'en-US' ? definition.name.en : definition.name.zh,
+        subtitle: t(language, `AI 客户端缓存 · ${targets.length} 个目录`, `AI client caches · ${targets.length} folders`),
+        description: language === 'en-US' ? definition.description.en : definition.description.zh,
+        sizeBytes,
+        ageDays: ageInDays(latestModifiedAt),
+        risk: 'safe',
+        status: t(language, '可安全重建', 'Safely rebuildable'),
+        location: displayPath(path.dirname(targets[0])),
+        evidence: [
+          t(language, `合计占用 ${formatBytesForEvidence(sizeBytes)}`, `Total size: ${formatBytesForEvidence(sizeBytes)}`),
+          ...existing.slice(0, 5).map((item) => (
+            `${displayPath(item.target)} · ${formatBytesForEvidence(item.sizeBytes)}`
+          ))
+        ],
+        action: {
+          kind: 'delete-storage-group',
+          label: t(language, '清理 AI 缓存', 'Clean AI caches'),
+          consequence: t(language, '只会永久删除上面列出的可重建缓存目录，客户端下次启动时可能重新下载内容。', 'Only the listed rebuildable cache folders are permanently removed. The clients may download content again on next launch.'),
+          reversible: false,
+          estimatedBytes: sizeBytes
+        }
+      },
+      { kind: 'delete-storage-group', target: targets[0], targets },
+      [],
+      revealTargets,
+      targets[0]
+    )
+  })
+  return inspected.filter((item): item is ScanCandidate => item !== null)
+}
+
 function formatBytesForEvidence(bytes: number): string {
   if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`
   return `${Math.max(1, Math.round(bytes / 1024 ** 2))} MB`
@@ -929,6 +1070,166 @@ async function scanApplicationCaches(
     .filter((item): item is ScanCandidate => item !== null)
     .sort((a, b) => (b.sizeBytes ?? 0) - (a.sizeBytes ?? 0))
     .slice(0, 16)
+}
+
+async function scanApplicationLogs(
+  actions: Map<string, RegisteredAction>,
+  revealTargets: Map<string, string>,
+  language: AppLanguage
+): Promise<ScanCandidate[]> {
+  const logRoot = path.join(HOME, 'Library/Logs')
+  let entries: Dirent[]
+  try {
+    entries = await fs.readdir(logRoot, { withFileTypes: true })
+  } catch {
+    return []
+  }
+  const inspected = await mapLimit(entries.slice(0, 120), 6, async (entry) => {
+    if (entry.isSymbolicLink() || entry.name.startsWith('com.apple.')) return null
+    const target = path.join(logRoot, entry.name)
+    try {
+      const [stats, sizeBytes] = await Promise.all([fs.lstat(target), getPathSize(target)])
+      if (stats.isSymbolicLink() || sizeBytes < 25 * 1024 * 1024) return null
+      return registerCandidate(
+        actions,
+        {
+          section: 'storage',
+          name: entry.name,
+          subtitle: t(language, '应用日志', 'Application logs'),
+          description: t(language, '应用生成的诊断和运行日志；清理不会删除文稿或设置，但会失去旧的故障排查记录。', 'Diagnostic and runtime logs generated by applications. Documents and settings are preserved, but old troubleshooting records are removed.'),
+          sizeBytes,
+          ageDays: ageInDays(stats.mtime),
+          risk: 'review',
+          status: t(language, '建议确认', 'Review first'),
+          location: displayPath(target),
+          evidence: [
+            t(language, `占用 ${formatBytesForEvidence(sizeBytes)}`, `Size: ${formatBytesForEvidence(sizeBytes)}`),
+            t(language, `最近修改于 ${ageInDays(stats.mtime)} 天前`, `Last modified ${ageInDays(stats.mtime)} days ago`)
+          ],
+          action: {
+            kind: 'delete-storage',
+            label: t(language, '永久清理日志', 'Delete logs permanently'),
+            consequence: t(language, '该应用的旧日志会永久删除并立即释放空间，文稿和设置不受影响。', 'Old logs from this application are permanently removed to release space. Documents and settings are not affected.'),
+            reversible: false,
+            estimatedBytes: sizeBytes
+          }
+        },
+        { kind: 'delete-storage', target },
+        [],
+        revealTargets,
+        target
+      )
+    } catch {
+      return null
+    }
+  })
+  return inspected
+    .filter((item): item is ScanCandidate => item !== null)
+    .sort((left, right) => (right.sizeBytes ?? 0) - (left.sizeBytes ?? 0))
+    .slice(0, 12)
+}
+
+interface LargeUserFile {
+  target: string
+  sizeBytes: number
+  modifiedAt: Date
+  modifiedAtMs: number
+  source: 'Downloads' | 'Desktop' | 'Movies'
+}
+
+async function findLargeUserFiles(): Promise<LargeUserFile[]> {
+  const queue = (['Downloads', 'Desktop', 'Movies'] as const).map((source) => ({
+    directory: path.join(HOME, source),
+    depth: 0,
+    source
+  }))
+  const found: LargeUserFile[] = []
+  let visited = 0
+  while (queue.length && visited < 5_000) {
+    const current = queue.shift()!
+    let entries: Dirent[]
+    try {
+      entries = await fs.readdir(current.directory, { withFileTypes: true })
+    } catch {
+      continue
+    }
+    for (const entry of entries) {
+      visited += 1
+      if (visited > 5_000) break
+      if (entry.isSymbolicLink()) continue
+      const target = path.join(current.directory, entry.name)
+      if (entry.isDirectory()) {
+        if (
+          current.depth < 3 &&
+          !entry.name.startsWith('.') &&
+          !entry.name.toLowerCase().endsWith('.app')
+        ) {
+          queue.push({ ...current, directory: target, depth: current.depth + 1 })
+        }
+        continue
+      }
+      if (!entry.isFile()) continue
+      try {
+        const stats = await fs.lstat(target)
+        if (
+          stats.isSymbolicLink() ||
+          stats.size < 500 * 1024 * 1024 ||
+          ageInDays(stats.mtime) < 7
+        ) continue
+        found.push({
+          target,
+          sizeBytes: stats.size,
+          modifiedAt: stats.mtime,
+          modifiedAtMs: stats.mtimeMs,
+          source: current.source
+        })
+      } catch {
+        // Files can disappear while the user is downloading or organizing them.
+      }
+    }
+  }
+  return found.sort((left, right) => right.sizeBytes - left.sizeBytes).slice(0, 12)
+}
+
+async function scanLargeUserFiles(
+  actions: Map<string, RegisteredAction>,
+  revealTargets: Map<string, string>,
+  language: AppLanguage
+): Promise<ScanCandidate[]> {
+  return (await findLargeUserFiles()).map((file) => registerCandidate(
+    actions,
+    {
+      section: 'storage',
+      name: path.basename(file.target),
+      subtitle: t(language, `${file.source} 中的大文件`, `Large file in ${file.source}`),
+      description: t(language, '这是用户目录中的大文件。Memento 不判断内容是否仍有用，只在你确认后将它移到废纸篓。', 'This is a large file in a user folder. Memento does not decide whether its contents are still useful and moves it to the Trash only after confirmation.'),
+      sizeBytes: file.sizeBytes,
+      ageDays: ageInDays(file.modifiedAt),
+      risk: 'review',
+      status: t(language, '手动确认', 'Manual review'),
+      location: displayPath(file.target),
+      evidence: [
+        t(language, `占用 ${formatBytesForEvidence(file.sizeBytes)}`, `Size: ${formatBytesForEvidence(file.sizeBytes)}`),
+        t(language, `最近修改于 ${ageInDays(file.modifiedAt)} 天前`, `Last modified ${ageInDays(file.modifiedAt)} days ago`)
+      ],
+      action: {
+        kind: 'trash-large-file',
+        label: t(language, '移到废纸篓', 'Move to Trash'),
+        consequence: t(language, '文件会移到当前用户的废纸篓，不会直接永久删除；确认无误后可在 Finder 清空废纸篓。', 'The file moves to the current user’s Trash and is not deleted permanently. Empty the Trash in Finder after reviewing it.'),
+        reversible: true,
+        estimatedBytes: file.sizeBytes
+      }
+    },
+    {
+      kind: 'trash-large-file',
+      target: file.target,
+      expectedSizeBytes: file.sizeBytes,
+      expectedModifiedAtMs: file.modifiedAtMs
+    },
+    [],
+    revealTargets,
+    file.target
+  ))
 }
 
 async function scanBrewVersions(
@@ -1040,13 +1341,19 @@ async function scanStorage(
   revealTargets: Map<string, string>,
   language: AppLanguage
 ): Promise<ScanCandidate[]> {
-  const definedTargets = new Set(storageDefinitions.map((item) => item.target))
-  const [defined, caches, brewVersions] = await Promise.all([
+  const definedTargets = new Set([
+    ...storageDefinitions.map((item) => item.target),
+    ...storageGroupDefinitions.flatMap((item) => item.targets)
+  ])
+  const [defined, groups, caches, logs, largeFiles, brewVersions] = await Promise.all([
     scanDefinedStorage(actions, revealTargets, language),
+    scanStorageGroups(actions, revealTargets, language),
     scanApplicationCaches(actions, revealTargets, definedTargets, language),
+    scanApplicationLogs(actions, revealTargets, language),
+    scanLargeUserFiles(actions, revealTargets, language),
     scanBrewVersions(actions, revealTargets, language)
   ])
-  return [...defined, ...caches, ...brewVersions].sort(
+  return [...defined, ...groups, ...caches, ...logs, ...largeFiles, ...brewVersions].sort(
     (a, b) => (b.sizeBytes ?? 0) - (a.sizeBytes ?? 0)
   )
 }

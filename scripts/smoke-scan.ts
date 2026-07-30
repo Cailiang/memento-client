@@ -104,7 +104,16 @@ process.stdout.write(
         (candidate) => candidate.section === 'storage' && candidate.location
       ).length,
       permanentStorageActions: bundle.result.candidates.filter(
-        (candidate) => candidate.section === 'storage' && candidate.action?.kind === 'delete-storage'
+        (candidate) => candidate.section === 'storage' && (
+          candidate.action?.kind === 'delete-storage' ||
+          candidate.action?.kind === 'delete-storage-group'
+        )
+      ).length,
+      aiCacheGroups: bundle.result.candidates
+        .filter((candidate) => candidate.section === 'storage' && candidate.action?.kind === 'delete-storage-group')
+        .map((candidate) => ({ name: candidate.name, sizeBytes: candidate.sizeBytes ?? 0 })),
+      largeUserFiles: bundle.result.candidates.filter(
+        (candidate) => candidate.section === 'storage' && candidate.action?.kind === 'trash-large-file'
       ).length,
       terminal: {
         baselineMs: bundle.result.terminal.baselineMs,

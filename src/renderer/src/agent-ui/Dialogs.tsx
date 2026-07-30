@@ -118,12 +118,14 @@ export function DirectActionConfirmDialog({
 
 export function ExecutionProgressDialog({
   phase,
+  progress,
   itemCount,
   completedCount,
   detail,
   onClose
 }: {
   phase: ExecutionPhase
+  progress: number
   itemCount: number
   completedCount: number
   detail: string
@@ -131,7 +133,7 @@ export function ExecutionProgressDialog({
 }): React.JSX.Element {
   const { text } = useI18n()
   const finished = phase === 'completed' || phase === 'failed'
-  const progress = phase === 'executing' ? 32 : phase === 'verifying' ? 78 : 100
+  const progressValue = Math.max(0, Math.min(100, Math.round(progress)))
   const title = phase === 'executing'
     ? text('正在执行已确认的操作', 'Running confirmed actions')
     : phase === 'verifying'
@@ -164,8 +166,8 @@ export function ExecutionProgressDialog({
           : phase === 'verifying'
             ? text('正在重新扫描相关项目，确认操作已经生效。', 'Scanning the affected items to confirm the changes.')
             : detail}</small></div>
-        <div className="execution-progress-head"><span>{stage}</span><strong>{progress}%</strong></div>
-        <div className="execution-progress-track" role="progressbar" aria-label={text('处理进度', 'Action progress')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}><span style={{ width: `${progress}%` }} /></div>
+        <div className="execution-progress-head"><span>{stage}</span><strong>{progressValue}%</strong></div>
+        <div className="execution-progress-track" role="progressbar" aria-label={text('处理进度', 'Action progress')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressValue}><span style={{ width: `${progressValue}%` }} /></div>
         <div className="execution-steps"><span className="is-active">{text('执行', 'Run')}</span><span className={phase !== 'executing' ? 'is-active' : ''}>{text('复检', 'Verify')}</span><span className={finished ? 'is-active' : ''}>{text('完成', 'Done')}</span></div>
         {finished && <div className="execution-result"><strong>{completedCount} / {itemCount}</strong><span>{text('项操作完成', 'actions completed')}</span></div>}
       </div>

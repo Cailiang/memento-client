@@ -2,7 +2,11 @@ import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { deleteStorageTarget, isAllowedStorageCleanupTarget } from './storage-cleanup'
+import {
+  deleteStorageTarget,
+  deleteStorageTargets,
+  isAllowedStorageCleanupTarget
+} from './storage-cleanup'
 
 describe('storage cleanup', () => {
   it('permanently removes a scanned application cache', async () => {
@@ -30,6 +34,24 @@ describe('storage cleanup', () => {
 
       expect(isAllowedStorageCleanupTarget(cacheRoot, home)).toBe(false)
       await expect(deleteStorageTarget(target, home)).rejects.toThrow('Symbolic links')
+    } finally {
+      await fs.rm(home, { recursive: true, force: true })
+    }
+  })
+
+  it('removes only the allowlisted cache folders in an AI client group', async () => {
+    const home = await fs.mkdtemp(path.join(os.tmpdir(), 'memento-storage-ai-'))
+    try {
+      const cache = path.join(home, 'Library', 'Application Support', 'Claude', 'Cache')
+      const settings = path.join(home, 'Library', 'Application Support', 'Claude', 'config.json')
+      await fs.mkdir(cache, { recursive: true })
+      await fs.writeFile(path.join(cache, 'cache.bin'), 'cache')
+      await fs.writeFile(settings, 'settings')
+
+      expect(isAllowedStorageCleanupTarget(cache, home)).toBe(true)
+      await deleteStorageTargets([cache], home)
+      await expect(fs.lstat(cache)).rejects.toMatchObject({ code: 'ENOENT' })
+      await expect(fs.readFile(settings, 'utf8')).resolves.toBe('settings')
     } finally {
       await fs.rm(home, { recursive: true, force: true })
     }

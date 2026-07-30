@@ -30,6 +30,12 @@ export function selectExecutablePlanItems(
   if (!requestedIds.length || requestedIds.some((id) => !allowedIds.has(id))) {
     throw new Error(english ? 'The action plan contains invalid operations.' : '处理计划包含无效操作')
   }
+  const completedIds = new Set(run.results.filter((result) => result.ok).map((result) => result.id))
+  if (requestedIds.some((id) => completedIds.has(id))) {
+    throw new Error(english
+      ? 'A completed operation cannot be run again.'
+      : '已完成的操作不能重复执行')
+  }
   return {
     run,
     items: run.plan.filter((item) => requestedIds.includes(item.id))

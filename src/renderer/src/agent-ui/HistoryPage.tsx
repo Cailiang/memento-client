@@ -1,4 +1,5 @@
-import { ChevronRight, Download, History, Trash2 } from 'lucide-react'
+import { ChevronRight, History, Search, Trash2 } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import type { AgentRunRecord } from '../../../shared/agent-types'
 import { useI18n } from '../i18n'
 import { formatBytes, formatDateTime, runStatusLabel } from './utils'
@@ -6,38 +7,40 @@ import { formatBytes, formatDateTime, runStatusLabel } from './utils'
 export function HistoryPage({
   runs,
   onOpenRun,
-  onDeleteRun,
-  onToast
+  onDeleteRun
 }: {
   runs: AgentRunRecord[]
   onOpenRun: (run: AgentRunRecord) => void
   onDeleteRun: (run: AgentRunRecord) => void
-  onToast: (message: string) => void
 }): React.JSX.Element {
   const { language, text } = useI18n()
-
-  const exportRuns = (): void => {
-    const source = JSON.stringify(runs, null, 2)
-    const url = URL.createObjectURL(new Blob([source], { type: 'application/json' }))
-    const anchor = document.createElement('a')
-    anchor.href = url
-    anchor.download = `memento-agent-history-${new Date().toISOString().slice(0, 10)}.json`
-    anchor.click()
-    URL.revokeObjectURL(url)
-    onToast(text('已导出任务记录', 'Task history exported'))
-  }
+  const [query, setQuery] = useState('')
+  const filteredRuns = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase()
+    if (!normalized) return runs
+    return runs.filter((run) => [
+      run.prompt,
+      run.providerName,
+      run.model,
+      runStatusLabel(run.status, language),
+      run.response ?? '',
+      run.error ?? ''
+    ].some((value) => value.toLocaleLowerCase().includes(normalized)))
+  }, [language, query, runs])
 
   return (
     <section className="page content-page is-active">
       <div className="page-command-bar">
-        <span className="page-command-summary">{text(`共 ${runs.length} 条本机任务记录`, `${runs.length} local task records`)}</span>
-        <div className="page-command-actions"><button type="button" className="secondary-button" onClick={exportRuns} disabled={!runs.length}><Download size={16} />{text('导出', 'Export')}</button></div>
+        <span className="page-command-summary">{query.trim()
+          ? text(`找到 ${filteredRuns.length} 条，共 ${runs.length} 条任务记录`, `${filteredRuns.length} of ${runs.length} task records`)
+          : text(`共 ${runs.length} 条本机任务记录`, `${runs.length} local task records`)}</span>
+        <label className="search-field history-search"><Search size={16} /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={text('搜索任务、模型或状态', 'Search tasks, models, or status')} aria-label={text('搜索任务记录', 'Search task history')} /></label>
       </div>
 
-      {runs.length ? (
+      {filteredRuns.length ? (
         <div className="history-table">
           <div className="history-head"><span>{text('任务', 'Task')}</span><span>{text('状态', 'Status')}</span><span>{text('时间', 'Time')}</span><span>{text('结果', 'Result')}</span><span /></div>
-          {runs.map((run) => {
+          {filteredRuns.map((run) => {
             const reclaimed = run.plan.reduce((sum, item) => sum + item.estimatedBytes, 0)
             return (
               <div className="history-entry" key={run.id}>
@@ -60,7 +63,7 @@ export function HistoryPage({
           })}
         </div>
       ) : (
-        <div className="history-empty"><History size={20} /><strong>{text('还没有任务记录', 'No task history yet')}</strong><span>{text('在 Agent 页面开始第一个任务。', 'Start the first task from Agent.')}</span></div>
+        <div className="history-empty">{query.trim() ? <Search size={20} /> : <History size={20} />}<strong>{query.trim() ? text('没有匹配的任务', 'No matching tasks') : text('还没有任务记录', 'No task history yet')}</strong><span>{query.trim() ? text('尝试搜索任务内容、模型名称或状态。', 'Try a task, model, or status.') : text('在 Agent 页面开始第一个任务。', 'Start the first task from Agent.')}</span></div>
       )}
     </section>
   )

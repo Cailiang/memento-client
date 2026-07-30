@@ -64,7 +64,7 @@ function demoOperationCopy(
   if (kind.startsWith('stop-')) {
     return { label: 'Stop service', consequence: 'Stop the registered background service.' }
   }
-  if (kind === 'trash') {
+  if (kind === 'trash' || kind === 'trash-large-file') {
     return { label: 'Move to Trash', consequence: 'Move the registered item to the Trash.' }
   }
   if (kind === 'brew-cleanup') {
@@ -244,7 +244,15 @@ interface ExecutionState {
   itemCount: number
   completedCount: number
   detail: string
+  progress: number
+  itemIds: string[]
   runId?: string
+}
+
+function waitForNextPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => resolve()))
+  })
 }
 
 function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSettings['language']) => void }): React.JSX.Element {
@@ -323,7 +331,16 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
   }, [scanBusy, settings.language])
 
   useEffect(() => {
-    const unsubscribeProgress = window.memento?.onScanProgress(setProgress)
+    const unsubscribeProgress = window.memento?.onScanProgress((scanProgress) => {
+      setProgress(scanProgress)
+      setExecutionState((current) => current?.phase === 'verifying'
+        ? {
+            ...current,
+            progress: Math.min(96, 44 + Math.round(scanProgress.progress * 0.52)),
+            detail: scanProgress.message
+          }
+        : current)
+    })
     const unsubscribeUpdate = window.memento?.onUpdateState(setUpdateState)
     const unsubscribeAgent = window.memento?.onAgentRunEvent((event: AgentRunEvent) => {
       if (event.type === 'status') {
@@ -338,7 +355,10 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
           ? {
               ...current,
               phase: event.status === 'verifying' ? 'verifying' : 'executing',
-              detail: event.message
+              detail: event.message,
+              progress: event.status === 'verifying'
+                ? Math.max(current.progress, 44)
+                : Math.max(current.progress, 16)
             }
           : current)
         return
@@ -349,13 +369,16 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
         setRunStatusMessage(event.type === 'failed'
           ? event.run.error ?? (event.run.language === 'en-US' ? 'Task failed' : '任务失败')
           : '')
-        setSelectedPlanIds(new Set(event.run.plan.map((item) => item.id)))
+        setSelectedPlanIds(new Set())
       }
       setExecutionState((current) => current?.runId === event.run.id
         ? {
             ...current,
             phase: event.type === 'failed' ? 'failed' : 'completed',
-            completedCount: event.run.results.filter((item) => item.ok).length,
+            completedCount: event.run.results.filter((item) => (
+              item.ok && current.itemIds.includes(item.id)
+            )).length,
+            progress: 100,
             detail: event.run.error ?? (event.run.language === 'en-US'
               ? 'Verification finished.'
               : '复检已经完成。')
@@ -496,22 +519,27 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       return
     }
     const runId = activeRun.id
-    const itemCount = selectedPlanIds.size
+    const itemIds = [...selectedPlanIds]
+    const itemCount = itemIds.length
     setExecutionState({
       phase: 'executing',
       itemCount,
       completedCount: 0,
+      progress: 8,
+      itemIds,
       detail: settings.language === 'en-US'
         ? 'Running the actions you confirmed.'
         : '正在执行你已经确认的操作。',
       runId
     })
+    await waitForNextPaint()
     try {
       if (!window.memento) {
         await new Promise<void>((resolve) => window.setTimeout(resolve, 520))
         setExecutionState((current) => current?.runId === runId ? {
           ...current,
           phase: 'verifying',
+          progress: 44,
           detail: settings.language === 'en-US'
             ? 'Scanning again to verify the results.'
             : '正在重新体检并验证结果。'
@@ -529,10 +557,13 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
         }
         setActiveRun(completed)
         setRuns((current) => [completed, ...current.filter((run) => run.id !== completed.id)])
+        setSelectedPlanIds(new Set())
         setExecutionState({
           phase: 'completed',
           itemCount,
           completedCount: itemCount,
+          progress: 100,
+          itemIds,
           detail: settings.language === 'en-US'
             ? 'The actions completed and verification passed.'
             : '操作已经完成，复检结果正常。',
@@ -545,15 +576,18 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       }
       const executed = await window.memento.executeAgentPlan({
         runId: activeRun.id,
-        itemIds: [...selectedPlanIds]
+        itemIds
       })
       setActiveRun(executed.run)
       setResult(executed.scan)
       setRuns((current) => [executed.run, ...current.filter((run) => run.id !== executed.run.id)])
+      const selectedResults = executed.run.results.filter((item) => itemIds.includes(item.id))
       setExecutionState({
-        phase: executed.run.results.some((item) => !item.ok) ? 'failed' : 'completed',
+        phase: selectedResults.some((item) => !item.ok) ? 'failed' : 'completed',
         itemCount,
-        completedCount: executed.run.results.filter((item) => item.ok).length,
+        completedCount: selectedResults.filter((item) => item.ok).length,
+        progress: 100,
+        itemIds,
         detail: executed.run.error ?? (settings.language === 'en-US'
           ? 'The actions completed and verification passed.'
           : '操作已经完成，复检结果正常。'),
@@ -569,6 +603,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       setExecutionState((current) => current?.runId === runId ? {
         ...current,
         phase: 'failed',
+        progress: 100,
         detail: message
       } : current)
       setToast(message)
@@ -616,8 +651,11 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       phase: 'executing',
       itemCount: 1,
       completedCount: 0,
+      progress: 8,
+      itemIds: [action.id],
       detail: appText(`正在执行“${action.label}”。`, `Running "${action.label}".`)
     })
+    await waitForNextPaint()
     try {
       const results = window.memento
         ? action.kind === 'terminal-fix'
@@ -635,6 +673,8 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
         phase: 'verifying',
         itemCount: 1,
         completedCount,
+        progress: 44,
+        itemIds: [action.id],
         detail: appText('正在重新体检并验证结果。', 'Scanning again to verify the result.')
       })
       setScanBusy(true)
@@ -647,6 +687,8 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
         phase: failure ? 'failed' : 'completed',
         itemCount: 1,
         completedCount,
+        progress: 100,
+        itemIds: [action.id],
         detail: failure?.message ?? appText(
           `“${action.label}”已完成，复检结果正常。`,
           `"${action.label}" completed and verification passed.`
@@ -660,6 +702,8 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
         phase: 'failed',
         itemCount: 1,
         completedCount: 0,
+        progress: 100,
+        itemIds: [action.id],
         detail: message
       })
       setToast(message)
@@ -698,6 +742,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
 
   const addAgentPlanItem = async (id: string): Promise<void> => {
     if (!activeRun || addingOperationId) return
+    const wasFinished = ['completed', 'failed', 'cancelled'].includes(activeRun.status)
     setAddingOperationId(id)
     try {
       let updated: AgentRunRecord
@@ -719,7 +764,10 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       }
       setActiveRun(updated)
       setRuns((current) => [updated, ...current.filter((run) => run.id !== updated.id)])
-      setSelectedPlanIds(new Set(updated.plan.map((item) => item.id)))
+      const completedIds = new Set(updated.results.filter((item) => item.ok).map((item) => item.id))
+      setSelectedPlanIds(wasFinished
+        ? new Set([id])
+        : new Set(updated.plan.filter((item) => !completedIds.has(item.id)).map((item) => item.id)))
       setRunStatusMessage(settings.language === 'en-US' ? 'Added to the confirmation plan' : '已加入确认计划')
     } catch (error) {
       setToast(error instanceof Error
@@ -1073,11 +1121,11 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       {view === 'agent' && <AgentPage scan={result} run={activeRun} conversationRuns={conversationRuns} statusMessage={runStatusMessage} selectedPlanIds={selectedPlanIds} providerConfigured={Boolean(defaultProvider)} addingOperationId={addingOperationId} openingApplicationId={openingApplicationId} returnLabel={agentOriginLabel} onSubmit={startAgentRun} onNewTask={() => { setActiveRun(null); activeRunId.current = null; setSelectedPlanIds(new Set()); setRunStatusMessage(''); setAgentOrigin(null) }} onOpenHistory={() => setView('history')} onOpenSettings={() => setView('settings')} onReturn={returnToAgentOrigin} onOpenApplication={openAgentApplication} onAddPlanItem={(id) => void addAgentPlanItem(id)} onTogglePlanItem={(id) => setSelectedPlanIds((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next })} onExecutePlan={() => void executePlan()} onDiscardPlan={discardPlan} />}
       {view === 'health' && <HealthPage result={result} settings={settings} scanBusy={scanBusy} progress={progress} tab={healthTab} restoreTarget={restoreTarget?.view === 'health' ? restoreTarget : null} onRestoreComplete={() => setRestoreTarget(null)} onScan={() => void scanNow()} onTabChange={setHealthTab} onAgentPrompt={(prompt, origin: HealthAgentOrigin) => startAgentRun(prompt, { origin: { view: 'health', ...origin } })} onDirectAction={requestDirectAction} onDirectTerminalFix={requestDirectTerminalFix} onIgnore={setPendingIgnore} onManageIgnored={openIgnoredManager} />}
       {view === 'apps' && <ApplicationsPage applications={result?.applications ?? []} openingId={openingApplicationId} removingId={removingApplicationId} restoreTarget={restoreTarget?.view === 'apps' ? restoreTarget : null} onRestoreComplete={() => setRestoreTarget(null)} ignoredCount={settings.applicationWhitelist.length} onOpen={(application) => void openApplication(application)} onUninstall={setPendingUninstall} onIgnore={setPendingApplicationIgnore} onManageIgnored={() => openIgnoredManager('applications')} onAgentPrompt={(prompt, origin) => startAgentRun(prompt, { isolated: true, origin: { view: 'apps', ...origin } })} />}
-      {view === 'history' && <HistoryPage runs={runs} onOpenRun={(run) => { setActiveRun(run); activeRunId.current = run.id; setSelectedPlanIds(new Set(run.plan.map((item) => item.id))); setView('agent') }} onDeleteRun={setPendingHistoryDelete} onToast={setToast} />}
+      {view === 'history' && <HistoryPage runs={runs} onOpenRun={(run) => { setActiveRun(run); activeRunId.current = run.id; setSelectedPlanIds(new Set()); setView('agent') }} onDeleteRun={setPendingHistoryDelete} />}
       {view === 'settings' && <SettingsPage settings={settings} providers={providers} appVersion={appVersion} updateState={updateState} onUpdateSettings={updateSettings} onDiscoverModels={discoverProviderModels} onSaveProvider={saveProvider} onTestProvider={testProvider} onDeleteProvider={deleteProvider} onSetDefaultProvider={setDefaultProvider} onImportCcSwitch={importCcSwitchProviders} onCheckUpdates={checkForUpdates} onManageIgnored={() => openIgnoredManager()} onToast={setToast} />}
 
       {pendingDirectAction && <DirectActionConfirmDialog action={pendingDirectAction} onClose={() => setPendingDirectAction(null)} onConfirm={() => void executeDirectAction()} />}
-      {executionState && <ExecutionProgressDialog phase={executionState.phase} itemCount={executionState.itemCount} completedCount={executionState.completedCount} detail={executionState.detail} onClose={() => setExecutionState(null)} />}
+      {executionState && <ExecutionProgressDialog phase={executionState.phase} progress={executionState.progress} itemCount={executionState.itemCount} completedCount={executionState.completedCount} detail={executionState.detail} onClose={() => setExecutionState(null)} />}
       {pendingUninstall && <UninstallDialog application={pendingUninstall} busy={uninstallBusy} onClose={() => setPendingUninstall(null)} onConfirm={() => void uninstallApplication()} />}
       {pendingIgnore && <IgnoreConfirmDialog candidate={pendingIgnore} busy={ignoreBusy} onClose={() => setPendingIgnore(null)} onConfirm={() => void confirmIgnore()} />}
       {pendingApplicationIgnore && <ApplicationIgnoreConfirmDialog application={pendingApplicationIgnore} busy={ignoreBusy} onClose={() => setPendingApplicationIgnore(null)} onConfirm={() => void confirmApplicationIgnore()} />}

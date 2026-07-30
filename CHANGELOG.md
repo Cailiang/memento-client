@@ -8,6 +8,28 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.33 - 2026-07-30
+
+### English
+
+- Rebuilt the confirmed-action progress dialog so it paints before IPC execution starts, begins at 8%, follows actual verification scan progress, and uses a quieter cleanup animation with reduced-motion support instead of jumping to a fixed 78%.
+- Reconciled unchanged registered action and terminal-fix capabilities across verification scans. A task can now execute selected steps in multiple batches, retains prior results, and prevents already completed steps from running twice.
+- Added live task-history search across prompts, providers, models, statuses, responses, and errors; removed the low-value history export action.
+- Fixed Google-compatible proxies such as Antigravity by sending API credentials in an Authorization header for both model discovery and model execution. The official Google endpoint uses `x-goog-api-key`; credentials are no longer placed in the model-list URL.
+- Expanded storage inspection with grouped rebuildable caches for Claude, Codex, Antigravity, and Grok, plus iOS simulator caches, large application logs, and large files under Downloads, Desktop, and Movies.
+- Kept AI settings, credentials, conversations, sessions, workspaces, and projects outside cleanup allowlists. Rebuildable caches and logs require explicit permanent-cleanup confirmation; large user files can only be moved to Trash after their size, timestamp, real path, and parent folder are revalidated.
+- Updated the interactive prototype, focused safety tests, visual smoke coverage, product documentation, and release documentation for version 0.6.33.
+
+### 简体中文
+
+- 重做确认执行进度弹层：先完成首帧绘制再调用 IPC，初始进度为 8%，复检阶段跟随真实扫描进度，并使用更克制的清理动效与减少动态效果支持，不再直接跳到固定 78%。
+- 复检后会对内容未变化的操作与终端修复能力进行安全对账。同一任务现在可以分批执行选中步骤，保留之前的真实结果，并阻止已完成步骤被重复执行。
+- 任务记录新增按任务、供应商、模型、状态、回答和错误即时搜索；删除价值较低的任务记录导出功能。
+- 修复 Antigravity 等 Google 兼容代理：模型发现和模型调用都使用 Authorization Header；Google 官方地址使用 `x-goog-api-key`，模型列表 URL 不再携带密钥。
+- 存储检查新增 Claude、Codex、Antigravity、Grok 可重建缓存分组，同时增加 iOS 模拟器缓存、大体积应用日志，以及下载、桌面和影片目录中的大文件。
+- AI 设置、密钥、对话、会话、工作区和项目始终不进入清理白名单。可重建缓存和日志需要明确确认后永久清理；大文件只允许在重新校验大小、时间、真实路径和所属目录后移到废纸篓。
+- 同步更新 0.6.33 交互原型、安全测试、视觉冒烟覆盖、产品文档和发布记录。
+
 ## 0.6.32 - 2026-07-30
 
 ### English

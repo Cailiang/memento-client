@@ -43,16 +43,35 @@ describe('model provider configuration', () => {
     expect(request?.headers).toMatchObject({ Authorization: 'Bearer secret-model-key' })
   })
 
-  it('uses the Google models route and strips resource prefixes', async () => {
+  it('uses the official Google API-key header and strips resource prefixes', async () => {
     const fetchProvider = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) => new Response(JSON.stringify({
       models: [{ name: 'models/gemini-2.5-pro' }, { name: 'models/gemini-2.5-flash' }]
     }), { status: 200 }))
-    const result = await discoverProviderModels(discoveryInput('google'), fetchProvider)
+    const result = await discoverProviderModels({
+      ...discoveryInput('google'),
+      baseUrl: 'https://generativelanguage.googleapis.com'
+    }, fetchProvider)
 
     expect(result.models).toEqual(['gemini-2.5-flash', 'gemini-2.5-pro'])
-    expect(String(fetchProvider.mock.calls[0][0])).toBe(
-      'https://code.tczor.cn/v1beta/models?key=secret-model-key'
-    )
+    expect(String(fetchProvider.mock.calls[0][0])).toBe('https://generativelanguage.googleapis.com/v1beta/models')
+    expect(fetchProvider.mock.calls[0][1]?.headers).toMatchObject({
+      'x-goog-api-key': 'secret-model-key'
+    })
+  })
+
+  it('uses bearer authorization for a Google-compatible proxy', async () => {
+    const fetchProvider = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) => new Response(JSON.stringify({
+      models: [{ name: 'models/gemini-2.5-pro' }]
+    }), { status: 200 }))
+    await discoverProviderModels({
+      ...discoveryInput('google'),
+      baseUrl: 'https://code.tczor.cn/antigravity'
+    }, fetchProvider)
+
+    expect(String(fetchProvider.mock.calls[0][0])).toBe('https://code.tczor.cn/antigravity/models')
+    expect(fetchProvider.mock.calls[0][1]?.headers).toMatchObject({
+      Authorization: 'Bearer secret-model-key'
+    })
   })
 
   it('filters models that cannot run the text and tool-calling Agent', async () => {

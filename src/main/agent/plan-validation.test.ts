@@ -80,4 +80,14 @@ describe('Agent plan validation', () => {
       itemIds: ['invented-action']
     })).toThrow('The action plan contains invalid operations.')
   })
+
+  it('rejects replaying an operation that already completed in the same task', () => {
+    expect(() => selectExecutablePlanItems({
+      ...run(),
+      results: [{ id: 'storage:cache', ok: true, message: 'Done' }]
+    }, {
+      runId: 'run-1',
+      itemIds: ['storage:cache']
+    })).toThrow('已完成的操作不能重复执行')
+  })
 })

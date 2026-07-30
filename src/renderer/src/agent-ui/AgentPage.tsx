@@ -162,6 +162,7 @@ export function AgentPage({
   const selectedItems = run?.plan.filter((item) => selectedPlanIds.has(item.id)) ?? []
   const selectedBytes = selectedItems.reduce((sum, item) => sum + item.estimatedBytes, 0)
   const activePlannedIds = new Set(run?.plan.map((item) => item.id) ?? [])
+  const completedPlanIds = new Set(run?.results.filter((result) => result.ok).map((result) => result.id) ?? [])
 
   useEffect(() => {
     conversationRef.current?.scrollTo({ top: conversationRef.current.scrollHeight, behavior: 'smooth' })
@@ -334,11 +335,11 @@ export function AgentPage({
               {run.plan.map((item) => (
                 <div className="plan-step" key={item.id}>
                   <label className="plan-check" title={text('选择此步骤', 'Select this step')}>
-                    <input type="checkbox" checked={selectedPlanIds.has(item.id)} onChange={() => onTogglePlanItem(item.id)} disabled={!waitingConfirmation} />
-                    <span>{selectedPlanIds.has(item.id) && <Check size={12} />}</span>
+                    <input type="checkbox" checked={selectedPlanIds.has(item.id)} onChange={() => onTogglePlanItem(item.id)} disabled={!waitingConfirmation || completedPlanIds.has(item.id)} />
+                    <span>{(selectedPlanIds.has(item.id) || completedPlanIds.has(item.id)) && <Check size={12} />}</span>
                   </label>
                   <div className="plan-step-copy"><strong>{item.title}</strong><small>{item.detail}</small></div>
-                  <div className="plan-step-meta"><strong>{item.estimatedBytes ? formatBytes(item.estimatedBytes) : text('操作', 'Action')}</strong><small>{item.risk === 'review' ? text('需确认', 'Review') : text('待执行', 'Pending')}</small></div>
+                  <div className="plan-step-meta"><strong>{item.estimatedBytes ? formatBytes(item.estimatedBytes) : text('操作', 'Action')}</strong><small>{completedPlanIds.has(item.id) ? text('已完成', 'Completed') : item.risk === 'review' ? text('需确认', 'Review') : text('待执行', 'Pending')}</small></div>
                 </div>
               ))}
             </div>

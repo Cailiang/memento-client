@@ -118,7 +118,7 @@ try {
     failures.push('agent-execution: duplicate confirmation dialog is still rendered')
   }
   const executionStart = Number(await executionDialog.locator('[role="progressbar"]').getAttribute('aria-valuenow'))
-  if (executionStart !== 32) failures.push(`agent-execution: unexpected execution progress ${executionStart}`)
+  if (executionStart < 5 || executionStart > 20) failures.push(`agent-execution: unrealistic starting progress ${executionStart}`)
   await page.screenshot({ path: '/tmp/memento-interaction-agent-execution.png' })
   await executionDialog.getByRole('button', { name: '完成' }).waitFor({ state: 'visible' })
   await page.waitForFunction(() => !document.querySelector('[role="dialog"] .dialog-actions button')?.hasAttribute('disabled'))
@@ -127,6 +127,14 @@ try {
   await page.locator('.nav-button[title="任务记录"]').click()
   const historyEntries = page.locator('.history-entry')
   const historyCount = await historyEntries.count()
+  if (await page.getByRole('button', { name: '导出', exact: true }).count()) {
+    failures.push('history-search: obsolete export action is still rendered')
+  }
+  const historySearch = page.getByRole('searchbox', { name: '搜索任务记录' })
+  const firstHistoryTitle = await historyEntries.first().locator('.history-title strong').textContent()
+  await historySearch.fill(firstHistoryTitle ?? '')
+  if (await historyEntries.count() !== 1) failures.push('history-search: task filtering did not narrow the list')
+  await historySearch.fill('')
   await historyEntries.first().locator('.history-delete').click()
   await page.getByRole('dialog', { name: '删除任务记录？' }).waitFor()
   await page.screenshot({ path: '/tmp/memento-interaction-history-delete.png' })

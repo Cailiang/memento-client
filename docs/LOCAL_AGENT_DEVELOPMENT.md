@@ -77,6 +77,8 @@ On the first import attempt, `cc-switch-import.ts` checks CC Switch's Tauri stor
 
 After a URL and credential are available, the Renderer debounces a typed model-discovery IPC call. The main process reuses an existing encrypted key when the field is blank, requests the provider's `/models` endpoint with the correct authentication scheme, and de-duplicates IDs. Capability metadata is preferred when an endpoint supplies it; otherwise known image, audio, realtime, embedding, moderation, and internal-only model families are excluded by conservative ID rules. The response includes the resolved base URL and excluded count so the UI can explain why a mixed catalog contains fewer Agent-selectable models. Requests time out after 15 seconds. Failed HTTP responses retain the request URL without credential query parameters and a bounded server message; all errors are sanitized before crossing IPC and rendered in a wrapping, selectable alert instead of the compact status chip.
 
+Official `generativelanguage.googleapis.com` discovery and model requests use `x-goog-api-key`. A Google-compatible proxy such as an imported Antigravity endpoint instead receives `Authorization: Bearer ...` for both discovery and AI SDK model calls, with `x-goog-api-key` suppressed. Model-discovery URLs never contain credentials.
+
 The connection test creates a two-step `ToolLoopAgent` run with a `connection_probe` tool. The first step requires the tool; the follow-up step disables tool calls and verifies that the provider accepts the tool result and returns a normal response. The probe allows 60 seconds overall and 45 seconds per provider request because reasoning and coding models can exceed 20 seconds for the complete round trip. Success therefore means the endpoint, key, model, response protocol, tool call, and tool-result continuation all worked. A text-only first response is a failed test.
 
 ## 4.1 Update Checks
@@ -128,13 +130,20 @@ Before execution, `selectExecutablePlanItems` validates that:
 - the submitted Run ID matches;
 - the item array is non-empty and contains at most 100 short string IDs;
 - every ID belongs to the persisted plan;
+- no successfully completed operation is submitted again;
 - duplicate submitted IDs do not cause duplicate execution.
 
 The existing action and terminal-fix registries then validate the IDs again against the current in-memory scan. Stale actions fail instead of falling back to model-provided paths or commands. Destructive filesystem and service changes retain their existing target allowlists and privilege boundaries.
 
 Application uninstall first uses Electron's native macOS Trash API. If that API reports an unrelated privacy error and leaves the bundle in place, Memento falls back to a same-volume move into the current user's `~/.Trash`. The fallback revalidates that the target is a real, non-nested `.app` under `/Applications` or `~/Applications`, allocates a non-conflicting destination, and verifies both sides of the move. Only `EACCES` or `EPERM` enters the existing administrator authorization boundary; other filesystem failures remain visible and do not mark the action complete.
 
-After execution, Memento performs a fresh scan. Per-operation success or failure is stored on the run; partial failure is reported as partial failure. Cancelling an active request aborts the provider call, while cancelling a waiting plan persists `cancelled` and clears the executable plan.
+After execution, Memento performs a fresh scan. Registered actions and terminal fixes whose complete local capability payload remains unchanged inherit their prior opaque IDs; changed or missing targets receive no such reconciliation. This lets a user execute another operation from the same trusted result after verification without accepting stale paths. Per-operation results accumulate on the run, successful steps become non-selectable, and partial failure is reported as partial failure. Cancelling an active request aborts the provider call, while cancelling a waiting plan persists `cancelled` and clears the executable plan.
+
+Storage scanning has three cleanup boundaries:
+
+- Known rebuildable cache folders for Claude, Codex, Antigravity, Grok, Xcode, package managers, and iOS simulators use exact main-process allowlists. AI credentials, settings, conversations, sessions, workspaces, and projects are not included.
+- Large direct children of `~/Library/Logs` are review-required permanent cleanup targets; their resolved paths are checked again before deletion.
+- Regular files at least seven days old and 500 MB under Downloads, Desktop, or Movies are review-only. The main process rechecks the allowed root, real path, file type, byte size, and modification time, then moves the file to Trash instead of deleting it permanently.
 
 ## 7. Ignored Items
 
@@ -156,12 +165,12 @@ The production Renderer consists of one shell and five prototype-aligned pages u
 - Dialogs trap focus, close with Escape when idle, restore previous focus, and block backdrop closing during execution.
 - Async buttons disable repeated submission and show a spinner.
 - Dynamic scan and Agent states use live regions.
-- Agent waits use a phase-aware estimated progress surface. It starts below 25%, advances asymptotically to a status-specific cap, reports elapsed time, and reaches completion only when the actual result replaces it.
+- Agent waits use a phase-aware estimated progress surface. Confirmed execution paints its 8% initial state before IPC starts; execution events advance the first phase and actual scan progress drives verification from 44% through 96%. It reaches 100% only on completion or failure.
 - Layouts cover full sidebar, compact sidebar, bottom navigation, tablet, and phone widths.
 - `prefers-reduced-motion` reduces all non-essential transitions.
 - Application icons are requested lazily and only for target paths registered by the current scan.
 - Conversation turns remain visible together, while SQLite keeps their compact focus and pending-plan context available to subsequent runs.
-- Task-history deletion is confirmed in the Renderer and handled in the main process. Deleting `agent_runs` cascades to `tool_calls`; active runs are rejected, and completed system changes are not undone.
+- Task history has local live search across prompts, provider/model names, status, response, and error text. Deletion is confirmed in the Renderer and handled in the main process. Deleting `agent_runs` cascades to `tool_calls`; active runs are rejected, and completed system changes are not undone.
 - Structured application results use a logo grid with last-used time and size; storage, service, and terminal results use compact rows. Their buttons reference only registered application or operation IDs.
 - Model prose is parsed by `react-markdown` with GFM and soft-line-break support. Common model bullet characters are normalized into semantic lists, raw HTML remains disabled, and links are rendered as inert labels. The Renderer never uses `dangerouslySetInnerHTML` or model-generated HTML.
 - Health rows expose analysis as AI analysis, summarize the count of registered operations, and wait for the user to choose an operation from the trusted structured result before anything enters the confirmation plan.

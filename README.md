@@ -9,9 +9,9 @@ Memento is a local macOS maintenance Agent. It combines deterministic device sca
 The application is rebuilt around the approved interactive prototype at [`../prototypes/memento-agent/index.html`](../prototypes/memento-agent/index.html). Its five work areas are:
 
 - **Agent:** ask for a goal in plain language, continue with context-aware follow-ups, act from structured module results, review the plan, confirm, execute, and verify.
-- **Computer health:** inspect storage, background services, and terminal startup without opening redundant detail pages.
+- **Computer health:** inspect rebuildable AI/developer caches, application logs, large user files, background services, and terminal startup without opening redundant detail pages.
 - **Applications:** browse user and read-only system apps in a real-logo grid, see usage and bundle metadata, ask Agent about one exact app, open it, ignore it, or move an uninstallable app to Trash after confirmation.
-- **Task history:** reopen, export, or permanently delete local Agent runs and their tool-call records.
+- **Task history:** search, reopen, or permanently delete local Agent runs and their tool-call records.
 - **Settings:** manage multiple model providers, software updates, window behavior, ignored items, color theme, and language.
 
 Storage, background-service, and application findings can be ignored. Ignored items are removed from scan results, registered operations, and the data exposed to Agent tools. Each relevant work page opens its own ignored category directly, while Settings retains the combined manager.
@@ -28,6 +28,10 @@ Users can save multiple providers and choose one default model:
 - Google Gemini
 
 Each configuration contains a name, API type, base URL, API key, and selected model. Once a URL and credential are available, Memento normalizes the API base and automatically fetches the model list. Image, audio, realtime, embedding, moderation, and other clearly incompatible entries are kept out of the Agent model picker. Existing encrypted credentials can be reused while editing. A separate connection test verifies model access and tool calling, not just plain text generation.
+
+Official Google model discovery uses the `x-goog-api-key` header. Google-compatible proxy URLs use Bearer authorization for discovery and model calls, so credentials never need to appear in a `/models` query string.
+
+Storage cleanup groups only known rebuildable cache paths for Claude, Codex, Antigravity, and Grok. It does not include their credentials, settings, conversations, sessions, workspaces, or projects. Large files at least seven days old and 500 MB in Downloads, Desktop, or Movies are review-only findings and can only be moved to Trash after the main process revalidates the exact file.
 
 On the first launch after this importer is introduced, Memento detects the local CC Switch database at `~/.cc-switch/cc-switch.db` or its configured custom directory. Usable Claude, Codex, and Gemini entries are imported once and mapped by API format. The completed attempt is recorded in SQLite, so a provider the user later deletes does not return at the next launch. Settings provides an explicit **Re-import CC Switch** action whenever the user wants to read it again. Credential-free placeholders are skipped. The CC Switch database is opened read-only; imported credentials stay in the main process and are re-encrypted in Memento's own provider store.
 
@@ -82,7 +86,7 @@ npm run ui:smoke -- http://127.0.0.1:4174
 npm run audit:runtime
 ```
 
-The visual smoke test exercises all five pages at `1440x900`, `1024x768`, `820x1180`, and `390x844`, checks horizontal overflow, and covers the visible build version, compact page controls, Agent progress state, structured results, history deletion, application filtering and ignoring, English-only output, plans, confirmation, health tabs, and provider editing. The Electron smoke test separately verifies the production preload, real application inventory, localized names, protected system apps, and real icons.
+The visual smoke test exercises all five pages at `1440x900`, `1024x768`, `820x1180`, and `390x844`, checks horizontal overflow, and covers the visible build version, compact page controls, Agent and execution progress, structured results, history search and deletion, application filtering and ignoring, English-only output, plans, confirmation, health tabs, and provider editing. The Electron smoke test separately verifies the production preload, real application inventory, localized names, protected system apps, and real icons.
 
 The current supported build chain is Vite 7, electron-vite 5, and electron-builder 26. `npm run audit:runtime` checks dependencies shipped with Memento, while `npm run audit` also reports development and packaging dependencies inherited from upstream tools.
 

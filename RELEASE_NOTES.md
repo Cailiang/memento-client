@@ -1,16 +1,17 @@
-# Memento Agent 0.6.32
+# Memento Agent 0.6.33
 
 ## 简体中文
 
-`0.6.32` 完成构建工具链的跨主版本安全升级，同时保持现有应用功能和安装包兼容。
+`0.6.33` 修复分批执行与 Antigravity 鉴权，并让执行反馈和磁盘清理更真实、更实用。
 
 ### 主要变化
 
-- Vite 5 升级至 7.3.6，electron-vite 2 升级至 5.0.0，electron-builder 25 升级至 26.15.3。
-- React Vite 插件升级至 5.2.0，Vitest 升级至 3.2.7；Node.js 开发要求调整为 22.12 或更高版本。
-- 随应用发布的运行时依赖安全审计为 0；完整开发依赖审计由 33 项降至 16 项，且不再包含严重问题。
-- 剩余审计项均来自 electron-builder 最新稳定版的上游打包依赖，没有通过高风险强制覆盖来破坏跨平台打包兼容性。
-- 单元测试、生产构建、设备扫描、真实 Electron 启动和四种视口 UI 测试均已通过。
+- 执行弹层会先显示再启动操作，从 8% 开始，并按真实复检进度推进；清理动画也重新设计。
+- 同一 Agent 任务可分批执行多个操作，复检后仍有效的第二个操作不会再报“操作已经失效”，已完成操作不能重复运行。
+- 任务记录新增即时搜索并移除导出入口。
+- Antigravity 等 Google 兼容代理改用 Authorization Header，Google 官方接口使用 `x-goog-api-key`。
+- 存储扫描新增 Claude、Codex、Antigravity、Grok 缓存、iOS 模拟器缓存、大型应用日志和用户目录大文件。
+- AI 配置、密钥、对话和项目不参与清理；大文件只会移到废纸篓。
 
 ### 安装说明
 
@@ -18,15 +19,16 @@
 
 ## English
 
-`0.6.32` completes the cross-major security upgrade of the build toolchain while preserving existing application and packaging behavior.
+`0.6.33` fixes batched execution and Antigravity authentication while making execution feedback and disk cleanup more useful.
 
 ### Highlights
 
-- Vite 5 is upgraded to 7.3.6, electron-vite 2 to 5.0.0, and electron-builder 25 to 26.15.3.
-- React's Vite plugin is upgraded to 5.2.0 and Vitest to 3.2.7; development now requires Node.js 22.12 or newer.
-- The shipped runtime dependency audit is clean. The full development audit is reduced from 33 findings to 16 and no longer contains critical findings.
-- The remaining findings are inherited from the latest stable electron-builder packaging dependencies; risky cross-major overrides were not used because they would compromise cross-platform packaging compatibility.
-- Unit tests, production builds, device scanning, real Electron startup, and all four UI viewports pass on the upgraded chain.
+- The execution dialog paints before work begins, starts at 8%, follows real verification progress, and uses a redesigned cleanup animation.
+- One Agent task can execute operations in multiple batches. A still-valid second operation no longer expires after verification, and completed operations cannot run twice.
+- Task history now has live search and no export action.
+- Google-compatible proxies such as Antigravity use Authorization headers, while the official Google API uses `x-goog-api-key`.
+- Storage inspection now includes Claude, Codex, Antigravity, and Grok caches, iOS simulator caches, large application logs, and large files in user folders.
+- AI configuration, credentials, conversations, and projects are excluded from cleanup; large files only move to Trash.
 
 ### Installation
 

@@ -7,7 +7,7 @@ import { z } from 'zod'
 import type { AppLanguage } from '../../shared/app-settings'
 import type { AgentProviderTestResult } from '../../shared/agent-types'
 import type { PrivateAgentProvider } from './agent-store'
-import { normalizeProviderBaseUrl } from './provider-config'
+import { isOfficialGoogleApiUrl, normalizeProviderBaseUrl } from './provider-config'
 
 export const PROVIDER_TEST_TIMEOUT = {
   totalMs: 60_000,
@@ -34,7 +34,13 @@ export function createProviderModel(provider: PrivateAgentProvider): LanguageMod
     case 'google':
       return createGoogleGenerativeAI({
         apiKey: provider.apiKey,
-        baseURL
+        baseURL,
+        headers: isOfficialGoogleApiUrl(baseURL)
+          ? undefined
+          : {
+              'x-goog-api-key': undefined,
+              Authorization: `Bearer ${provider.apiKey}`
+            }
       })(provider.model)
     case 'openai-compatible':
       return createOpenAICompatible({
