@@ -209,11 +209,23 @@ export interface TerminalFixRunResult {
   canUndo: boolean
 }
 
+export type AppUpdatePhase =
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'downloading'
+  | 'downloaded'
+  | 'installing'
+  | 'up-to-date'
+  | 'error'
+  | 'unsupported'
+
 export interface AppUpdateState {
   currentVersion: string
   latestVersion: string | null
   updateAvailable: boolean
-  releaseUrl: string | null
+  phase: AppUpdatePhase
+  downloadPercent: number | null
   checkedAt: string | null
   error: string | null
 }
@@ -222,7 +234,7 @@ export interface MementoApi extends MementoAgentApi, MementoSettingsApi {
   getVersion: () => Promise<string>
   getUpdateState: () => Promise<AppUpdateState>
   checkForUpdates: () => Promise<AppUpdateState>
-  openUpdatePage: () => Promise<void>
+  installUpdate: () => Promise<void>
   scan: (language?: import('./app-settings').AppLanguage) => Promise<ScanResult>
   scanDiskUsage: () => Promise<DiskUsageScanResult>
   cancelDiskUsageScan: () => Promise<void>

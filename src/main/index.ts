@@ -4,11 +4,11 @@ import {
   ipcMain,
   Menu,
   nativeImage,
-  Notification,
   shell,
   Tray,
   type MenuItemConstructorOptions
 } from 'electron'
+import { autoUpdater, type ProgressInfo, type UpdateInfo } from 'electron-updater'
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { existsSync, lstatSync } from 'node:fs'
@@ -73,7 +73,7 @@ import {
   validateDiskUsageTrashTarget,
   withoutDiskUsageTargets
 } from './disk-usage-scanner'
-import { fetchUpdateState } from './update-checker'
+import { createUpdateState, reduceUpdateState } from './update-checker'
 import {
   applyTerminalFixGroup,
   restoreTerminalBackup,
@@ -101,8 +101,8 @@ let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let isQuitting = false
 let updateTimer: NodeJS.Timeout | null = null
-let lastNotifiedVersion: string | null = null
 let updateState: AppUpdateState | null = null
+let updateCheckPromise: Promise<AppUpdateState> | null = null
 
 function mainText(chinese: string, english: string): string {
   return appSettings.language === 'en-US' ? english : chinese
@@ -211,48 +211,98 @@ function importCcSwitchProviders(): CcSwitchImportResult {
 }
 
 function emptyUpdateState(): AppUpdateState {
-  return {
-    currentVersion: app.getVersion(),
-    latestVersion: null,
-    updateAvailable: false,
-    releaseUrl: null,
-    checkedAt: null,
-    error: null
-  }
+  return createUpdateState(app.getVersion())
 }
 
-async function openUpdatePage(): Promise<void> {
-  const releaseUrl = updateState?.releaseUrl
-  if (!releaseUrl?.startsWith('https://github.com/Cailiang/memento-client/releases/')) {
-    throw new Error(mainText('当前没有可打开的新版本页面', 'No update page is currently available.'))
-  }
-  await shell.openExternal(releaseUrl)
+function updaterSupported(): boolean {
+  if (!app.isPackaged) return false
+  if (process.platform === 'darwin' || process.platform === 'win32') return true
+  return process.platform === 'linux' && Boolean(process.env.APPIMAGE)
 }
 
-async function checkForAppUpdate(showSystemNotification: boolean): Promise<AppUpdateState> {
-  updateState = await fetchUpdateState(app.getVersion())
+function publishUpdateState(state: AppUpdateState): AppUpdateState {
+  updateState = state
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('memento:update-state', updateState)
+    mainWindow.webContents.send('memento:update-state', state)
   }
-  if (
-    showSystemNotification &&
-    updateState.updateAvailable &&
-    updateState.latestVersion &&
-    updateState.latestVersion !== lastNotifiedVersion &&
-    Notification.isSupported()
-  ) {
-    lastNotifiedVersion = updateState.latestVersion
-    const notification = new Notification({
-      title: mainText('Memento 有新版本', 'A Memento update is available'),
-      body: mainText(
-        `v${updateState.latestVersion} 已发布，点击查看安装包。`,
-        `v${updateState.latestVersion} is available. Click to view the installer.`
-      )
-    })
-    notification.on('click', () => void openUpdatePage().catch(() => undefined))
-    notification.show()
+  return state
+}
+
+function nextUpdateState(event: Parameters<typeof reduceUpdateState>[1]): AppUpdateState {
+  return publishUpdateState(reduceUpdateState(updateState ?? emptyUpdateState(), event))
+}
+
+function updaterErrorMessage(error: unknown): string {
+  const fallback = mainText('自动更新失败', 'Automatic update failed')
+  const detail = error instanceof Error ? error.message.trim() : ''
+  return detail ? `${fallback}: ${detail.slice(0, 280)}` : fallback
+}
+
+function configureAppUpdater(): void {
+  if (!updaterSupported()) {
+    nextUpdateState({ type: 'unsupported' })
+    return
   }
-  return updateState
+
+  autoUpdater.autoDownload = true
+  autoUpdater.autoInstallOnAppQuit = false
+  autoUpdater.allowPrerelease = false
+  autoUpdater.on('checking-for-update', () => nextUpdateState({ type: 'checking' }))
+  autoUpdater.on('update-available', (info: UpdateInfo) => {
+    nextUpdateState({ type: 'available', version: info.version })
+  })
+  autoUpdater.on('update-not-available', (info: UpdateInfo) => {
+    nextUpdateState({ type: 'not-available', version: info.version })
+  })
+  autoUpdater.on('download-progress', (progress: ProgressInfo) => {
+    nextUpdateState({ type: 'progress', percent: progress.percent })
+  })
+  autoUpdater.on('update-downloaded', (info: UpdateInfo) => {
+    nextUpdateState({ type: 'downloaded', version: info.version })
+  })
+  autoUpdater.on('error', (error: Error) => {
+    nextUpdateState({ type: 'error', message: updaterErrorMessage(error) })
+  })
+}
+
+async function checkForAppUpdate(): Promise<AppUpdateState> {
+  if (!updaterSupported()) return nextUpdateState({ type: 'unsupported' })
+  if (updateState?.phase === 'downloaded' || updateState?.phase === 'installing') {
+    return updateState
+  }
+  if (updateCheckPromise) return updateCheckPromise
+
+  updateCheckPromise = (async () => {
+    nextUpdateState({ type: 'checking' })
+    try {
+      await autoUpdater.checkForUpdates()
+    } catch (error) {
+      if (updateState?.phase !== 'error') {
+        nextUpdateState({ type: 'error', message: updaterErrorMessage(error) })
+      }
+    }
+    return updateState ?? emptyUpdateState()
+  })()
+
+  try {
+    return await updateCheckPromise
+  } finally {
+    updateCheckPromise = null
+  }
+}
+
+function installAppUpdate(): void {
+  if (updateState?.phase !== 'downloaded') {
+    throw new Error(mainText('新版本尚未下载完成', 'The update has not finished downloading.'))
+  }
+  nextUpdateState({ type: 'installing' })
+  setImmediate(() => {
+    try {
+      autoUpdater.quitAndInstall(false, true)
+    } catch (error) {
+      nextUpdateState({ type: 'error', message: updaterErrorMessage(error) })
+    }
+  })
 }
 
 async function readApplicationIcon(target: string): Promise<string | null> {
@@ -1039,11 +1089,13 @@ app.whenReady().then(async () => {
   agentRuntime = new LocalAgentRuntime(agentStore)
   appSettings = agentStore.getAppSettings()
   applyWindowSettings()
+  updateState = emptyUpdateState()
+  configureAppUpdater()
 
   ipcMain.handle('memento:get-version', () => app.getVersion())
   ipcMain.handle('memento:update:get', () => updateState ?? emptyUpdateState())
-  ipcMain.handle('memento:update:check', () => checkForAppUpdate(false))
-  ipcMain.handle('memento:update:open', () => openUpdatePage())
+  ipcMain.handle('memento:update:check', () => checkForAppUpdate())
+  ipcMain.handle('memento:update:install', () => installAppUpdate())
   ipcMain.handle('memento:get-application-icon', async (_event, id: string) => {
     if (typeof id !== 'string' || id.length > 100) return null
     const application = [
@@ -1344,11 +1396,11 @@ app.whenReady().then(async () => {
 
   createWindow()
   const initialUpdateCheck = setTimeout(() => {
-    void checkForAppUpdate(true)
+    void checkForAppUpdate()
   }, 3_000)
   initialUpdateCheck.unref()
   updateTimer = setInterval(() => {
-    void checkForAppUpdate(true)
+    void checkForAppUpdate()
   }, 60 * 60 * 1_000)
   updateTimer.unref()
   app.on('activate', () => {

@@ -1,6 +1,6 @@
 {
   "name": "memento",
-  "version": "0.6.54",
+  "version": "0.6.55",
   "private": true,
   "author": {
     "name": "Cailiang",
@@ -13,13 +13,14 @@
     "dev:web": "vite --config vite.renderer.config.ts --host 127.0.0.1",
     "icon": "node scripts/generate-icon.mjs",
     "build": "npm run typecheck && electron-vite build",
-    "dist:mac": "npm run build && electron-builder --mac dmg --publish never",
+    "dist:mac": "npm run build && electron-builder --mac dmg zip --publish never",
     "dist:win": "npm run build && electron-builder --win nsis --publish never",
     "dist:linux": "npm run build && electron-builder --linux AppImage deb --publish never",
     "preview": "electron-vite preview",
     "scan:smoke": "vite-node scripts/smoke-scan.ts",
     "electron:smoke": "node scripts/electron-smoke.mjs",
     "ui:smoke": "node scripts/visual-smoke.mjs",
+    "release:collect": "vite-node --script scripts/collect-release-artifacts.ts",
     "audit": "npm audit --registry=https://registry.npmjs.org",
     "audit:runtime": "npm audit --omit=dev --registry=https://registry.npmjs.org",
     "test": "vitest run",
@@ -31,6 +32,7 @@
     "@ai-sdk/openai": "^4.0.23",
     "@ai-sdk/openai-compatible": "^3.0.16",
     "ai": "^7.0.41",
+    "electron-updater": "^6.8.9",
     "lucide-react": "^0.468.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -41,6 +43,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^24.13.3",
     "@types/react": "^19.0.3",
     "@types/react-dom": "^19.0.2",
@@ -48,6 +51,7 @@
     "electron": "^43.2.0",
     "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
+    "js-yaml": "^5.2.2",
     "playwright-core": "^1.61.1",
     "typescript": "^5.7.2",
     "vite": "^7.3.6",
@@ -59,6 +63,11 @@
   "build": {
     "appId": "com.fcl.memento",
     "productName": "Memento",
+    "publish": {
+      "provider": "github",
+      "owner": "Cailiang",
+      "repo": "memento-client"
+    },
     "artifactName": "${productName}-${version}-${arch}.${ext}",
     "asar": true,
     "directories": {
@@ -81,7 +90,8 @@
       "hardenedRuntime": true,
       "notarize": true,
       "target": [
-        "dmg"
+        "dmg",
+        "zip"
       ]
     },
     "win": {

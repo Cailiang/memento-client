@@ -8,6 +8,22 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.55 - 2026-07-31
+
+### English
+
+- Replaced update notifications and the floating Release-page notice with hourly automatic checks and background package downloads.
+- Added a compact version-adjacent progress control that becomes an Update button after download and installs the package before restarting Memento.
+- Added typed updater states, accessible status text, retry handling, and regression coverage for download, ready, installation, error, and unsupported-package paths.
+- Extended the release pipeline with signed-app macOS ZIPs, updater blockmaps, architecture-aware metadata merging, and strict validation of all 19 release assets while retaining checksums for the eight user-facing installers.
+
+### 简体中文
+
+- 移除系统更新通知和跳转 Release 页的悬浮提示，改为每小时自动检查并在后台下载新版本。
+- 在侧边栏版本号旁新增紧凑的下载进度控件；下载完成后变为“更新”按钮，点击即可安装并重启 Memento。
+- 新增类型化更新状态、无障碍状态文本、重试处理，以及下载、就绪、安装、错误和不支持安装包路径的回归测试。
+- 发布流程新增包含已签名应用的 macOS ZIP、更新块映射、分架构元数据合并和 19 个发布资产的严格校验，同时继续只为 8 个面向用户的安装包生成校验和。
+
 ## 0.6.54 - 2026-07-31
 
 ### English

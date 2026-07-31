@@ -76,6 +76,12 @@ try {
       if (visibleVersion !== `v${expectedVersion}`) {
         failures.push(`${viewportName}/${pageName}: wrong visible version ${JSON.stringify(visibleVersion)}`)
       }
+      if (viewport.width > 1100 && await page.locator('.brand-meta').count() !== 1) {
+        failures.push(`${viewportName}/${pageName}: version-adjacent update region is missing`)
+      }
+      if (await page.locator('.update-notice').count()) {
+        failures.push(`${viewportName}/${pageName}: removed standalone update notice is still rendered`)
+      }
       if (await page.locator('.topbar-actions').count()) {
         failures.push(`${viewportName}/${pageName}: removed topbar actions are still rendered`)
       }
@@ -95,7 +101,29 @@ try {
   if (!await settingsPage.getByRole('button', { name: '立即检查' }).isVisible()) {
     failures.push('settings: manual update check is missing')
   }
+  if (!await settingsPage.getByText('Memento 每小时自动检查新版本，并在后台完成下载。').isVisible()) {
+    failures.push('settings: background update behavior is not explained')
+  }
   await settingsPage.close()
+
+  const updatePage = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+  const updateUrl = new URL(baseUrl)
+  updateUrl.searchParams.set('demoUpdate', 'downloaded')
+  await updatePage.goto(updateUrl.href, { waitUntil: 'networkidle' })
+  const installUpdateButton = updatePage.getByRole('button', { name: '安装新版本并重启 Memento' })
+  if (!await installUpdateButton.isVisible()) {
+    failures.push('update: version-adjacent install button is missing')
+  } else {
+    await updatePage.screenshot({ path: '/tmp/memento-interaction-update-ready.png' })
+    await installUpdateButton.click()
+    if (!await updatePage.getByRole('button', { name: '正在安装新版本' }).isDisabled()) {
+      failures.push('update: install button did not enter the installing state')
+    }
+  }
+  if (await updatePage.locator('.update-notice').count()) {
+    failures.push('update: standalone update notice is still rendered')
+  }
+  await updatePage.close()
 
   const concurrentPage = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   await concurrentPage.goto(baseUrl, { waitUntil: 'networkidle' })
@@ -451,4 +479,4 @@ if (failures.length) {
   throw new Error(`UI smoke test failed:\n${failures.join('\n')}`)
 }
 
-console.log(`UI smoke test passed: ${viewports.length * pages.length} screenshots in /tmp`)
+console.log(`UI smoke test passed: ${viewports.length * pages.length} viewport screenshots plus interaction captures in /tmp`)

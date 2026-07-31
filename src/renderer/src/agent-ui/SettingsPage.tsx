@@ -274,15 +274,30 @@ export function SettingsPage({
     : connectionOk === false || (!connectionMessage && selected?.connectionState === 'failed')
       ? 'review'
       : ''
-  const updateDescription = updateBusy
+  const updateDescription = updateBusy || updateState?.phase === 'checking'
     ? text('正在检查新版本…', 'Checking for updates…')
-    : updateState?.updateAvailable && updateState.latestVersion
-      ? text(`发现新版本 v${updateState.latestVersion}`, `Memento v${updateState.latestVersion} is available`)
-      : updateState?.error
-        ? text('上次检查失败，可手动重试', 'The last check failed. Try again manually.')
-        : updateState?.checkedAt
-          ? text('已是最新版本', 'Memento is up to date.')
-          : text('等待首次自动检查', 'Waiting for the first automatic check')
+    : updateState?.phase === 'available' && updateState.latestVersion
+      ? text(`发现 v${updateState.latestVersion}，正在准备后台下载`, `Memento v${updateState.latestVersion} was found. Preparing the background download.`)
+      : updateState?.phase === 'downloading' && updateState.latestVersion
+        ? text(`发现 v${updateState.latestVersion}，正在后台下载 ${updateState.downloadPercent ?? 0}%`, `Downloading Memento v${updateState.latestVersion} in the background: ${updateState.downloadPercent ?? 0}%`)
+        : updateState?.phase === 'downloaded' && updateState.latestVersion
+          ? text(`v${updateState.latestVersion} 已下载，点击版本号旁的更新按钮安装`, `Memento v${updateState.latestVersion} is ready. Use the update button beside the version to install it.`)
+          : updateState?.phase === 'installing'
+            ? text('正在安装新版本，Memento 即将重启', 'Installing the update. Memento will restart shortly.')
+            : updateState?.phase === 'error'
+              ? text('自动更新失败，可手动重试', 'Automatic update failed. Try again manually.')
+              : updateState?.phase === 'unsupported'
+                ? text('当前安装包不支持应用内自动更新', 'This package does not support in-app updates.')
+                : updateState?.checkedAt
+                  ? text('已是最新版本', 'Memento is up to date.')
+                  : text('等待首次自动检查', 'Waiting for the first automatic check')
+  const updateCheckDisabled = updateBusy || Boolean(updateState && [
+    'checking',
+    'available',
+    'downloading',
+    'downloaded',
+    'installing'
+  ].includes(updateState.phase))
 
   return (
     <section className="page content-page is-active">
@@ -339,8 +354,8 @@ export function SettingsPage({
         </section>
 
         <section className="settings-section">
-          <div className="settings-label"><h2>{text('软件更新', 'Software update')}</h2><p>{text('Memento 每小时自动检查一次新版本。', 'Memento checks for a new version every hour.')}</p></div>
-          <div className="setting-row"><span><strong>{text(`当前版本 v${appVersion}`, `Current version v${appVersion}`)}</strong><small>{updateDescription}</small></span><button type="button" className="secondary-button" disabled={updateBusy} onClick={() => void checkUpdates()}>{updateBusy ? <LoaderCircle className="spinner" size={14} /> : <RefreshCw size={14} />}{updateBusy ? text('检查中', 'Checking') : text('立即检查', 'Check now')}</button></div>
+          <div className="settings-label"><h2>{text('软件更新', 'Software update')}</h2><p>{text('Memento 每小时自动检查新版本，并在后台完成下载。', 'Memento checks hourly and downloads new versions in the background.')}</p></div>
+          <div className="setting-row"><span><strong>{text(`当前版本 v${appVersion}`, `Current version v${appVersion}`)}</strong><small role="status" aria-live="polite">{updateDescription}{updateState?.phase === 'error' && updateState.error ? ` · ${updateState.error}` : ''}</small></span><button type="button" className="secondary-button" disabled={updateCheckDisabled} onClick={() => void checkUpdates()}>{updateBusy || updateState?.phase === 'checking' ? <LoaderCircle className="spinner" size={14} /> : <RefreshCw size={14} />}{updateBusy || updateState?.phase === 'checking' ? text('检查中', 'Checking') : text('立即检查', 'Check now')}</button></div>
         </section>
 
         <section className="settings-section">

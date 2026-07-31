@@ -12,7 +12,7 @@ Memento is a local desktop maintenance agent. It combines deterministic device i
 - **Computer health:** review storage findings, browse disk usage, inspect background services, and diagnose terminal startup issues.
 - **Applications:** inspect installed applications and metadata, open or ignore an app, and move supported apps to Trash after confirmation.
 - **Task history:** reopen, search, and delete locally stored Agent runs and tool-call records.
-- **Settings:** manage model providers, updates, window behavior, ignored items, theme, and language.
+- **Settings:** manage model providers, automatic background updates, window behavior, ignored items, theme, and language.
 
 ## Safety Model
 
@@ -97,7 +97,9 @@ The `Release` GitHub Actions workflow builds the following packages from a match
 | Windows | x64, arm64 | NSIS EXE |
 | Linux | x64, arm64 | AppImage, DEB |
 
-Each GitHub Release contains eight platform packages and `SHA256SUMS.txt`. macOS packages are signed with the project's Developer ID Application certificate, notarized by Apple, and stapled before upload. The release workflow verifies the final app and DMG with `codesign`, Gatekeeper, and `stapler`.
+Memento checks for updates hourly. A new version downloads in the background, then an **Update** button appears beside the sidebar version; selecting it installs the downloaded package and restarts the app without a separate update popup.
+
+Each GitHub Release contains eight user-facing platform installers, updater payloads and metadata, and `SHA256SUMS.txt` (19 assets total). The checksum manifest covers only the eight installers. macOS packages are signed with the project's Developer ID Application certificate, notarized by Apple, and stapled before upload. The release workflow verifies the final app and DMG with `codesign`, Gatekeeper, and `stapler`.
 
 ## License
 

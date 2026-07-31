@@ -72,6 +72,21 @@ const DEMO_PROVIDER: AgentProvider = {
   updatedAt: new Date().toISOString()
 }
 
+function demoUpdateState(currentVersion: string): AppUpdateState | null {
+  if (!import.meta.env.DEV) return null
+  const phase = new URLSearchParams(window.location.search).get('demoUpdate')
+  if (phase !== 'downloading' && phase !== 'downloaded') return null
+  return {
+    currentVersion,
+    latestVersion: '0.6.56',
+    updateAvailable: true,
+    phase,
+    downloadPercent: phase === 'downloaded' ? 100 : 42,
+    checkedAt: new Date().toISOString(),
+    error: null
+  }
+}
+
 function demoOperationCopy(
   kind: string,
   language: AppSettings['language'],
@@ -539,7 +554,9 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
         const [initialSettings, initialVersion, initialUpdateState] = await Promise.all([
           window.memento ? window.memento.getAppSettings() : Promise.resolve(DEFAULT_APP_SETTINGS),
           window.memento ? window.memento.getVersion() : Promise.resolve(__MEMENTO_VERSION__),
-          window.memento ? window.memento.getUpdateState() : Promise.resolve(null)
+          window.memento
+            ? window.memento.getUpdateState()
+            : Promise.resolve(demoUpdateState(__MEMENTO_VERSION__))
         ])
         setAppVersion(initialVersion)
         setUpdateState(initialUpdateState)
@@ -1284,24 +1301,37 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
             currentVersion: appVersion,
             latestVersion: null,
             updateAvailable: false,
-            releaseUrl: null,
+            phase: 'up-to-date' as const,
+            downloadPercent: null,
             checkedAt: new Date().toISOString(),
             error: null
           }
       setUpdateState(next)
-      setToast(next.error
-        ? appText('检查更新失败，请稍后重试', 'Could not check for updates. Try again later.')
-        : next.updateAvailable && next.latestVersion
-          ? appText(`发现新版本 v${next.latestVersion}`, `Memento v${next.latestVersion} is available.`)
-          : appText('当前已是最新版本', 'Memento is up to date.'))
     } catch (error) {
-      setToast(error instanceof Error ? error.message : appText('无法检查更新', 'Could not check for updates.'))
+      setUpdateState((current) => ({
+        currentVersion: current?.currentVersion ?? appVersion,
+        latestVersion: current?.latestVersion ?? null,
+        updateAvailable: current?.updateAvailable ?? false,
+        phase: 'error',
+        downloadPercent: null,
+        checkedAt: new Date().toISOString(),
+        error: error instanceof Error ? error.message : appText('无法检查更新', 'Could not check for updates.')
+      }))
     }
   }
 
-  const openUpdatePage = (): void => {
-    void window.memento?.openUpdatePage().catch((error) => {
-      setToast(error instanceof Error ? error.message : appText('无法打开版本页面', 'Could not open the release page.'))
+  const installUpdate = (): void => {
+    if (!window.memento) {
+      setUpdateState((current) => current ? { ...current, phase: 'installing' } : current)
+      return
+    }
+    void window.memento?.installUpdate().catch((error) => {
+      setUpdateState((current) => current ? {
+        ...current,
+        phase: 'error',
+        downloadPercent: null,
+        error: error instanceof Error ? error.message : appText('无法安装更新', 'Could not install the update.')
+      } : current)
     })
   }
 
@@ -1382,7 +1412,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       hostname={result?.system.hostname ?? ''}
       osVersion={result?.system.osVersion ?? ''}
       onNavigate={setView}
-      onOpenUpdate={openUpdatePage}
+      onInstallUpdate={installUpdate}
     >
       {view === 'agent' && <AgentPage scan={result} run={activeRun} conversationRuns={conversationRuns} workspaceRuns={workspaceRuns} statusMessage={runStatusMessage} selectedPlanIds={selectedPlanIds} providerConfigured={Boolean(defaultProvider)} addingOperationId={addingOperationId} openingApplicationId={openingApplicationId} returnLabel={agentOriginLabel} onSubmit={startAgentRun} onSelectWorkspaceRun={selectWorkspaceRun} onCloseWorkspaceRun={closeWorkspaceRun} onNewTask={() => { setActiveRun(null); activeRunId.current = null; setSelectedPlanIds(new Set()); setRunStatusMessage(''); setAgentOrigin(null) }} onOpenHistory={() => setView('history')} onOpenSettings={() => setView('settings')} onReturn={returnToAgentOrigin} onOpenApplication={openAgentApplication} onAddPlanItem={(id) => void addAgentPlanItem(id)} onTogglePlanItem={(id) => setSelectedPlanIds((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next })} onExecutePlan={() => void executePlan()} onDiscardPlan={discardPlan} />}
       {view === 'health' && <HealthPage result={result} settings={settings} scanBusy={scanBusy} progress={progress} tab={healthTab} storageMode={storageMode} diskUsage={diskUsage} diskUsageProgress={diskUsageProgress} diskUsageBusy={diskUsageBusy} diskUsageError={diskUsageError} restoreTarget={restoreTarget?.view === 'health' ? restoreTarget : null} onRestoreComplete={() => setRestoreTarget(null)} onScan={() => void scanNow()} onTabChange={setHealthTab} onStorageModeChange={changeStorageMode} onDiskUsageScan={() => void scanDiskUsage()} onDiskUsageCancel={cancelDiskUsageScan} onRevealDiskUsageNode={revealDiskUsageNode} onTrashDiskUsageNode={setPendingDiskUsageTrash} onAskDiskUsageNode={(node, origin) => startAgentRun(appText(`分析磁盘目录“${node.name}”（${node.location}）。直接说明它属于什么软件或用途、当前是否仍被使用，以及能否删除。结合已安装应用、后台服务、目录内容、软件包收据和 shell 引用给出证据；如果确认是已卸载软件的残留并且有已注册操作，请生成移到废纸篓的确认任务，不要直接执行。`, `Analyze the disk directory "${node.name}" (${node.location}). Directly explain what software or purpose it belongs to, whether it is still in use, and whether it can be deleted. Use installed apps, background services, directory entries, package receipts, and shell references as evidence. If it is confirmed leftover data from uninstalled software and a registered operation is available, prepare a confirmation task to move it to Trash without executing it.`), { isolated: true, origin: { view: 'health', ...origin }, diskUsageNodeId: node.id })} onRevealCandidate={revealCandidate} onAgentPrompt={(prompt, origin: HealthAgentOrigin) => startAgentRun(prompt, { isolated: true, origin: { view: 'health', ...origin } })} onDirectAction={requestDirectAction} onDirectTerminalFix={requestDirectTerminalFix} onOptimizeTerminal={requestTerminalFixBatch} onIgnore={setPendingIgnore} onManageIgnored={openIgnoredManager} />}

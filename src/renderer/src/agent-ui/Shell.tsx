@@ -2,14 +2,13 @@ import {
   Activity,
   AppWindow,
   Archive,
-  Download,
   History,
+  LoaderCircle,
   Monitor,
+  RefreshCw,
   Settings2,
-  Sparkles,
-  X
+  Sparkles
 } from 'lucide-react'
-import { useState } from 'react'
 import type { AgentProvider } from '../../../shared/agent-types'
 import type { AppUpdateState } from '../../../shared/types'
 import { useI18n } from '../i18n'
@@ -26,7 +25,7 @@ export function Shell({
   hostname,
   osVersion,
   onNavigate,
-  onOpenUpdate,
+  onInstallUpdate,
   children
 }: {
   activeView: AgentViewKey
@@ -38,11 +37,10 @@ export function Shell({
   hostname: string
   osVersion: string
   onNavigate: (view: AgentViewKey) => void
-  onOpenUpdate: () => void
+  onInstallUpdate: () => void
   children: React.ReactNode
 }): React.JSX.Element {
   const { text } = useI18n()
-  const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState<string | null>(null)
   const navigation: Array<{
     id: AgentViewKey
     label: [string, string]
@@ -55,6 +53,27 @@ export function Shell({
     { id: 'history', label: ['任务记录', 'History'], icon: History },
     { id: 'settings', label: ['设置', 'Settings'], icon: Settings2 }
   ]
+  const showUpdateControl = updateState && [
+    'available',
+    'downloading',
+    'downloaded',
+    'installing'
+  ].includes(updateState.phase)
+  const updateReady = updateState?.phase === 'downloaded'
+  const updateLabel = updateState?.phase === 'downloading'
+    ? `${updateState.downloadPercent ?? 0}%`
+    : updateState?.phase === 'downloaded'
+      ? text('更新', 'Update')
+      : updateState?.phase === 'installing'
+        ? text('安装中', 'Installing')
+        : text('准备中', 'Preparing')
+  const updateTitle = updateReady
+    ? text('安装新版本并重启 Memento', 'Install the update and restart Memento')
+    : updateState?.phase === 'downloading'
+      ? text(`正在后台下载新版本 ${updateState.downloadPercent ?? 0}%`, `Downloading the update in the background: ${updateState.downloadPercent ?? 0}%`)
+      : updateState?.phase === 'installing'
+        ? text('正在安装新版本', 'Installing the update')
+        : text('正在准备后台下载', 'Preparing the background download')
 
   return (
     <div className="app-shell">
@@ -63,7 +82,24 @@ export function Shell({
           <span className="brand-mark"><Archive size={18} /></span>
           <div className="brand-copy">
             <strong>Memento</strong>
-            <span className="brand-version">v{appVersion}</span>
+            <span className="brand-meta" role="status" aria-live="polite">
+              <span className="brand-version">v{appVersion}</span>
+              {showUpdateControl && (
+                <button
+                  type="button"
+                  className="brand-update-button"
+                  disabled={!updateReady}
+                  onClick={onInstallUpdate}
+                  title={updateTitle}
+                  aria-label={updateTitle}
+                >
+                  {updateReady
+                    ? <RefreshCw size={11} />
+                    : <LoaderCircle className="spinner" size={11} />}
+                  <span>{updateLabel}</span>
+                </button>
+              )}
+            </span>
           </div>
         </div>
 
@@ -115,20 +151,6 @@ export function Shell({
         </header>
         <main className="page-stack">{children}</main>
       </div>
-      {updateState?.updateAvailable && updateState.latestVersion &&
-        dismissedUpdateVersion !== updateState.latestVersion && (
-        <aside className="update-notice" role="status">
-          <span><Download size={17} /></span>
-          <div>
-            <strong>{text(`发现新版本 v${updateState.latestVersion}`, `Memento v${updateState.latestVersion} is available`)}</strong>
-            <small>{text('可前往发布页面下载安装', 'Open the release page to download and install it.')}</small>
-          </div>
-          <div className="update-notice-actions">
-            <button type="button" className="secondary-button" onClick={onOpenUpdate}>{text('查看', 'View')}</button>
-            <button type="button" className="icon-button" onClick={() => setDismissedUpdateVersion(updateState.latestVersion)} title={text('稍后提醒', 'Remind me later')} aria-label={text('稍后提醒', 'Remind me later')}><X size={15} /></button>
-          </div>
-        </aside>
-      )}
     </div>
   )
 }

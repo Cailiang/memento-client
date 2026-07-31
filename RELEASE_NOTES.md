@@ -1,35 +1,37 @@
-# Memento Agent 0.6.54
+# Memento Agent 0.6.55
 
 ## 简体中文
 
-`0.6.54` 为 macOS 安装包启用正式的 Developer ID 签名和 Apple 公证，解决 Apple Silicon 用户安装后被提示“已损坏，无法打开”的问题。
+`0.6.55` 新增应用内后台自动更新。Memento 会自动下载新版本，并只在版本号旁提供安装入口，不再弹出单独的更新提示。
 
 ### 主要变化
 
-- Intel 与 Apple Silicon 应用均使用项目的 `Developer ID Application` 证书签名，并启用 Hardened Runtime。
-- GitHub Actions 使用隔离的临时钥匙串导入签名证书，不会污染构建机器的默认钥匙串。
-- electron-builder 完成应用签名和公证后，工作流还会单独签名最终 DMG、提交 Apple 公证并装订票据。
-- 上传安装包前会验证应用版本、可执行架构、Bundle ID、签名主体、Team ID、Gatekeeper 结果，以及应用和 DMG 的公证票据。
+- 启动后和每小时自动检查稳定版本；发现新版本后直接在后台下载。
+- 侧边栏版本号旁显示准备状态和下载百分比，下载完成后变为“更新”按钮。
+- 点击“更新”后安装已经下载的版本并重启 Memento，无需打开 GitHub Release 页面手动下载安装。
+- 设置页保留“立即检查”，并显示检查、下载、就绪、安装、失败和安装包不支持等状态。
+- GitHub Release 新增 macOS ZIP、更新块映射和分架构元数据；工作流会严格验证完整的 19 个发布资产。
 
 ### 安装说明
 
-完整扫描和清理目前支持 macOS；Windows 与 Linux 安装包用于桌面外壳的可移植性验证。
+应用内更新从本版本开始可用，因此首次安装 `0.6.55` 仍需从 GitHub Release 下载对应平台安装包。完整扫描和清理目前支持 macOS；Windows 与 Linux 安装包用于桌面外壳的可移植性验证。
 
-公证后的 macOS 安装包可直接打开和安装，不再需要移除隔离属性或在“隐私与安全性”中手动放行。若从第三方镜像或缓存下载，请先确认文件校验和与 GitHub Release 中的 `SHA256SUMS.txt` 一致。
+macOS 安装包继续使用 Developer ID 签名、Apple 公证和票据装订。若从第三方镜像或缓存下载，请先确认安装包校验和与 GitHub Release 中的 `SHA256SUMS.txt` 一致。
 
 ## English
 
-`0.6.54` enables production Developer ID signing and Apple notarization for macOS packages, resolving the damaged-app warning seen after installing the Apple Silicon build.
+`0.6.55` adds background in-app updates. Memento downloads a new version automatically and exposes installation only beside the sidebar version, without a separate update popup.
 
 ### Highlights
 
-- Both Intel and Apple Silicon apps are signed with the project's `Developer ID Application` certificate and Hardened Runtime enabled.
-- GitHub Actions imports the signing certificate into an isolated temporary keychain without modifying the build machine's persistent keychain.
-- After electron-builder signs and notarizes the app, the workflow separately signs the final DMG, submits it to Apple for notarization, and staples the ticket.
-- Before upload, release verification checks the app version, executable architecture, bundle identifier, signing authority, Team ID, Gatekeeper assessments, and stapled tickets for both the app and DMG.
+- Checks the stable release channel after startup and every hour, then downloads a newer version in the background.
+- Shows preparation and download progress beside the sidebar version; the control becomes an Update button when the package is ready.
+- Installs the downloaded version and restarts Memento when Update is selected, without opening GitHub Releases for a manual download.
+- Keeps Check now in Settings and reports checking, downloading, ready, installing, failure, and unsupported-package states.
+- Adds macOS ZIPs, updater blockmaps, and architecture-aware metadata to GitHub Releases, with strict validation of all 19 assets.
 
 ### Installation
 
-Full scanning and cleanup currently support macOS; Windows and Linux packages validate portability of the desktop shell.
+In-app updates begin with this version, so the first installation of `0.6.55` still requires the matching package from GitHub Releases. Full scanning and cleanup currently support macOS; Windows and Linux packages validate portability of the desktop shell.
 
-The notarized macOS package can be opened and installed normally without removing quarantine attributes or manually approving it in Privacy & Security. When downloading from a mirror or cache, verify the file against `SHA256SUMS.txt` from the GitHub Release first.
+macOS packages remain Developer ID signed, Apple-notarized, and stapled. When downloading from a mirror or cache, verify the installer against `SHA256SUMS.txt` from the GitHub Release first.

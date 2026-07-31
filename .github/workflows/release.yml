@@ -153,9 +153,13 @@ jobs:
           retention-days: 14
           path: |
             release/*.dmg
+            release/*.zip
+            release/*.zip.blockmap
             release/*.exe
+            release/*.exe.blockmap
             release/*.AppImage
             release/*.deb
+            release/latest*.yml
 
   release:
     if: github.event_name == 'push'
@@ -163,18 +167,16 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.x
+          cache: npm
+      - run: npm ci
       - uses: actions/download-artifact@v8
         with:
           path: artifacts
       - name: Collect packages and checksums
-        shell: bash
-        run: |
-          mkdir dist
-          find artifacts -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.AppImage' -o -name '*.deb' \) -exec cp {} dist/ \;
-          test "$(find dist -maxdepth 1 -type f | wc -l | tr -d ' ')" = "8"
-          cd dist
-          find . -maxdepth 1 -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.AppImage' -o -name '*.deb' \) -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
-          test "$(wc -l < SHA256SUMS.txt | tr -d ' ')" = "8"
+        run: npm run release:collect -- artifacts dist
       - name: Publish bilingual GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}

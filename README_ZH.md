@@ -12,7 +12,7 @@ Memento 是一款本地桌面系统维护 Agent。它把确定性的设备检查
 - **电脑体检：** 查看存储建议和磁盘占用，检查后台服务，并诊断终端启动问题。
 - **应用管理：** 查看已安装应用及其元数据，打开或忽略应用，确认后把支持卸载的应用移到废纸篓。
 - **任务记录：** 重新打开、搜索和删除保存在本机的 Agent 任务及工具调用记录。
-- **设置：** 管理模型供应商、软件更新、窗口行为、忽略项、主题和语言。
+- **设置：** 管理模型供应商、后台自动更新、窗口行为、忽略项、主题和语言。
 
 ## 安全边界
 
@@ -97,7 +97,9 @@ Memento 使用 Electron 应用数据目录中的本地 SQLite 数据库保存设
 | Windows | x64、arm64 | NSIS EXE |
 | Linux | x64、arm64 | AppImage、DEB |
 
-每个 GitHub Release 包含 8 个平台安装包和 `SHA256SUMS.txt`。macOS 安装包会使用项目的 Developer ID Application 证书签名，经 Apple 公证并装订票据后再上传；发布流程会使用 `codesign`、Gatekeeper 和 `stapler` 验证最终应用与 DMG。
+Memento 每小时自动检查更新。发现新版本后会在后台下载，下载完成后在侧边栏版本号旁显示“更新”按钮；点击后直接安装并重启，不再弹出单独的更新提示。
+
+每个 GitHub Release 包含 8 个面向用户的平台安装包、自动更新载荷与元数据，以及 `SHA256SUMS.txt`（共 19 个资产）。校验清单只覆盖 8 个安装包。macOS 安装包会使用项目的 Developer ID Application 证书签名，经 Apple 公证并装订票据后再上传；发布流程会使用 `codesign`、Gatekeeper 和 `stapler` 验证最终应用与 DMG。
 
 ## 许可证
 
