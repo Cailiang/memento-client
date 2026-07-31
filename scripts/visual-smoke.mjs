@@ -125,6 +125,26 @@ try {
   await concurrentPage.screenshot({ path: '/tmp/memento-interaction-agent-concurrency.png' })
   await concurrentPage.close()
 
+  const conversationPage = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+  await conversationPage.goto(baseUrl, { waitUntil: 'networkidle' })
+  await conversationPage.locator('.nav-button[title="电脑体检"]').click()
+  await conversationPage.getByRole('tab', { name: /存储空间/ }).click()
+  const lingmaRow = conversationPage.locator('.health-panel.is-active .data-row').filter({ hasText: '.lingma' })
+  if (!await lingmaRow.count()) {
+    failures.push('agent-identity: .lingma storage finding is missing')
+  } else {
+    await lingmaRow.getByRole('button', { name: 'AI 分析' }).click()
+    await conversationPage.locator('.message.assistant').filter({ hasText: '阿里云「通义灵码」' }).waitFor({ timeout: 5_000 })
+    await conversationPage.locator('textarea[aria-label="输入任务"]').fill('它现在还可能被什么使用？')
+    await conversationPage.locator('button[aria-label="发送"]').click()
+    await conversationPage.locator('.conversation .message.user').nth(1).waitFor({ timeout: 2_000 })
+    await conversationPage.waitForTimeout(1_100)
+    if (await conversationPage.locator('.agent-task-switcher').count()) {
+      failures.push('agent-conversation: a follow-up turn created another task tab')
+    }
+  }
+  await conversationPage.close()
+
   const diskPage = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   await diskPage.goto(baseUrl, { waitUntil: 'networkidle' })
   await diskPage.locator('.nav-button[title="电脑体检"]').click()
@@ -231,10 +251,15 @@ try {
   await page.locator('.health-panel.is-active .row-menu-popover [role="menuitem"]').first().click()
   const directConfirm = page.getByRole('dialog', { name: /直接执行/ })
   await directConfirm.waitFor()
+  const directStartedAt = Date.now()
   await directConfirm.locator('.primary-button, .danger-button').click()
   const directProgress = page.locator('[role="dialog"]').filter({ has: page.locator('.execution-stage') })
   await directProgress.waitFor()
   await page.waitForFunction(() => !document.querySelector('[role="dialog"] .dialog-actions button')?.hasAttribute('disabled'))
+  const directDuration = Date.now() - directStartedAt
+  if (directDuration < 2_400 || directDuration > 5_000) {
+    failures.push(`health/storage: direct deletion feedback took ${directDuration}ms instead of about 3 seconds`)
+  }
   await directProgress.getByRole('button', { name: '完成' }).click()
 
   await page.getByRole('tab', { name: /后台服务/ }).click()

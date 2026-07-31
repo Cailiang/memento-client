@@ -80,6 +80,7 @@ export interface DirectActionRequest {
   id: string
   ids?: string[]
   kind: 'action' | 'terminal-fix'
+  verificationMode: 'local' | 'scan'
   subject: string
   label: string
   consequence: string
@@ -102,7 +103,9 @@ export function DirectActionConfirmDialog({
   return (
     <DialogFrame
       title={text(`直接执行“${action.label}”？`, `Run "${action.label}" directly?`)}
-      description={text('不会经过 AI 分析；只执行下面这项已注册操作，完成后自动复检。', 'AI analysis is skipped. Only this registered action runs, followed by automatic verification.')}
+      description={action.verificationMode === 'local'
+        ? text('不会经过 AI 分析；只执行下面这项已注册操作，完成后在约 3 秒内更新当前列表。', 'AI analysis is skipped. Only this registered action runs, and the current list updates in about 3 seconds.')
+        : text('不会经过 AI 分析；只执行下面这项已注册操作，完成后自动复检。', 'AI analysis is skipped. Only this registered action runs, followed by automatic verification.')}
       onClose={onClose}
       actions={<><button type="button" className="secondary-button" onClick={onClose}>{text('取消', 'Cancel')}</button><button type="button" className={action.reversible ? 'primary-button' : 'danger-button'} onClick={onConfirm}><Play size={15} />{text('确认并执行', 'Confirm and run')}</button></>}
     >
@@ -119,6 +122,7 @@ export function DirectActionConfirmDialog({
 
 export function ExecutionProgressDialog({
   phase,
+  verificationMode,
   progress,
   itemCount,
   completedCount,
@@ -126,6 +130,7 @@ export function ExecutionProgressDialog({
   onClose
 }: {
   phase: ExecutionPhase
+  verificationMode: 'local' | 'scan'
   progress: number
   itemCount: number
   completedCount: number
@@ -138,28 +143,32 @@ export function ExecutionProgressDialog({
   const title = phase === 'executing'
     ? text('正在执行已确认的操作', 'Running confirmed actions')
     : phase === 'verifying'
-      ? text('正在重新体检', 'Verifying results')
+      ? verificationMode === 'local'
+        ? text('正在更新存储列表', 'Updating storage list')
+        : text('正在重新体检', 'Verifying results')
       : phase === 'completed'
         ? text('处理完成', 'Actions completed')
         : text('部分操作未完成', 'Some actions did not complete')
   const stage = phase === 'executing'
     ? text('执行操作', 'Running actions')
     : phase === 'verifying'
-      ? text('验证结果', 'Verifying')
+      ? verificationMode === 'local'
+        ? text('更新列表', 'Updating list')
+        : text('验证结果', 'Verifying')
       : phase === 'completed'
         ? text('复检通过', 'Verified')
         : text('需要查看', 'Review needed')
   const stageIndex = phase === 'executing' ? 0 : phase === 'verifying' ? 1 : 2
   const StatusIcon = phase === 'executing'
-    ? Play
+    ? verificationMode === 'local' ? Trash2 : Play
     : phase === 'verifying'
-      ? Search
+      ? verificationMode === 'local' ? Archive : Search
       : phase === 'completed'
         ? CheckCircle2
         : CircleAlert
   const stages = [
-    { label: text('执行', 'Run'), icon: Play },
-    { label: text('复检', 'Verify'), icon: Search },
+    { label: text('执行', 'Run'), icon: verificationMode === 'local' ? Trash2 : Play },
+    { label: verificationMode === 'local' ? text('更新', 'Update') : text('复检', 'Verify'), icon: verificationMode === 'local' ? Archive : Search },
     { label: text('完成', 'Done'), icon: CheckCircle2 }
   ]
   return (
@@ -170,7 +179,7 @@ export function ExecutionProgressDialog({
       onClose={onClose}
       actions={<button type="button" className="secondary-button" onClick={onClose} disabled={!finished}>{text('完成', 'Done')}</button>}
     >
-      <div className={`execution-stage is-${phase}`} role="status" aria-live="polite">
+      <div className={`execution-stage is-${phase} is-${verificationMode}`} role="status" aria-live="polite">
         <div className="execution-overview">
           <span className="execution-status-mark" aria-hidden="true"><StatusIcon size={22} /></span>
           <div className="execution-copy">
@@ -179,7 +188,9 @@ export function ExecutionProgressDialog({
             <span>{phase === 'executing'
               ? text(`正在处理 ${itemCount} 项已确认操作`, `Running ${itemCount} confirmed ${itemCount === 1 ? 'action' : 'actions'}`)
               : phase === 'verifying'
-                ? text('正在核对操作结果与设备状态', 'Checking action results and device state')
+                ? verificationMode === 'local'
+                  ? text('正在确认删除结果并更新当前列表', 'Confirming the deletion and updating the current list')
+                  : text('正在核对操作结果与设备状态', 'Checking action results and device state')
                 : detail}</span>
           </div>
           <strong className="execution-progress-value">{progressValue}%</strong>

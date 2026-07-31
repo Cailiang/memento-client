@@ -139,6 +139,21 @@ export interface HiddenHomeArtifact {
   kind: 'directory' | 'file'
 }
 
+export interface HiddenArtifactProduct {
+  name: { zh: string; en: string }
+  description: { zh: string; en: string }
+}
+
+const KNOWN_HIDDEN_ARTIFACT_PRODUCTS: Record<string, HiddenArtifactProduct> = {
+  lingma: {
+    name: { zh: '阿里云「通义灵码」', en: 'Alibaba Cloud Tongyi Lingma' },
+    description: {
+      zh: '这是阿里云「通义灵码」智能编码助手使用的用户配置目录。即使没有检测到独立应用，它仍可能由 IDE 插件或命令行工具使用。',
+      en: 'This is a user configuration directory for Alibaba Cloud Tongyi Lingma, an AI coding assistant. An IDE extension or command-line tool may still use it even when no standalone application is detected.'
+    }
+  }
+}
+
 type ApplicationIdentity = Pick<
   InstalledApplication,
   'name' | 'bundleId' | 'executable' | 'urlSchemes'
@@ -155,6 +170,10 @@ function identityParts(value: string): string[] {
 
 export function hiddenArtifactIdentity(name: string): string {
   return name.replace(/^\.+/, '').normalize('NFKD').toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
+export function knownHiddenArtifactProduct(name: string): HiddenArtifactProduct | null {
+  return KNOWN_HIDDEN_ARTIFACT_PRODUCTS[hiddenArtifactIdentity(name)] ?? null
 }
 
 export function installedApplicationIdentityTokens(

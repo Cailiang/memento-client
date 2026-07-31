@@ -8,10 +8,22 @@ import {
   installedApplicationIdentityTokens,
   installedCommandIdentityTokens,
   isAllowedHiddenHomeArtifactTarget,
+  knownHiddenArtifactProduct,
   validateHiddenHomeArtifactCleanupTarget
 } from './home-hidden-cleanup'
 
 describe('hidden Home cleanup', () => {
+  it('identifies known configuration directories without guessing from an installed app', () => {
+    expect(knownHiddenArtifactProduct('.lingma')).toEqual({
+      name: { zh: '阿里云「通义灵码」', en: 'Alibaba Cloud Tongyi Lingma' },
+      description: expect.objectContaining({
+        zh: expect.stringContaining('智能编码助手'),
+        en: expect.stringContaining('AI coding assistant')
+      })
+    })
+    expect(knownHiddenArtifactProduct('.unrecognized-tool')).toBeNull()
+  })
+
   it('finds unmatched app data while protecting credentials, shell files, and container roots', async () => {
     const home = await fs.mkdtemp(path.join(os.tmpdir(), 'memento-hidden-home-'))
     try {

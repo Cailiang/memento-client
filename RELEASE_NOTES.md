@@ -1,8 +1,8 @@
-# Memento Agent 0.6.48
+# Memento Agent 0.6.49
 
 ## 简体中文
 
-`0.6.48` 修复 Home 隐藏残留对已安装命令行工具的误判，并保留安全的废纸篓清理与完整 GitHub Actions 多平台发布流程。
+`0.6.49` 缩短存储直接清理反馈、修复 Agent 会话标签重复，并让具体配置分析直接说明软件归属；同时保留安全清理边界与完整 GitHub Actions 多平台发布流程。
 
 ### 主要变化
 
@@ -15,9 +15,12 @@
 - Antigravity 的 `connection_probe` 现在声明为严格工具，首轮请求会实际使用 Gemini `VALIDATED`，不会因退化为 `AUTO` 而只返回普通文本。
 - 存储建议现在扫描 Home 根目录隐藏项目及 `.config`、`.cache`、`.local/share` 一级子项目，只显示至少 30 天未修改且未与当前应用清单明确匹配的候选项。
 - 隐藏残留匹配现在同时索引 `PATH`、Homebrew 和常见用户 bin 目录中的命令；例如 `ipatool` 命令存在时，`~/.ipatool` 不再进入清理建议。
+- 已知隐藏配置会提供确定性产品归属；`.lingma` 明确标记为阿里云「通义灵码」智能编码助手的配置目录，并提醒它仍可能由 IDE 插件或命令行工具使用。
 - shell、凭据、包管理器和隐藏容器根目录受保护；候选项明确标记为需要确认，执行前重新校验，并且只移到废纸篓。
+- 存储建议中的直接清理在真实操作成功后用约 3 秒完成反馈并更新当前列表，不再等待完整电脑体检；服务、终端和 Agent 确认计划仍会重新体检。
 - 磁盘浏览删除成功后立即更新本地树，不再触发全盘重扫；同轮扫描中的其他项目可以继续删除。
-- 多个分析任务分别使用独立会话，确认执行计划后的状态动效也已改为紧凑的“执行、复检、完成”流程。
+- Agent 任务标签现在按会话而不是每轮消息管理；同一会话中的追问不会再新建标签，明确新任务与隔离分析继续使用独立会话。
+- Agent 分析具体存储项或后台服务时，会先直接说明产品、厂商和用途；证据不足时明确说明未知，不会猜测。
 
 ### 安装说明
 
@@ -25,7 +28,7 @@
 
 ## English
 
-`0.6.48` fixes hidden Home leftover false positives for installed command-line tools while retaining safe Trash cleanup and the complete GitHub Actions release pipeline.
+`0.6.49` shortens direct Storage cleanup feedback, fixes duplicate Agent conversation tabs, and makes specific configuration analysis identify its owning software up front while retaining safe cleanup boundaries and the complete GitHub Actions release pipeline.
 
 ### Highlights
 
@@ -38,9 +41,12 @@
 - Antigravity now declares `connection_probe` as strict, so the first request actually uses Gemini `VALIDATED` instead of falling back to a text-only `AUTO` response.
 - Storage findings now inspect hidden items directly under Home and one level below `.config`, `.cache`, and `.local/share`, retaining only candidates unchanged for at least 30 days and not clearly matched to the current app inventory.
 - Hidden leftover matching now also indexes commands in `PATH`, Homebrew, and common user bin directories; when `ipatool` exists, for example, `~/.ipatool` is no longer offered for cleanup.
+- Known hidden configurations include deterministic ownership metadata. `.lingma` is identified as an Alibaba Cloud Tongyi Lingma AI coding-assistant configuration directory that an IDE extension or command-line tool may still use.
 - Shell, credential, package-manager, and hidden container roots remain protected; every candidate requires review, is revalidated before execution, and only moves to Trash.
+- Direct cleanup from Storage completes its feedback and updates the current list in about three seconds after the real operation succeeds, without waiting for a full computer scan. Service, terminal, and confirmed Agent-plan actions retain full rescans.
 - Successful disk-browser removal updates the local tree without a full-volume rescan, so other items from the same scan can be removed consecutively.
-- Concurrent analyses use separate conversations, and confirmed plans now show a compact Run, Verify, Done execution sequence.
+- Agent task tabs are keyed by conversation rather than message turn, so follow-up questions stay in one tab while explicit new tasks and isolated analyses remain separate.
+- Specific storage-item and background-service analyses lead with the product, vendor, and purpose; insufficient evidence is reported as unknown instead of guessed.
 
 ### Installation
 

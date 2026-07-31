@@ -92,12 +92,12 @@ function CandidateRow({
       <div className="row-actions">
         <button type="button" className="secondary-button" onClick={() => onAgentPrompt(operationCount
           ? text(
-              `分析“${candidate.name}”，说明它的用途、当前状态、影响和风险，并比较全部 ${operationCount} 个可选操作。不要直接执行或默认选择操作，等我明确选择后再加入确认计划。`,
-              `Analyze "${candidate.name}", explain its purpose, current state, impact, and risks, then compare all ${operationCount} available actions. Do not execute or select an action until I explicitly choose one.`
+              `分析“${candidate.name}”。第一句话直接说明它是什么软件或服务、属于哪家公司以及主要用途；再说明当前状态、影响和风险，并比较全部 ${operationCount} 个可选操作。无法确认归属时明确说不知道，不要猜测。不要直接执行或默认选择操作，等我明确选择后再加入确认计划。`,
+              `Analyze "${candidate.name}". In the first sentence, directly identify the software or service, its vendor, and its main purpose. Then explain its current state, impact, and risks and compare all ${operationCount} available actions. If ownership cannot be established, say so instead of guessing. Do not execute or select an action until I explicitly choose one.`
             )
           : text(
-              `分析“${candidate.name}”，说明它的用途、当前状态、影响和是否需要关注；不要修改系统。`,
-              `Analyze "${candidate.name}" and explain its purpose, current state, impact, and whether it needs attention. Do not change the system.`
+              `分析“${candidate.name}”。第一句话直接说明它是什么软件或服务、属于哪家公司以及主要用途；再说明当前状态、影响和是否需要关注。无法确认归属时明确说不知道，不要猜测；不要修改系统。`,
+              `Analyze "${candidate.name}". In the first sentence, directly identify the software or service, its vendor, and its main purpose. Then explain its current state, impact, and whether it needs attention. If ownership cannot be established, say so instead of guessing. Do not change the system.`
             ), candidate.id)}>
           <Sparkles size={14} />{text('AI 分析', 'AI analysis')}
         </button>

@@ -143,6 +143,25 @@ export const demoResult: ScanResult = {
       }
     },
     {
+      id: 'demo-lingma',
+      section: 'storage',
+      name: '.lingma',
+      subtitle: '阿里云「通义灵码」 · Home 隐藏项目',
+      location: '~/.lingma',
+      description: '这是阿里云「通义灵码」智能编码助手使用的用户配置目录。IDE 插件或命令行工具仍可能使用它。',
+      sizeBytes: 84 * MB,
+      ageDays: 64,
+      risk: 'review',
+      status: '需确认归属',
+      evidence: ['已知归属：阿里云「通义灵码」', '隐藏位置：~/.lingma', '最近修改于 64 天前'],
+      action: {
+        kind: 'trash-home-artifact',
+        label: '移到废纸篓',
+        consequence: '整个隐藏项目及其中的配置和数据会移到废纸篓；如果通义灵码仍在使用它，相关设置可能会被重置。',
+        reversible: true
+      }
+    },
+    {
       id: 'demo-postgres',
       section: 'services',
       name: 'postgresql@14',
@@ -534,6 +553,13 @@ export function localizedDemoResult(language: AppLanguage): ScanResult {
       status: 'Reclaimable',
       evidence: ['Uses 4.6 GB', 'Last modified 37 days ago']
     },
+    'demo-lingma': {
+      name: '.lingma',
+      subtitle: 'Alibaba Cloud Tongyi Lingma · hidden Home item',
+      description: 'This is a user configuration directory for Alibaba Cloud Tongyi Lingma, an AI coding assistant. An IDE extension or command-line tool may still use it.',
+      status: 'Ownership review',
+      evidence: ['Known owner: Alibaba Cloud Tongyi Lingma', 'Hidden location: ~/.lingma', 'Last modified 64 days ago']
+    },
     'demo-postgres': {
       name: 'postgresql@14',
       subtitle: 'Homebrew background service',
@@ -572,6 +598,7 @@ export function localizedDemoResult(language: AppLanguage): ScanResult {
   const actionCopy: Record<string, { label: string; consequence: string }> = {
     'demo-derived-data': { label: 'Clean permanently', consequence: 'The cache will be permanently deleted to release space immediately. Xcode recreates it during the next full build.' },
     'demo-npm': { label: 'Clean permanently', consequence: 'The cache will be permanently deleted to release space immediately. npm may download dependencies again later.' },
+    'demo-lingma': { label: 'Move to Trash', consequence: 'The hidden configuration and data will move to the Trash. Tongyi Lingma settings may reset if an extension or command-line tool still uses it.' },
     'demo-postgres': { label: 'Stop service', consequence: 'The service will stop immediately and no longer start automatically at login.' },
     'demo-sunlogin-stop': { label: 'Stop service only', consequence: 'The process will stop, while the app, configuration, and user data remain.' },
     'demo-sunlogin-cleanup': { label: 'Uninstall and clean detected data', consequence: 'Stops the service, then moves Sunlogin, its login item, and 4 exact-match data items to the Trash. Documents and non-exact matches remain.' },

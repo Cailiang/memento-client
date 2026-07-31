@@ -52,6 +52,11 @@ import { type AgentViewKey, Shell } from './agent-ui/Shell'
 import { localizedDemoDiskUsageResult, localizedDemoResult } from './demo'
 import { withoutDiskUsageNode } from './disk-usage-tree'
 import { I18nProvider } from './i18n'
+import {
+  appendWorkspaceConversation,
+  latestWorkspaceConversationRuns
+} from './agent-workspace'
+import { applyCompletedCandidateActions } from './candidate-actions'
 
 const DEMO_PROVIDER: AgentProvider = {
   id: 'demo-provider',
@@ -120,9 +125,14 @@ function demoPresentation(
   language: AppSettings['language']
 ): AgentPresentation {
   const applicationTask = /应用|app|残留|unused/i.test(prompt)
-  const serviceTask = /服务|service|启动项|process/i.test(prompt)
+  const normalizedPrompt = prompt.toLocaleLowerCase()
+  const directlyNamedCandidate = scan.candidates.find((item) => (
+    normalizedPrompt.includes(item.name.toLocaleLowerCase())
+  ))
+  const serviceTask = directlyNamedCandidate
+    ? directlyNamedCandidate.section === 'services'
+    : /服务|service|启动项|process/i.test(prompt)
   if (applicationTask) {
-    const normalizedPrompt = prompt.toLocaleLowerCase()
     const directApplication = scan.applications.find((item) => (
       normalizedPrompt.includes(item.name.toLocaleLowerCase()) ||
       Boolean(item.bundleId && normalizedPrompt.includes(item.bundleId.toLocaleLowerCase()))
@@ -171,9 +181,12 @@ function demoPresentation(
       }]
     }
   }
-  const candidates = scan.candidates
-    .filter((item) => item.section === (serviceTask ? 'services' : 'storage'))
-    .slice(0, 8)
+  const matchingCandidate = directlyNamedCandidate?.section === (serviceTask ? 'services' : 'storage')
+    ? directlyNamedCandidate
+    : undefined
+  const candidates = (matchingCandidate
+    ? [matchingCandidate]
+    : scan.candidates.filter((item) => item.section === (serviceTask ? 'services' : 'storage')).slice(0, 8))
     .map((item) => ({
       kind: item.section as 'services' | 'storage',
       id: item.id,
@@ -199,14 +212,18 @@ function demoPresentation(
     }))
   const kind = serviceTask ? 'services' : 'storage'
   return {
-    summary: language === 'en-US'
-      ? 'Inspection complete. Review the relevant items below and add only the actions you want to the confirmation plan.'
-      : '检查完成。请核对下面的相关项目，只把需要处理的操作加入确认计划。',
+    summary: matchingCandidate
+      ? matchingCandidate.description
+      : language === 'en-US'
+        ? 'Inspection complete. Review the relevant items below and add only the actions you want to the confirmation plan.'
+        : '检查完成。请核对下面的相关项目，只把需要处理的操作加入确认计划。',
     sections: [{
       kind,
-      title: serviceTask
-        ? language === 'en-US' ? 'Background services' : '后台服务'
-        : language === 'en-US' ? 'Reclaimable storage' : '可清理的存储空间',
+      title: matchingCandidate
+        ? language === 'en-US' ? 'Identified item' : '项目识别'
+        : serviceTask
+          ? language === 'en-US' ? 'Background services' : '后台服务'
+          : language === 'en-US' ? 'Reclaimable storage' : '可清理的存储空间',
       items: candidates
     }]
   }
@@ -254,6 +271,7 @@ interface RestoreTarget extends PageRestoreTarget {
 
 interface ExecutionState {
   phase: ExecutionPhase
+  verificationMode: 'local' | 'scan'
   itemCount: number
   completedCount: number
   detail: string
@@ -268,6 +286,15 @@ function waitForNextPaint(): Promise<void> {
   })
 }
 
+const DIRECT_STORAGE_FEEDBACK_MS = 2_850
+
+async function waitUntilElapsed(startedAt: number, milliseconds: number): Promise<void> {
+  const remaining = milliseconds - (performance.now() - startedAt)
+  if (remaining > 0) {
+    await new Promise<void>((resolve) => window.setTimeout(resolve, remaining))
+  }
+}
+
 function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSettings['language']) => void }): React.JSX.Element {
   const [appVersion, setAppVersion] = useState(__MEMENTO_VERSION__)
   const [updateState, setUpdateState] = useState<AppUpdateState | null>(null)
@@ -279,7 +306,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
   const [scanBusy, setScanBusy] = useState(false)
   const [progress, setProgress] = useState<ScanProgress | null>(null)
   const [activeRun, setActiveRun] = useState<AgentRunRecord | null>(null)
-  const [workspaceRunIds, setWorkspaceRunIds] = useState<string[]>([])
+  const [workspaceConversationIds, setWorkspaceConversationIds] = useState<string[]>([])
   const [runStatusMessage, setRunStatusMessage] = useState('')
   const [selectedPlanIds, setSelectedPlanIds] = useState<Set<string>>(new Set())
   const [healthTab, setHealthTab] = useState<HealthTab>('storage')
@@ -591,7 +618,10 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       }
       setActiveRun(run)
       activeRunId.current = run.id
-      setWorkspaceRunIds((current) => [...current.filter((id) => id !== run.id), run.id].slice(-8))
+      setWorkspaceConversationIds((current) => appendWorkspaceConversation(
+        current,
+        run.conversationId
+      ))
       window.setTimeout(() => {
         const plan = demoPlan(result, settings.language)
         const presentation = demoPresentation(result, prompt, settings.language)
@@ -619,7 +649,10 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       conversationId: options.isolated ? undefined : activeRun?.conversationId
     }).then((run) => {
       setRuns((current) => [run, ...current.filter((item) => item.id !== run.id)])
-      setWorkspaceRunIds((current) => [...current.filter((id) => id !== run.id), run.id].slice(-8))
+      setWorkspaceConversationIds((current) => appendWorkspaceConversation(
+        current,
+        run.conversationId
+      ))
       if (latestAgentStartToken.current === startToken) {
         activeRunId.current = run.id
         setActiveRun(run)
@@ -640,6 +673,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     const itemCount = itemIds.length
     setExecutionState({
       phase: 'executing',
+      verificationMode: 'scan',
       itemCount,
       completedCount: 0,
       progress: 8,
@@ -677,6 +711,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
         setSelectedPlanIds(new Set())
         setExecutionState({
           phase: 'completed',
+          verificationMode: 'scan',
           itemCount,
           completedCount: itemCount,
           progress: 100,
@@ -701,6 +736,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       const selectedResults = executed.run.results.filter((item) => itemIds.includes(item.id))
       setExecutionState({
         phase: selectedResults.some((item) => !item.ok) ? 'failed' : 'completed',
+        verificationMode: 'scan',
         itemCount,
         completedCount: selectedResults.filter((item) => item.ok).length,
         progress: 100,
@@ -735,6 +771,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     setPendingDirectAction({
       id: operation.id,
       kind: 'action',
+      verificationMode: candidate.section === 'storage' ? 'local' : 'scan',
       subject: candidate.name,
       label: operation.label,
       consequence: operation.consequence,
@@ -752,6 +789,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     setPendingDirectAction({
       id: finding.fix.id,
       kind: 'terminal-fix',
+      verificationMode: 'scan',
       subject: finding.title,
       label: finding.fix.label,
       consequence: finding.fix.consequence,
@@ -771,6 +809,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       id: fixes[0].id,
       ids: fixes.map((fix) => fix.id),
       kind: 'terminal-fix',
+      verificationMode: 'scan',
       subject: appText(`${fixes.length} 项终端启动问题`, `${fixes.length} terminal startup issues`),
       label: appText(`一键优化 ${fixes.length} 项`, `Optimize ${fixes.length} items`),
       consequence: appText('自动备份相关 shell 配置，执行全部可安全应用的优化，校验语法后重新体检。', 'Back up the relevant shell configuration, apply every safe optimization, validate syntax, and scan again.'),
@@ -783,9 +822,11 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     if (!pendingDirectAction) return
     const action = pendingDirectAction
     const actionIds = action.ids?.length ? action.ids : [action.id]
+    const startedAt = performance.now()
     setPendingDirectAction(null)
     setExecutionState({
       phase: 'executing',
+      verificationMode: action.verificationMode,
       itemCount: actionIds.length,
       completedCount: 0,
       progress: 8,
@@ -806,37 +847,73 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
             }))), 520)
           })
       const completedCount = results.filter((item) => item.ok).length
+      const completedIds = new Set(results.filter((item) => item.ok).map((item) => item.id))
       setExecutionState({
         phase: 'verifying',
+        verificationMode: action.verificationMode,
         itemCount: actionIds.length,
         completedCount,
         progress: 44,
         itemIds: actionIds,
-        detail: appText('正在重新体检并验证结果。', 'Scanning again to verify the result.')
+        detail: action.verificationMode === 'local'
+          ? appText('正在确认删除结果并更新当前列表。', 'Confirming the deletion and updating the current list.')
+          : appText('正在重新体检并验证结果。', 'Scanning again to verify the result.')
       })
-      setScanBusy(true)
-      const verified = window.memento
-        ? await window.memento.scan(settings.language)
-        : await new Promise<ScanResult>((resolve) => window.setTimeout(() => resolve(localizedDemoResult(settings.language)), 520))
-      setResult(verified)
+      if (action.verificationMode === 'local') {
+        await waitUntilElapsed(startedAt, 1_600)
+        setExecutionState((current) => current ? { ...current, progress: 72 } : current)
+        await waitUntilElapsed(startedAt, 2_250)
+        setExecutionState((current) => current ? { ...current, progress: 92 } : current)
+        await waitUntilElapsed(startedAt, DIRECT_STORAGE_FEEDBACK_MS)
+        setResult((current) => current ? {
+          ...current,
+          candidates: applyCompletedCandidateActions(
+            current.candidates,
+            completedIds,
+            settings.language
+          )
+        } : current)
+      } else {
+        setScanBusy(true)
+        const verified = window.memento
+          ? await window.memento.scan(settings.language)
+          : await new Promise<ScanResult>((resolve) => window.setTimeout(() => resolve(localizedDemoResult(settings.language)), 520))
+        setResult(verified)
+      }
       const failure = results.find((item) => !item.ok)
       setExecutionState({
         phase: failure ? 'failed' : 'completed',
+        verificationMode: action.verificationMode,
         itemCount: actionIds.length,
         completedCount,
         progress: 100,
         itemIds: actionIds,
         detail: failure?.message ?? appText(
-          `“${action.label}”已完成，复检结果正常。`,
-          `"${action.label}" completed and verification passed.`
+          action.verificationMode === 'local'
+            ? `“${action.label}”已完成，当前列表已经更新。`
+            : `“${action.label}”已完成，复检结果正常。`,
+          action.verificationMode === 'local'
+            ? `"${action.label}" completed and the current list was updated.`
+            : `"${action.label}" completed and verification passed.`
         )
       })
+      if (!failure) {
+        setToast(appText(
+          action.verificationMode === 'local'
+            ? `“${action.subject}”已处理并从列表移除`
+            : `“${action.subject}”处理完成`,
+          action.verificationMode === 'local'
+            ? `"${action.subject}" was processed and removed from the list.`
+            : `"${action.subject}" completed.`
+        ))
+      }
     } catch (error) {
       const message = error instanceof Error
         ? error.message
         : appText('操作或复检未能完成', 'The action or verification did not complete.')
       setExecutionState({
         phase: 'failed',
+        verificationMode: action.verificationMode,
         itemCount: actionIds.length,
         completedCount: 0,
         progress: 100,
@@ -1014,7 +1091,12 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     try {
       if (window.memento) await window.memento.deleteAgentRun(run.id)
       setRuns((current) => current.filter((item) => item.id !== run.id))
-      setWorkspaceRunIds((current) => current.filter((id) => id !== run.id))
+      const conversationStillExists = runs.some((item) => (
+        item.id !== run.id && item.conversationId === run.conversationId
+      ))
+      if (!conversationStillExists) {
+        setWorkspaceConversationIds((current) => current.filter((id) => id !== run.conversationId))
+      }
       if (activeRun?.id === run.id) {
         setActiveRun(null)
         activeRunId.current = null
@@ -1224,13 +1306,11 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     byId.set(activeRun.id, activeRun)
     return [...byId.values()].sort((left, right) => left.createdAt.localeCompare(right.createdAt))
   }, [activeRun, runs])
-  const workspaceRuns = useMemo(() => {
-    const byId = new Map(runs.map((run) => [run.id, run]))
-    if (activeRun) byId.set(activeRun.id, activeRun)
-    return workspaceRunIds
-      .map((id) => byId.get(id))
-      .filter((run): run is AgentRunRecord => Boolean(run))
-  }, [activeRun, runs, workspaceRunIds])
+  const workspaceRuns = useMemo(() => latestWorkspaceConversationRuns(
+    runs,
+    activeRun,
+    workspaceConversationIds
+  ), [activeRun, runs, workspaceConversationIds])
 
   const selectWorkspaceRun = (run: AgentRunRecord): void => {
     latestAgentStartToken.current += 1
@@ -1244,10 +1324,10 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     setView('agent')
   }
 
-  const closeWorkspaceRun = (runId: string): void => {
-    const remaining = workspaceRuns.filter((run) => run.id !== runId)
-    setWorkspaceRunIds((current) => current.filter((id) => id !== runId))
-    if (activeRun?.id !== runId) return
+  const closeWorkspaceRun = (conversationId: string): void => {
+    const remaining = workspaceRuns.filter((run) => run.conversationId !== conversationId)
+    setWorkspaceConversationIds((current) => current.filter((id) => id !== conversationId))
+    if (activeRun?.conversationId !== conversationId) return
     const fallback = remaining.at(-1) ?? null
     if (fallback) {
       selectWorkspaceRun(fallback)
@@ -1299,7 +1379,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       {view === 'settings' && <SettingsPage settings={settings} providers={providers} appVersion={appVersion} updateState={updateState} onUpdateSettings={updateSettings} onDiscoverModels={discoverProviderModels} onSaveProvider={saveProvider} onTestProvider={testProvider} onDeleteProvider={deleteProvider} onSetDefaultProvider={setDefaultProvider} onImportCcSwitch={importCcSwitchProviders} onCheckUpdates={checkForUpdates} onManageIgnored={() => openIgnoredManager()} onToast={setToast} />}
 
       {pendingDirectAction && <DirectActionConfirmDialog action={pendingDirectAction} onClose={() => setPendingDirectAction(null)} onConfirm={() => void executeDirectAction()} />}
-      {executionState && <ExecutionProgressDialog phase={executionState.phase} progress={executionState.progress} itemCount={executionState.itemCount} completedCount={executionState.completedCount} detail={executionState.detail} onClose={() => setExecutionState(null)} />}
+      {executionState && <ExecutionProgressDialog phase={executionState.phase} verificationMode={executionState.verificationMode} progress={executionState.progress} itemCount={executionState.itemCount} completedCount={executionState.completedCount} detail={executionState.detail} onClose={() => setExecutionState(null)} />}
       {pendingUninstall && <UninstallDialog application={pendingUninstall} busy={uninstallBusy} onClose={() => setPendingUninstall(null)} onConfirm={() => void uninstallApplication()} />}
       {pendingDiskUsageTrash && <DiskUsageTrashDialog node={pendingDiskUsageTrash} busy={diskUsageTrashBusy} onClose={() => setPendingDiskUsageTrash(null)} onConfirm={() => void trashDiskUsageNode()} />}
       {pendingIgnore && <IgnoreConfirmDialog candidate={pendingIgnore} busy={ignoreBusy} onClose={() => setPendingIgnore(null)} onConfirm={() => void confirmIgnore()} />}

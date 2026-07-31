@@ -662,6 +662,7 @@ select { -webkit-app-region: no-drag; }
 .execution-overview { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; gap: 12px; }
 .execution-status-mark { position: relative; display: grid; width: 46px; height: 46px; overflow: hidden; place-items: center; border: 1px solid color-mix(in srgb, var(--accent) 36%, var(--line)); border-radius: 7px; color: var(--accent); background: var(--accent-soft); }
 .execution-status-mark::after { position: absolute; right: 5px; left: 5px; height: 1px; background: currentColor; box-shadow: 0 0 7px currentColor; content: ""; opacity: .45; animation: execution-scan 1.8s cubic-bezier(.45, 0, .55, 1) infinite; }
+.execution-stage.is-local .execution-status-mark::after { animation-duration: 900ms; }
 .execution-stage.is-completed .execution-status-mark { border-color: color-mix(in srgb, var(--success) 34%, var(--line)); color: var(--success); background: var(--success-soft); }
 .execution-stage.is-failed .execution-status-mark { border-color: color-mix(in srgb, var(--danger) 34%, var(--line)); color: var(--danger); background: var(--danger-soft); }
 .execution-stage.is-completed .execution-status-mark::after,
@@ -676,8 +677,9 @@ select { -webkit-app-region: no-drag; }
 .execution-copy span { margin-top: 4px; color: var(--text-tertiary); font-size: 10px; }
 .execution-progress-value { color: var(--text-secondary); font-size: 17px; font-variant-numeric: tabular-nums; }
 .execution-progress-track { width: 100%; height: 5px; margin-top: 18px; overflow: hidden; border-radius: 3px; background: var(--surface-strong); }
-.execution-progress-track > span { position: relative; display: block; height: 100%; overflow: hidden; border-radius: inherit; background: var(--accent); transition: width 650ms cubic-bezier(.22, 1, .36, 1); }
+.execution-progress-track > span { position: relative; display: block; height: 100%; overflow: hidden; border-radius: inherit; background: var(--accent); transition: width 480ms cubic-bezier(.22, 1, .36, 1); }
 .execution-progress-track i { position: absolute; inset: 0; background: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--accent-contrast) 48%, transparent) 50%, transparent 100%); animation: execution-progress-sweep 1.6s ease-in-out infinite; transform: translateX(-100%); }
+.execution-stage.is-local .execution-progress-track i { animation-duration: 1s; }
 .execution-stage.is-completed .execution-progress-track > span { background: var(--success); }
 .execution-stage.is-failed .execution-progress-track > span { background: var(--danger); }
 .execution-stage.is-completed .execution-progress-track i,

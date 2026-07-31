@@ -46,6 +46,7 @@ import {
   discoverHiddenHomeArtifacts,
   installedApplicationIdentityTokens,
   installedCommandIdentityTokens,
+  knownHiddenArtifactProduct,
   type HiddenHomeArtifactSource
 } from './home-hidden-cleanup'
 
@@ -1257,49 +1258,64 @@ async function scanHiddenHomeArtifacts(
     .filter((item): item is NonNullable<typeof item> => item !== null)
     .sort((left, right) => right.sizeBytes - left.sizeBytes)
     .slice(0, 40)
-    .map(({ artifact, sizeBytes }) => registerCandidate(
-      actions,
-      {
-        section: 'storage',
-        name: artifact.name,
-        subtitle: hiddenArtifactSourceLabel(artifact.source, language),
-        description: t(
-          language,
-          '当前应用清单和可执行命令目录中都没有找到与它明确匹配的项目。它可能是已卸载软件的残留，也可能属于未被识别的脚本或工具，请确认用途后再清理。',
-          'No installed application or indexed executable command clearly matches this item. It may be leftover data from uninstalled software or belong to an unrecognized script or tool, so review it before cleanup.'
-        ),
-        sizeBytes,
-        ageDays: ageInDays(artifact.modifiedAt),
-        risk: 'review',
-        status: t(language, '需确认归属', 'Ownership review'),
-        location: displayPath(artifact.target),
-        evidence: [
-          t(language, `隐藏位置：${displayPath(artifact.target)}`, `Hidden location: ${displayPath(artifact.target)}`),
-          t(language, '未匹配到已安装的 macOS 应用或可执行命令', 'No installed macOS application or executable command was matched'),
-          t(language, `最近修改于 ${ageInDays(artifact.modifiedAt)} 天前`, `Last modified ${ageInDays(artifact.modifiedAt)} days ago`)
-        ],
-        action: {
+    .map(({ artifact, sizeBytes }) => {
+      const product = knownHiddenArtifactProduct(artifact.name)
+      const productName = product
+        ? language === 'en-US' ? product.name.en : product.name.zh
+        : null
+      return registerCandidate(
+        actions,
+        {
+          section: 'storage',
+          name: artifact.name,
+          subtitle: productName
+            ? `${productName} · ${hiddenArtifactSourceLabel(artifact.source, language)}`
+            : hiddenArtifactSourceLabel(artifact.source, language),
+          description: product
+            ? language === 'en-US' ? product.description.en : product.description.zh
+            : t(
+                language,
+                '当前应用清单和可执行命令目录中都没有找到与它明确匹配的项目。它可能是已卸载软件的残留，也可能属于未被识别的脚本或工具，请确认用途后再清理。',
+                'No installed application or indexed executable command clearly matches this item. It may be leftover data from uninstalled software or belong to an unrecognized script or tool, so review it before cleanup.'
+              ),
+          sizeBytes,
+          ageDays: ageInDays(artifact.modifiedAt),
+          risk: 'review',
+          status: t(language, '需确认归属', 'Ownership review'),
+          location: displayPath(artifact.target),
+          evidence: [
+            ...(productName ? [t(
+              language,
+              `已知归属：${productName}`,
+              `Known owner: ${productName}`
+            )] : []),
+            t(language, `隐藏位置：${displayPath(artifact.target)}`, `Hidden location: ${displayPath(artifact.target)}`),
+            t(language, '未匹配到已安装的 macOS 应用或可执行命令', 'No installed macOS application or executable command was matched'),
+            t(language, `最近修改于 ${ageInDays(artifact.modifiedAt)} 天前`, `Last modified ${ageInDays(artifact.modifiedAt)} days ago`)
+          ],
+          action: {
+            kind: 'trash-home-artifact',
+            label: t(language, '移到废纸篓', 'Move to Trash'),
+            consequence: t(
+              language,
+              '整个隐藏项目及其中的配置和数据会移到废纸篓。如果它仍被应用或命令行工具使用，相关设置可能会被重置。',
+              'The entire hidden item, including its configuration and data, moves to the Trash. Settings may be reset if an app or command-line tool still uses it.'
+            ),
+            reversible: true,
+            estimatedBytes: sizeBytes
+          }
+        },
+        {
           kind: 'trash-home-artifact',
-          label: t(language, '移到废纸篓', 'Move to Trash'),
-          consequence: t(
-            language,
-            '整个隐藏项目及其中的配置和数据会移到废纸篓。如果它仍被应用或命令行工具使用，相关设置可能会被重置。',
-            'The entire hidden item, including its configuration and data, moves to the Trash. Settings may be reset if an app or command-line tool still uses it.'
-          ),
-          reversible: true,
-          estimatedBytes: sizeBytes
-        }
-      },
-      {
-        kind: 'trash-home-artifact',
-        target: artifact.target,
-        expectedModifiedAtMs: artifact.modifiedAtMs,
-        expectedKind: artifact.kind
-      },
-      [],
-      revealTargets,
-      artifact.target
-    ))
+          target: artifact.target,
+          expectedModifiedAtMs: artifact.modifiedAtMs,
+          expectedKind: artifact.kind
+        },
+        [],
+        revealTargets,
+        artifact.target
+      )
+    })
 }
 
 interface LargeUserFile {

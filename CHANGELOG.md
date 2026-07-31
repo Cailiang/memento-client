@@ -8,6 +8,24 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.49 - 2026-07-31
+
+### English
+
+- Changed direct Storage cleanup to finish with a compact three-stage feedback sequence of about three seconds. Successful registered operations update the current candidate list without blocking on a full computer scan; service, terminal, and confirmed Agent-plan operations retain full verification scans.
+- Added deterministic ownership metadata for known hidden configuration directories. `.lingma` is now identified as Alibaba Cloud Tongyi Lingma and described as an AI coding-assistant configuration directory that an IDE extension or command-line tool may still use.
+- Required specific storage-item and background-service analyses to begin by directly identifying the product, vendor, and purpose from scan evidence. Unknown ownership is stated explicitly instead of guessed.
+- Fixed the Agent task switcher to use conversation IDs rather than individual run IDs, so follow-up questions remain in one tab while explicit new tasks and isolated module analyses stay separate.
+- Added unit and browser regression coverage for known configuration identity, conversation-level task tabs, and the three-second direct-storage feedback window.
+
+### 简体中文
+
+- 存储空间的直接清理改为约 3 秒的紧凑三阶段反馈。已注册操作成功后直接更新当前候选列表，不再阻塞等待整机重扫；服务、终端和 Agent 确认计划仍保留完整复检。
+- 为已知隐藏配置目录增加确定性归属信息；`.lingma` 现在明确识别为阿里云「通义灵码」，并说明它是仍可能被 IDE 插件或命令行工具使用的智能编码助手配置目录。
+- 分析具体存储项或后台服务时，Agent 必须根据扫描证据在第一句话直接说明产品、厂商和用途；无法确认归属时明确说未知，不再猜测。
+- 修复 Agent 任务切换器按单次运行 ID 建标签的问题，改为按会话 ID 管理；同一会话的后续提问保留在一个标签，明确新任务和业务模块隔离分析仍分别显示。
+- 新增已知配置识别、会话级任务标签和存储直接操作三秒反馈窗口的单元与浏览器回归覆盖。
+
 ## 0.6.48 - 2026-07-31
 
 ### English
