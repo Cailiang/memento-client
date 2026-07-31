@@ -8,6 +8,22 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.46 - 2026-07-31
+
+### English
+
+- Fixed Antigravity connection probes by declaring `connection_probe` as a strict tool, so the Vercel Google adapter actually sends Gemini `VALIDATED` mode instead of permissive `AUTO`.
+- Kept the gateway-compatible `auto` tool choice while requiring schema-valid function calls; no separate Antigravity SDK is needed.
+- Added a request-level two-step regression test that verifies `VALIDATED`, executes the probe, sends its `functionResponse`, and switches the continuation request to `NONE`.
+- Updated the English and Simplified Chinese provider documentation and release metadata for the corrected protocol behavior.
+
+### 简体中文
+
+- 将 `connection_probe` 声明为严格工具，修复 Antigravity 连接探针，使 Vercel Google 适配器实际发送 Gemini `VALIDATED`，不再退化为宽松的 `AUTO`。
+- 保留网关兼容的 `auto` 工具选择，同时要求函数调用符合 Schema；无需新增 Antigravity SDK。
+- 新增请求级两步回归测试，验证 `VALIDATED`、实际执行探针、续传 `functionResponse`，并在后续请求切换为 `NONE`。
+- 同步更新中英文供应商说明与发布元数据，使其与修正后的协议行为一致。
+
 ## 0.6.45 - 2026-07-30
 
 ### English

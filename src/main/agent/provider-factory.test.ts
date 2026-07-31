@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { PrivateAgentProvider } from './agent-store'
 import {
   createProviderModel,
@@ -6,7 +6,8 @@ import {
   PROVIDER_TEST_TIMEOUT,
   providerErrorMessage,
   providerTestReasoning,
-  providerTestToolChoice
+  providerTestToolChoice,
+  testProviderConnection
 } from './provider-factory'
 
 function provider(type: PrivateAgentProvider['type']): PrivateAgentProvider {
@@ -64,5 +65,49 @@ describe('Agent provider factory', () => {
     expect(providerTestReasoning({ type: 'antigravity', model: 'gemini-3.1-pro-high' })).toBe('low')
     expect(providerTestReasoning({ type: 'google', model: 'gemini-2.5-pro' })).toBeUndefined()
     expect(providerTestReasoning({ type: 'anthropic', model: 'claude-opus-4-6' })).toBeUndefined()
+  })
+
+  it('sends Antigravity a strict VALIDATED probe and continues with its tool result', async () => {
+    const requestBodies: Array<Record<string, unknown>> = []
+    const fetchProvider = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_input, init) => {
+      if (typeof init?.body !== 'string') throw new Error('Expected a JSON request body')
+      requestBodies.push(JSON.parse(init.body) as Record<string, unknown>)
+      const parts = requestBodies.length === 1
+        ? [{ functionCall: { name: 'connection_probe', args: { acknowledgement: 'ready' } } }]
+        : [{ text: 'OK' }]
+      return new Response(JSON.stringify({
+        candidates: [{ content: { role: 'model', parts }, finishReason: 'STOP' }],
+        usageMetadata: { promptTokenCount: 1, candidatesTokenCount: 1, totalTokenCount: 2 }
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    })
+
+    try {
+      const result = await testProviderConnection({
+        ...provider('antigravity'),
+        baseUrl: 'https://models.example.com/antigravity/v1beta',
+        model: 'gemini-3.1-pro-high'
+      })
+
+      expect(result.toolCalling).toBe(true)
+      expect(requestBodies).toHaveLength(2)
+      expect(requestBodies[0]).toMatchObject({
+        toolConfig: { functionCallingConfig: { mode: 'VALIDATED' } },
+        tools: [{ functionDeclarations: [{ name: 'connection_probe' }] }]
+      })
+      expect(requestBodies[1]).toMatchObject({
+        toolConfig: { functionCallingConfig: { mode: 'NONE' } }
+      })
+      const followUpContents = requestBodies[1].contents as Array<{
+        parts?: Array<Record<string, unknown>>
+      }>
+      expect(followUpContents.some((content) =>
+        content.parts?.some((part) => 'functionResponse' in part)
+      )).toBe(true)
+    } finally {
+      fetchProvider.mockRestore()
+    }
   })
 })

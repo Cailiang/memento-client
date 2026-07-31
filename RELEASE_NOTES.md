@@ -1,8 +1,8 @@
-# Memento Agent 0.6.45
+# Memento Agent 0.6.46
 
 ## 简体中文
 
-`0.6.45` 启用完整的 GitHub Actions 多平台发布流程，并包含近期完成的 Antigravity 协议适配与磁盘浏览连续删除修复。
+`0.6.46` 修复 Antigravity 严格工具调用探针，并保留完整的 GitHub Actions 多平台发布流程。
 
 ### 主要变化
 
@@ -12,6 +12,7 @@
 - 发布包含 Intel 与 Apple Silicon DMG、x64 与 arm64 Windows EXE、x64 与 arm64 Linux AppImage 和 DEB，以及统一的 `SHA256SUMS.txt`。
 - `SHA256SUMS.txt` 只包含上述 8 个安装包并在发布前校验条目数量，不包含自身引用。
 - 设置中新增 Antigravity 接口类型，复用 Vercel Google 适配器并明确兼容 Sub2API 的 Gemini 原生协议，无需额外 SDK。
+- Antigravity 的 `connection_probe` 现在声明为严格工具，首轮请求会实际使用 Gemini `VALIDATED`，不会因退化为 `AUTO` 而只返回普通文本。
 - 磁盘浏览删除成功后立即更新本地树，不再触发全盘重扫；同轮扫描中的其他项目可以继续删除。
 - 多个分析任务分别使用独立会话，确认执行计划后的状态动效也已改为紧凑的“执行、复检、完成”流程。
 
@@ -21,7 +22,7 @@
 
 ## English
 
-`0.6.45` introduces a complete GitHub Actions release pipeline for every packaged platform and includes the recent Antigravity protocol and consecutive disk-browser removal fixes.
+`0.6.46` fixes the strict Antigravity tool-calling probe while retaining the complete GitHub Actions release pipeline for every packaged platform.
 
 ### Highlights
 
@@ -31,6 +32,7 @@
 - Each release contains Intel and Apple Silicon DMGs, x64 and arm64 Windows EXEs, x64 and arm64 Linux AppImage and DEB packages, plus a shared `SHA256SUMS.txt`.
 - `SHA256SUMS.txt` covers exactly those eight packages, is count-checked before publication, and does not reference itself.
 - Settings includes a dedicated Antigravity provider that reuses the Vercel Google adapter while explicitly supporting Sub2API's native Gemini protocol without another SDK.
+- Antigravity now declares `connection_probe` as strict, so the first request actually uses Gemini `VALIDATED` instead of falling back to a text-only `AUTO` response.
 - Successful disk-browser removal updates the local tree without a full-volume rescan, so other items from the same scan can be removed consecutively.
 - Concurrent analyses use separate conversations, and confirmed plans now show a compact Run, Verify, Done execution sequence.
 

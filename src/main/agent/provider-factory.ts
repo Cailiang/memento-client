@@ -68,6 +68,7 @@ export async function testProviderConnection(
   let toolCalled = false
   const probe = tool({
     description: 'Required connection probe. Call this tool exactly once.',
+    strict: true,
     inputSchema: z.object({
       acknowledgement: z.string().describe('A short acknowledgement')
     }),

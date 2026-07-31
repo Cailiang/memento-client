@@ -32,7 +32,7 @@ Memento 使用开源的 [Vercel AI SDK](https://github.com/vercel/ai) 和 `ToolL
 
 每个配置包含名称、接口类型、服务地址、请求密钥和所选模型。地址和密钥可用后，Memento 会自动补全 API 基地址并获取模型列表，图片、音频、实时、Embedding、审核等明显不适用于 Agent 的项目不会进入模型选择器；编辑已有配置时可以复用本地加密密钥。“测试连接”会真实验证模型访问与工具调用能力，而不是只检查普通文本回复。
 
-Google Gemini 官方端点使用原生 `/v1beta` 协议与 `x-goog-api-key` Header。Antigravity 现为独立接口类型，专门对应 Sub2API 的 `/antigravity/v1beta` 路由；底层继续复用 Vercel Google 适配器，但工具探针使用网关兼容的 `VALIDATED`，不再强制发送 `ANY`。服务地址包含 `/antigravity` 的已有 Google 配置会自动迁移。连接探针仍必须真实完成工具调用和工具结果续传；Gemini 3 探针使用模型支持的 `LOW` 推理级别，不再发送 `MINIMAL`。
+Google Gemini 官方端点使用原生 `/v1beta` 协议与 `x-goog-api-key` Header。Antigravity 现为独立接口类型，专门对应 Sub2API 的 `/antigravity/v1beta` 路由；底层继续复用 Vercel Google 适配器，并将探针声明为严格工具，使网关兼容的 `auto` 实际序列化为 `VALIDATED`，而不是退化为 `AUTO` 或强制发送 `ANY`。服务地址包含 `/antigravity` 的已有 Google 配置会自动迁移。连接探针仍必须真实完成工具调用和工具结果续传；Gemini 3 探针使用模型支持的 `LOW` 推理级别，不再发送 `MINIMAL`。
 
 存储清理只会组合 Claude、Codex、Antigravity 和 Grok 已知的可重建缓存路径，不包含密钥、设置、对话、会话、工作区或项目。下载、桌面和影片目录中超过 500 MB 且至少 7 天未修改的大文件只作为待确认项，并且主进程重新校验文件后也只能将其移到废纸篓。
 
