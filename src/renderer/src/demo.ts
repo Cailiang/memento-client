@@ -111,19 +111,6 @@ export const demoResult: ScanResult = {
       }
     },
     {
-      id: 'demo-docker',
-      section: 'storage',
-      name: 'Docker 虚拟磁盘',
-      subtitle: '~/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw',
-      location: '~/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw',
-      description: '包含 Docker 镜像、容器和卷。请在 Docker 内执行 prune，不应直接删除。',
-      sizeBytes: 38.2 * GB,
-      ageDays: 0,
-      risk: 'protected',
-      status: '仅分析',
-      evidence: ['占用 38.2 GB', '包含 6 个正在使用的卷']
-    },
-    {
       id: 'demo-npm',
       section: 'storage',
       name: 'npm 内容缓存',
@@ -146,18 +133,18 @@ export const demoResult: ScanResult = {
       id: 'demo-lingma',
       section: 'storage',
       name: '.lingma',
-      subtitle: '阿里云「通义灵码」 · Home 隐藏项目',
+      subtitle: 'Home 隐藏项目',
       location: '~/.lingma',
-      description: '这是阿里云「通义灵码」智能编码助手使用的用户配置目录。IDE 插件或命令行工具仍可能使用它。',
+      description: '当前应用清单和可执行命令目录中没有找到明确匹配；AI 分析会继续关联本机服务、配置文件名、软件包收据和 shell 引用。',
       sizeBytes: 84 * MB,
       ageDays: 64,
       risk: 'review',
       status: '需确认归属',
-      evidence: ['已知归属：阿里云「通义灵码」', '隐藏位置：~/.lingma', '最近修改于 64 天前'],
+      evidence: ['隐藏位置：~/.lingma', '未匹配到已安装的 macOS 应用或可执行命令', '最近修改于 64 天前'],
       action: {
         kind: 'trash-home-artifact',
         label: '移到废纸篓',
-        consequence: '整个隐藏项目及其中的配置和数据会移到废纸篓；如果通义灵码仍在使用它，相关设置可能会被重置。',
+        consequence: '整个隐藏目录及其中的配置和数据会移到废纸篓；如果仍有应用或命令使用它，相关设置可能会被重置。',
         reversible: true
       }
     },
@@ -170,7 +157,14 @@ export const demoResult: ScanResult = {
       location: '/usr/local/opt/postgresql@14',
       risk: 'review',
       status: '运行中，PID 1148',
-      evidence: ['运行用户：fang', '已连续运行 19 天'],
+      evidence: ['运行用户：fang', '已连续运行 19 天', 'CPU 34.2% · 内存 1.4 GB'],
+      serviceAnomalies: ['high-cpu', 'high-memory'],
+      serviceMetrics: {
+        pid: 1148,
+        cpuPercent: 34.2,
+        memoryBytes: 1.4 * GB,
+        runningSeconds: 19 * 24 * 60 * 60
+      },
       action: {
         kind: 'stop-brew-service',
         label: '停止服务',
@@ -539,13 +533,6 @@ export function localizedDemoResult(language: AppLanguage): ScanResult {
       status: 'Reclaimable',
       evidence: ['Uses 12.8 GB', 'Last modified 18 days ago']
     },
-    'demo-docker': {
-      name: 'Docker virtual disk',
-      subtitle: '~/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw',
-      description: 'Contains Docker images, containers, and volumes. Use Docker prune instead of deleting it directly.',
-      status: 'Analysis only',
-      evidence: ['Uses 38.2 GB', 'Contains 6 active volumes']
-    },
     'demo-npm': {
       name: 'npm content cache',
       subtitle: '~/.npm/_cacache',
@@ -555,10 +542,10 @@ export function localizedDemoResult(language: AppLanguage): ScanResult {
     },
     'demo-lingma': {
       name: '.lingma',
-      subtitle: 'Alibaba Cloud Tongyi Lingma · hidden Home item',
-      description: 'This is a user configuration directory for Alibaba Cloud Tongyi Lingma, an AI coding assistant. An IDE extension or command-line tool may still use it.',
+      subtitle: 'Hidden Home item',
+      description: 'No installed macOS app or executable command was matched. AI analysis can correlate local services, configuration names, package receipts, and shell references.',
       status: 'Ownership review',
-      evidence: ['Known owner: Alibaba Cloud Tongyi Lingma', 'Hidden location: ~/.lingma', 'Last modified 64 days ago']
+      evidence: ['Hidden location: ~/.lingma', 'No installed macOS application or executable command was matched', 'Last modified 64 days ago']
     },
     'demo-postgres': {
       name: 'postgresql@14',
@@ -598,7 +585,7 @@ export function localizedDemoResult(language: AppLanguage): ScanResult {
   const actionCopy: Record<string, { label: string; consequence: string }> = {
     'demo-derived-data': { label: 'Clean permanently', consequence: 'The cache will be permanently deleted to release space immediately. Xcode recreates it during the next full build.' },
     'demo-npm': { label: 'Clean permanently', consequence: 'The cache will be permanently deleted to release space immediately. npm may download dependencies again later.' },
-    'demo-lingma': { label: 'Move to Trash', consequence: 'The hidden configuration and data will move to the Trash. Tongyi Lingma settings may reset if an extension or command-line tool still uses it.' },
+    'demo-lingma': { label: 'Move to Trash', consequence: 'The hidden directory and its data will move to the Trash. Settings may reset if an app or command still uses it.' },
     'demo-postgres': { label: 'Stop service', consequence: 'The service will stop immediately and no longer start automatically at login.' },
     'demo-sunlogin-stop': { label: 'Stop service only', consequence: 'The process will stop, while the app, configuration, and user data remain.' },
     'demo-sunlogin-cleanup': { label: 'Uninstall and clean detected data', consequence: 'Stops the service, then moves Sunlogin, its login item, and 4 exact-match data items to the Trash. Documents and non-exact matches remain.' },

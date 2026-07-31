@@ -8,6 +8,26 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.50 - 2026-07-31
+
+### English
+
+- Replaced the hidden-artifact ownership table with dynamic Agent evidence correlation. Focused analysis now matches exact identity tokens across storage, background services, installed applications, allowlisted filesystem names, package receipts, shallow target entries, and redacted shell references.
+- Added explicit `confirmed-local`, `strong-signature`, and `unconfirmed` evidence levels. General model knowledge may explain an exact product name, but local state claims must remain tied to observed evidence.
+- Split background-service resource findings into separate high-CPU and high-memory categories while retaining exact runtime metrics in each result.
+- Replaced the ambiguous health-score message with a concrete review action that opens the highest-priority finding category.
+- Restricted automatic Storage cleanup findings to directories. Personal files under Downloads, Desktop, and Movies and the Docker virtual-disk file remain visible only in the user-initiated Disk browser.
+- Added regression coverage for dynamic Cisco correlation, shell-secret redaction, independent CPU and memory thresholds, directory-only hidden cleanup, actionable health review, and personal-file exclusion.
+
+### 简体中文
+
+- 移除隐藏配置归属表，改为 Agent 动态关联证据。聚焦分析现在会按精确身份 token 关联存储项、后台服务、已安装应用、受限目录文件名、软件包收据、目标目录浅层结构和已脱敏的 shell 引用。
+- 新增“本机确认”“明确签名”“未确认”三级证据。模型可以用通用知识解释明确产品名，但关于本机状态的结论必须基于现场证据。
+- 后台服务资源异常拆分为 CPU 占用异常和内存占用异常，并继续展示精确运行指标。
+- 电脑体检评分不再显示含糊的“建议进一步检查”，改为可点击的明确待确认项入口，并自动打开最高优先级分类。
+- 自动存储清理建议现在只生成目录候选；下载、桌面、影片中的个人文件和 Docker 虚拟磁盘文件只在用户主动打开的磁盘浏览中显示。
+- 新增 Cisco 动态关联、shell 密钥脱敏、CPU/内存独立阈值、隐藏目录限制、体检操作入口和个人文件排除的回归覆盖。
+
 ## 0.6.49 - 2026-07-31
 
 ### English

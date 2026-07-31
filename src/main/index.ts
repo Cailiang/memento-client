@@ -62,7 +62,6 @@ import {
   deleteStorageTargets,
   isAllowedStorageCleanupTarget
 } from './storage-cleanup'
-import { validateLargeFileCleanupTarget } from './large-file-cleanup'
 import { validateHiddenHomeArtifactCleanupTarget } from './home-hidden-cleanup'
 import { brewCleanupVersionTargets, isSafeBrewVersion } from './brew-cleanup'
 import { reconcileScanCapabilities } from './scan-capability-reconciliation'
@@ -603,19 +602,6 @@ async function executeRegisteredAction(action: RegisteredAction): Promise<void> 
       throw new Error(mainText('存储目标未通过本地安全校验，请重新扫描', 'A storage target did not pass local validation. Scan again.'))
     }
     await deleteStorageTargets(action.targets)
-    return
-  }
-
-  if (action.kind === 'trash-large-file') {
-    await validateLargeFileCleanupTarget(
-      action.target,
-      action.expectedSizeBytes,
-      action.expectedModifiedAtMs
-    )
-    await shell.trashItem(action.target)
-    if (existsSync(action.target)) {
-      throw new Error(mainText('大文件仍在原位置，请重新扫描', 'The large file is still in its original location. Scan again.'))
-    }
     return
   }
 

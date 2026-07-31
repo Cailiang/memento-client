@@ -131,10 +131,10 @@ try {
   await conversationPage.getByRole('tab', { name: /存储空间/ }).click()
   const lingmaRow = conversationPage.locator('.health-panel.is-active .data-row').filter({ hasText: '.lingma' })
   if (!await lingmaRow.count()) {
-    failures.push('agent-identity: .lingma storage finding is missing')
+    failures.push('agent-evidence: .lingma storage finding is missing')
   } else {
     await lingmaRow.getByRole('button', { name: 'AI 分析' }).click()
-    await conversationPage.locator('.message.assistant').filter({ hasText: '阿里云「通义灵码」' }).waitFor({ timeout: 5_000 })
+    await conversationPage.locator('.agent-result-section').waitFor({ timeout: 5_000 })
     await conversationPage.locator('textarea[aria-label="输入任务"]').fill('它现在还可能被什么使用？')
     await conversationPage.locator('button[aria-label="发送"]').click()
     await conversationPage.locator('.conversation .message.user').nth(1).waitFor({ timeout: 2_000 })
@@ -144,6 +144,26 @@ try {
     }
   }
   await conversationPage.close()
+
+  const healthReviewPage = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+  await healthReviewPage.goto(baseUrl, { waitUntil: 'networkidle' })
+  await healthReviewPage.locator('.nav-button[title="电脑体检"]').click()
+  const reviewButton = healthReviewPage.locator('.health-score')
+  if (!await reviewButton.getByText(/查看 \d+ 项待确认内容/).count()) {
+    failures.push('health-summary: score does not expose a concrete review action')
+  } else {
+    await reviewButton.click()
+    if (await healthReviewPage.getByRole('tab', { name: /后台服务/ }).getAttribute('aria-selected') !== 'true') {
+      failures.push('health-summary: review action did not open the priority module')
+    }
+    if (!await healthReviewPage.getByRole('tab', { name: /CPU 占用异常/ }).count()) {
+      failures.push('health-services: high CPU category is missing')
+    }
+    if (!await healthReviewPage.getByRole('tab', { name: /内存占用异常/ }).count()) {
+      failures.push('health-services: high memory category is missing')
+    }
+  }
+  await healthReviewPage.close()
 
   const diskPage = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   await diskPage.goto(baseUrl, { waitUntil: 'networkidle' })

@@ -24,6 +24,11 @@ import type {
 } from '../../shared/types'
 import { AgentStore, type PrivateAgentProvider } from './agent-store'
 import { createProviderModel, providerErrorMessage } from './provider-factory'
+import {
+  artifactEvidenceConfidence,
+  inspectLocalArtifactEvidence,
+  relatedScanEvidence
+} from './local-evidence'
 
 type EmitAgentEvent = (event: AgentRunEvent) => void
 
@@ -452,6 +457,12 @@ export class LocalAgentRuntime {
     const latestFocus = [...priorRuns].reverse().find((run) => run.focus.length)?.focus ?? []
     const contextualFocus = resolveContextualFocus(initialRun.prompt, initialRun.focus, priorRuns)
     const contextualFocusIds = new Set(contextualFocus.map((focus) => focus.id))
+    const relatedEvidence = relatedScanEvidence(scan, contextualFocus)
+    const contextualInspectionIds = new Set([
+      ...relatedEvidence.storage.map((item) => item.id),
+      ...relatedEvidence.services.map((item) => item.id),
+      ...relatedEvidence.applications.map((item) => item.id)
+    ])
     const inspectedKinds = new Set<AgentResultKind>()
     let proposedPlan: AgentPlanItem[] = []
     let presented: AgentPresentation | null = null
@@ -487,18 +498,41 @@ export class LocalAgentRuntime {
           })
         }),
         inspect_storage: tool({
-          description: 'List storage findings, stable item IDs, and registered operation IDs.',
+          description: 'List storage findings, stable item IDs, registered operations, and correlated local evidence for a focused item.',
           inputSchema: z.object({}),
           execute: async (input) => {
             inspectedKinds.add('storage')
             setStatus('analyzing', '正在检查存储空间', 'Inspecting storage')
+            const items = scan.candidates
+              .filter((item) => item.section === 'storage')
+              .filter((item) => !contextualFocusIds.size || contextualInspectionIds.has(item.id))
+              .map(compactCandidate)
+            if (!contextualFocusIds.size) {
+              return recordTool('inspect_storage', input, items)
+            }
+            const focusedLocations = scan.candidates
+              .filter((item) => contextualFocusIds.has(item.id) && item.location)
+              .map((item) => item.location!)
+            const localEvidence = await inspectLocalArtifactEvidence(
+              relatedEvidence.identityTokens,
+              focusedLocations
+            )
+            const confidence = artifactEvidenceConfidence(relatedEvidence, localEvidence)
             return recordTool(
               'inspect_storage',
               input,
-              scan.candidates
-                .filter((item) => item.section === 'storage')
-                .filter((item) => !contextualFocusIds.size || contextualFocusIds.has(item.id))
-                .map(compactCandidate)
+              {
+                items,
+                relatedContext: {
+                  identityTokens: relatedEvidence.identityTokens,
+                  associationConfidence: confidence.level,
+                  confidenceReasons: confidence.reasons,
+                  correlatedStorage: relatedEvidence.storage.map(compactCandidate),
+                  correlatedServices: relatedEvidence.services.map(compactCandidate),
+                  correlatedApplications: relatedEvidence.applications.map(compactApplication),
+                  localEvidence
+                }
+              }
             )
           }
         }),
@@ -513,7 +547,7 @@ export class LocalAgentRuntime {
               input,
               scan.candidates
                 .filter((item) => item.section === 'services')
-                .filter((item) => !contextualFocusIds.size || contextualFocusIds.has(item.id))
+                .filter((item) => !contextualFocusIds.size || contextualInspectionIds.has(item.id))
                 .map(compactCandidate)
             )
           }
@@ -528,7 +562,7 @@ export class LocalAgentRuntime {
               'inspect_applications',
               input,
               scan.applications
-                .filter((item) => !contextualFocusIds.size || contextualFocusIds.has(item.id))
+                .filter((item) => !contextualFocusIds.size || contextualInspectionIds.has(item.id))
                 .slice(0, 160)
                 .map(compactApplication)
             )
@@ -619,7 +653,9 @@ export class LocalAgentRuntime {
           'You are Memento, the product-integrated local computer maintenance agent.',
           languageInstruction,
           'Use inspection tools before making claims about this computer.',
-          'When analyzing one specific storage item or background service, begin the user-visible summary by directly naming the owning product or vendor and stating what it does. Prefer scanner evidence and exact paths. If ownership is not established, say that it is unknown instead of guessing.',
+          'When analyzing one specific storage item or background service, begin the user-visible summary by directly naming the owning product or vendor and stating what it does. You may use general product knowledge to interpret exact names, but clearly separate general identification from evidence observed on this computer.',
+          'Focused storage inspection returns relatedContext with cross-module matches, allowlisted path names, installed package receipts, shallow target entries, and redacted shell references. Use associationConfidence and confidenceReasons. Distinguish confirmed-local evidence, strong exact signatures, and unconfirmed possibilities.',
+          'Do not call an item an uninstalled leftover when a matching application, service, package receipt, executable directory, or shell reference is still present. If the available evidence still cannot establish ownership, say that it is unknown instead of guessing.',
           'The conversation context below is authoritative for follow-up references.',
           'When the user says this service, this app, it, that item, or an equivalent pronoun, resolve it to the latest focused entity. If there is exactly one matching focused entity, never ask which entity and never list unrelated entities.',
           'Memento has native Application Management, Storage, Background Services, and Terminal Diagnostics modules.',

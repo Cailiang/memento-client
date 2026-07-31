@@ -8,22 +8,10 @@ import {
   installedApplicationIdentityTokens,
   installedCommandIdentityTokens,
   isAllowedHiddenHomeArtifactTarget,
-  knownHiddenArtifactProduct,
   validateHiddenHomeArtifactCleanupTarget
 } from './home-hidden-cleanup'
 
 describe('hidden Home cleanup', () => {
-  it('identifies known configuration directories without guessing from an installed app', () => {
-    expect(knownHiddenArtifactProduct('.lingma')).toEqual({
-      name: { zh: '阿里云「通义灵码」', en: 'Alibaba Cloud Tongyi Lingma' },
-      description: expect.objectContaining({
-        zh: expect.stringContaining('智能编码助手'),
-        en: expect.stringContaining('AI coding assistant')
-      })
-    })
-    expect(knownHiddenArtifactProduct('.unrecognized-tool')).toBeNull()
-  })
-
   it('finds unmatched app data while protecting credentials, shell files, and container roots', async () => {
     const home = await fs.mkdtemp(path.join(os.tmpdir(), 'memento-hidden-home-'))
     try {
@@ -41,6 +29,7 @@ describe('hidden Home cleanup', () => {
         '.local/share/retired-data'
       ]
       await Promise.all(paths.map((target) => fs.mkdir(path.join(home, target), { recursive: true })))
+      await fs.writeFile(path.join(home, '.retired-toolrc'), 'legacy=true\n')
       const binRoot = path.join(home, '.local', 'bin')
       const ipatool = path.join(binRoot, 'ipatool')
       await fs.mkdir(binRoot, { recursive: true })
@@ -72,6 +61,7 @@ describe('hidden Home cleanup', () => {
         '.config/old-client',
         '.local/share/retired-data'
       ])
+      expect(artifacts.every((artifact) => artifact.kind === 'directory')).toBe(true)
       expect(isAllowedHiddenHomeArtifactTarget(path.join(home, '.config'), home)).toBe(false)
       expect(isAllowedHiddenHomeArtifactTarget(path.join(home, '.ssh'), home)).toBe(false)
     } finally {

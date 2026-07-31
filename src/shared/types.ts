@@ -9,7 +9,6 @@ export type ActionKind =
   | 'trash'
   | 'delete-storage'
   | 'delete-storage-group'
-  | 'trash-large-file'
   | 'trash-home-artifact'
   | 'stop-brew-service'
   | 'stop-launch-agent'
@@ -49,7 +48,13 @@ export interface ScanCandidate {
   serviceMetrics?: ServiceRuntimeMetrics
 }
 
-export type ServiceAnomalyKind = 'orphaned' | 'resource' | 'long-running' | 'failed' | 'stale'
+export type ServiceAnomalyKind =
+  | 'orphaned'
+  | 'high-cpu'
+  | 'high-memory'
+  | 'long-running'
+  | 'failed'
+  | 'stale'
 
 export interface ServiceRuntimeMetrics {
   pid?: number

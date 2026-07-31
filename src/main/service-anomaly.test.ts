@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { classifyServiceAnomalies } from './scanner'
 
 describe('service anomaly classification', () => {
-  it('separates orphaned, failed, resource-heavy, and long-running services', () => {
+  it('separates orphaned, failed, high-CPU, high-memory, and long-running services', () => {
     expect(classifyServiceAnomalies({
       loaded: true,
       programMissing: true,
@@ -12,7 +12,18 @@ describe('service anomaly classification', () => {
         memoryBytes: 1024 * 1024 * 1024,
         runningSeconds: 30 * 24 * 60 * 60
       }
-    })).toEqual(['orphaned', 'failed', 'resource', 'long-running'])
+    })).toEqual(['orphaned', 'failed', 'high-cpu', 'high-memory', 'long-running'])
+  })
+
+  it('classifies CPU and memory thresholds independently', () => {
+    expect(classifyServiceAnomalies({
+      loaded: true,
+      metrics: { cpuPercent: 20, memoryBytes: 256 * 1024 * 1024 }
+    })).toEqual(['high-cpu'])
+    expect(classifyServiceAnomalies({
+      loaded: true,
+      metrics: { cpuPercent: 2, memoryBytes: 1024 * 1024 * 1024 }
+    })).toEqual(['high-memory'])
   })
 
   it('marks only old stopped configurations as stale', () => {

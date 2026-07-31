@@ -1,0 +1,88 @@
+import { promises as fs } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { describe, expect, it } from 'vitest'
+import type { AgentFocus } from '../../shared/agent-types'
+import type { ScanResult } from '../../shared/types'
+import {
+  artifactEvidenceConfidence,
+  inspectLocalArtifactEvidence,
+  relatedScanEvidence
+} from './local-evidence'
+
+function scan(): ScanResult {
+  return {
+    scanId: 'scan', startedAt: '', completedAt: '',
+    system: {
+      hostname: 'Mac', osVersion: '15.0', diskTotalBytes: 1, diskFreeBytes: 1,
+      memoryTotalBytes: 1, memoryUsedBytes: 0, uptimeSeconds: 1
+    },
+    candidates: [{
+      id: 'hidden-cisco', section: 'storage', name: '.cisco', subtitle: 'Hidden Home item',
+      description: 'Unmatched item', location: '~/.cisco', risk: 'review', status: 'Review', evidence: []
+    }, {
+      id: 'service-cisco', section: 'services', name: 'com.cisco.anyconnect.vpnagentd',
+      subtitle: 'Launch daemon', description: 'Loaded service', location: '/opt/cisco/anyconnect',
+      risk: 'review', status: 'Loaded', evidence: []
+    }, {
+      id: 'other-cache', section: 'storage', name: 'Unrelated cache', subtitle: 'Cache',
+      description: 'Cache', location: '~/Library/Caches/example', risk: 'safe', status: 'Safe', evidence: []
+    }],
+    applications: [{
+      id: 'cisco-app', name: 'Cisco Secure Client', version: '5',
+      bundleId: 'com.cisco.secureclient.gui', location: '/Applications/Cisco Secure Client.app',
+      sizeBytes: 1, lastUsedAt: null, scope: 'shared', unused: false
+    }],
+    ignoredApplications: [],
+    terminal: { shell: '/bin/zsh', baselineMs: 1, startupMs: 1, sampleCount: 1, findings: [], configFiles: [] },
+    warnings: []
+  }
+}
+
+describe('local artifact evidence', () => {
+  it('correlates a focused artifact across scan modules without a vendor table', () => {
+    const focus: AgentFocus[] = [{ kind: 'storage', id: 'hidden-cisco', name: '.cisco' }]
+    const related = relatedScanEvidence(scan(), focus)
+    expect(related.identityTokens).toContain('cisco')
+    expect(related.storage.map((item) => item.id)).toEqual(['hidden-cisco'])
+    expect(related.services.map((item) => item.id)).toEqual(['service-cisco'])
+    expect(related.applications.map((item) => item.id)).toEqual(['cisco-app'])
+    expect(related.matchedTokens).toEqual(['cisco'])
+  })
+
+  it('collects shallow path evidence and redacts shell secrets', async () => {
+    const home = await fs.mkdtemp(path.join(os.tmpdir(), 'memento-evidence-'))
+    try {
+      await fs.mkdir(path.join(home, '.antigravity', 'extensions'), { recursive: true })
+      await fs.mkdir(path.join(home, '.antigravity', 'antigravity', 'bin'), { recursive: true })
+      await fs.mkdir(path.join(home, 'Library', 'Preferences'), { recursive: true })
+      await fs.writeFile(path.join(home, 'Library', 'Preferences', 'com.google.antigravity.plist'), '')
+      await fs.writeFile(path.join(home, '.zshrc'), [
+        'export ANTIGRAVITY_API_KEY="do-not-leak"',
+        'export PATH="$HOME/.antigravity/antigravity/bin:$PATH"'
+      ].join('\n'))
+
+      const evidence = await inspectLocalArtifactEvidence(
+        ['antigravity'],
+        ['~/.antigravity'],
+        { home, systemRoots: [], packageReceipts: ['com.google.antigravity.ide'] }
+      )
+
+      expect(evidence.inspectedTargets[0].children.map((item) => item.path))
+        .toEqual(['antigravity', 'extensions'])
+      expect(evidence.matchingPaths).toEqual([expect.objectContaining({
+        path: '~/Library/Preferences/com.google.antigravity.plist',
+        matchedToken: 'antigravity'
+      })])
+      expect(evidence.shellReferences).toHaveLength(2)
+      expect(evidence.shellReferences[0].text).toContain('[REDACTED]')
+      expect(JSON.stringify(evidence)).not.toContain('do-not-leak')
+      expect(evidence.packageReceipts).toEqual(['com.google.antigravity.ide'])
+      expect(artifactEvidenceConfidence({
+        identityTokens: ['antigravity'], storage: [], services: [], applications: [], matchedTokens: []
+      }, evidence)).toMatchObject({ level: 'confirmed-local' })
+    } finally {
+      await fs.rm(home, { recursive: true, force: true })
+    }
+  })
+})

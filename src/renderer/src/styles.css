@@ -357,12 +357,19 @@ select { -webkit-app-region: no-drag; }
 .health-band { display: grid; grid-template-columns: 160px repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .health-score,
 .health-metric { min-width: 0; min-height: 88px; padding: 16px; border-right: 1px solid var(--line); }
+.health-score { border-top: 0; border-bottom: 0; border-left: 0; color: var(--text); background: transparent; text-align: left; transition: background-color 180ms ease; }
+.health-score:not(:disabled):hover { background: var(--surface-strong); }
+.health-score:not(:disabled):active { transform: translateY(1px); }
+.health-score:focus-visible { position: relative; z-index: 1; outline: 2px solid var(--focus); outline-offset: -2px; }
+.health-score:disabled { cursor: default; }
 .health-band > div:last-child { border-right: 0; }
+.health-band > button:last-child { border-right: 0; }
 .health-score strong { display: block; font-size: 34px; font-variant-numeric: tabular-nums; line-height: 1; }
 .health-score span,
 .health-metric span,
 .health-metric small { display: block; color: var(--text-tertiary); font-size: 11px; }
-.health-score span { margin-top: 8px; }
+.health-score span { display: flex; min-width: 0; align-items: center; gap: 2px; margin-top: 8px; line-height: 1.35; }
+.health-score span svg { flex: 0 0 auto; }
 .health-metric strong { display: block; margin: 8px 0 4px; font-size: 16px; }
 .health-tabs { display: flex; gap: 22px; margin-top: 18px; border-bottom: 1px solid var(--line); }
 .health-tab { min-height: 40px; padding: 0 1px; border: 0; border-bottom: 2px solid transparent; color: var(--text-tertiary); background: transparent; font-size: 13px; font-weight: 650; }

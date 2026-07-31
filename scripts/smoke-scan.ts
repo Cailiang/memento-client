@@ -84,6 +84,13 @@ const suggestedIpatoolConfig = hiddenHomeItems.find((candidate) => candidate.loc
 if (installedIpatool && suggestedIpatoolConfig) {
   throw new Error('installed ipatool command was reported as hidden leftover data')
 }
+const personalFileFinding = bundle.result.candidates.find((candidate) =>
+  candidate.section === 'storage' &&
+  /^~\/(?:Downloads|Desktop|Movies)\//.test(candidate.location ?? '')
+)
+if (personalFileFinding) {
+  throw new Error(`personal file was reported as a Storage cleanup finding: ${personalFileFinding.location}`)
+}
 
 const expectedLocations = new Map([
   ['homebrew.mxcl.php@7.4', '/usr/local/opt/php@7.4'],
@@ -127,9 +134,7 @@ process.stdout.write(
       aiCacheGroups: bundle.result.candidates
         .filter((candidate) => candidate.section === 'storage' && candidate.action?.kind === 'delete-storage-group')
         .map((candidate) => ({ name: candidate.name, sizeBytes: candidate.sizeBytes ?? 0 })),
-      largeUserFiles: bundle.result.candidates.filter(
-        (candidate) => candidate.section === 'storage' && candidate.action?.kind === 'trash-large-file'
-      ).length,
+      personalFileFindings: 0,
       hiddenHomeItems: {
         count: hiddenHomeItems.length,
         totalBytes: hiddenHomeItems.reduce((sum, candidate) => sum + (candidate.sizeBytes ?? 0), 0),

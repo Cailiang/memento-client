@@ -136,22 +136,7 @@ export interface HiddenHomeArtifact {
   source: HiddenHomeArtifactSource
   modifiedAt: Date
   modifiedAtMs: number
-  kind: 'directory' | 'file'
-}
-
-export interface HiddenArtifactProduct {
-  name: { zh: string; en: string }
-  description: { zh: string; en: string }
-}
-
-const KNOWN_HIDDEN_ARTIFACT_PRODUCTS: Record<string, HiddenArtifactProduct> = {
-  lingma: {
-    name: { zh: '阿里云「通义灵码」', en: 'Alibaba Cloud Tongyi Lingma' },
-    description: {
-      zh: '这是阿里云「通义灵码」智能编码助手使用的用户配置目录。即使没有检测到独立应用，它仍可能由 IDE 插件或命令行工具使用。',
-      en: 'This is a user configuration directory for Alibaba Cloud Tongyi Lingma, an AI coding assistant. An IDE extension or command-line tool may still use it even when no standalone application is detected.'
-    }
-  }
+  kind: 'directory'
 }
 
 type ApplicationIdentity = Pick<
@@ -170,10 +155,6 @@ function identityParts(value: string): string[] {
 
 export function hiddenArtifactIdentity(name: string): string {
   return name.replace(/^\.+/, '').normalize('NFKD').toLowerCase().replace(/[^a-z0-9]/g, '')
-}
-
-export function knownHiddenArtifactProduct(name: string): HiddenArtifactProduct | null {
-  return KNOWN_HIDDEN_ARTIFACT_PRODUCTS[hiddenArtifactIdentity(name)] ?? null
 }
 
 export function installedApplicationIdentityTokens(
@@ -309,14 +290,14 @@ export async function discoverHiddenHomeArtifacts(
   for (const { root, source, entries } of rootEntries) {
     for (const entry of entries) {
       if (source === 'home' && !entry.name.startsWith('.')) continue
-      if (entry.isSymbolicLink() || (!entry.isDirectory() && !entry.isFile())) continue
+      if (entry.isSymbolicLink() || !entry.isDirectory()) continue
       const target = path.join(root, entry.name)
       if (!isAllowedHiddenHomeArtifactTarget(target, home)) continue
       const identity = hiddenArtifactIdentity(entry.name)
       if (matchesInstalledIdentity(identity, installedIdentities)) continue
       try {
         const stats = await fs.lstat(target)
-        if (stats.isSymbolicLink() || (!stats.isDirectory() && !stats.isFile())) continue
+        if (stats.isSymbolicLink() || !stats.isDirectory()) continue
         if (now - stats.mtimeMs < HIDDEN_HOME_MINIMUM_AGE_DAYS * DAY_MS) continue
         discovered.push({
           target,
@@ -324,7 +305,7 @@ export async function discoverHiddenHomeArtifacts(
           source,
           modifiedAt: stats.mtime,
           modifiedAtMs: stats.mtimeMs,
-          kind: stats.isDirectory() ? 'directory' : 'file'
+          kind: 'directory'
         })
       } catch {
         // A hidden item can disappear while the scan is running.
@@ -346,7 +327,8 @@ export async function validateHiddenHomeArtifactCleanupTarget(
   const stats = await fs.lstat(target)
   if (
     stats.isSymbolicLink() ||
-    (expectedKind === 'directory' ? !stats.isDirectory() : !stats.isFile())
+    expectedKind !== 'directory' ||
+    !stats.isDirectory()
   ) {
     throw new Error('The hidden Home item changed type after the scan.')
   }

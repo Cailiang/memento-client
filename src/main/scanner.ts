@@ -46,7 +46,6 @@ import {
   discoverHiddenHomeArtifacts,
   installedApplicationIdentityTokens,
   installedCommandIdentityTokens,
-  knownHiddenArtifactProduct,
   type HiddenHomeArtifactSource
 } from './home-hidden-cleanup'
 
@@ -64,7 +63,7 @@ function t(language: AppLanguage, chinese: string, english: string): string {
 
 export type RegisteredAction =
   | {
-      kind: Exclude<ActionKind, 'trash-launch-agent-config' | 'trash-service-software' | 'trash-service-directory' | 'brew-cleanup' | 'delete-storage-group' | 'trash-large-file' | 'trash-home-artifact'>
+      kind: Exclude<ActionKind, 'trash-launch-agent-config' | 'trash-service-software' | 'trash-service-directory' | 'brew-cleanup' | 'delete-storage-group' | 'trash-home-artifact'>
       target: string
     }
   | {
@@ -73,16 +72,10 @@ export type RegisteredAction =
       targets: string[]
     }
   | {
-      kind: 'trash-large-file'
-      target: string
-      expectedSizeBytes: number
-      expectedModifiedAtMs: number
-    }
-  | {
       kind: 'trash-home-artifact'
       target: string
       expectedModifiedAtMs: number
-      expectedKind: 'directory' | 'file'
+      expectedKind: 'directory'
     }
   | {
       kind: 'brew-cleanup'
@@ -171,8 +164,8 @@ export function classifyServiceAnomalies(input: {
   const anomalies: ServiceAnomalyKind[] = []
   if (input.programMissing) anomalies.push('orphaned')
   if (input.failed) anomalies.push('failed')
-  if ((input.metrics?.cpuPercent ?? 0) >= HIGH_SERVICE_CPU_PERCENT ||
-      (input.metrics?.memoryBytes ?? 0) >= HIGH_SERVICE_MEMORY_BYTES) anomalies.push('resource')
+  if ((input.metrics?.cpuPercent ?? 0) >= HIGH_SERVICE_CPU_PERCENT) anomalies.push('high-cpu')
+  if ((input.metrics?.memoryBytes ?? 0) >= HIGH_SERVICE_MEMORY_BYTES) anomalies.push('high-memory')
   if ((input.metrics?.runningSeconds ?? 0) >= LONG_RUNNING_SERVICE_SECONDS) anomalies.push('long-running')
   if (!input.loaded && (input.ageDays ?? 0) >= 180) anomalies.push('stale')
   return anomalies
@@ -983,13 +976,6 @@ const storageDefinitions: StorageDefinition[] = [
     description: { zh: 'CocoaPods 下载缓存，不会修改项目中的 Pods 目录。', en: 'CocoaPods download cache. Pods directories inside projects are not modified.' },
     risk: 'safe',
     action: true
-  },
-  {
-    name: { zh: 'Docker 虚拟磁盘', en: 'Docker virtual disk' },
-    target: path.join(HOME, 'Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw'),
-    description: { zh: '包含 Docker 镜像、容器和卷。请在 Docker 内执行 prune，不应直接删除。', en: 'Contains Docker images, containers, and volumes. Manage it inside Docker instead of deleting it directly.' },
-    risk: 'protected',
-    minimumBytes: 100 * 1024 * 1024
   }
 ]
 
@@ -1004,7 +990,7 @@ async function scanDefinedStorage(
       fs.lstat(definition.target),
       getPathSize(definition.target)
     ])
-    if (definition.action && stats.isSymbolicLink()) return null
+    if (stats.isSymbolicLink() || !stats.isDirectory()) return null
     if (sizeBytes < (definition.minimumBytes ?? 10 * 1024 * 1024)) return null
 
     const action = definition.action
@@ -1052,7 +1038,7 @@ async function scanStorageGroups(
     const existing = (await mapLimit(definition.targets, 4, async (target) => {
       try {
         const stats = await fs.lstat(target)
-        if (stats.isSymbolicLink()) return null
+        if (stats.isSymbolicLink() || !stats.isDirectory()) return null
         return { target, stats, sizeBytes: await getPathSize(target) }
       } catch {
         return null
@@ -1124,7 +1110,7 @@ async function scanApplicationCaches(
   const inspected = await mapLimit(targets.slice(0, 80), 6, async (target) => {
     try {
       const [stats, sizeBytes] = await Promise.all([fs.lstat(target), getPathSize(target)])
-      if (stats.isSymbolicLink()) return null
+      if (stats.isSymbolicLink() || !stats.isDirectory()) return null
       if (sizeBytes < 50 * 1024 * 1024) return null
       const name = path.basename(target)
       return registerCandidate(
@@ -1179,7 +1165,7 @@ async function scanApplicationLogs(
     return []
   }
   const inspected = await mapLimit(entries.slice(0, 120), 6, async (entry) => {
-    if (entry.isSymbolicLink() || entry.name.startsWith('com.apple.')) return null
+    if (!entry.isDirectory() || entry.isSymbolicLink() || entry.name.startsWith('com.apple.')) return null
     const target = path.join(logRoot, entry.name)
     try {
       const [stats, sizeBytes] = await Promise.all([fs.lstat(target), getPathSize(target)])
@@ -1259,36 +1245,23 @@ async function scanHiddenHomeArtifacts(
     .sort((left, right) => right.sizeBytes - left.sizeBytes)
     .slice(0, 40)
     .map(({ artifact, sizeBytes }) => {
-      const product = knownHiddenArtifactProduct(artifact.name)
-      const productName = product
-        ? language === 'en-US' ? product.name.en : product.name.zh
-        : null
       return registerCandidate(
         actions,
         {
           section: 'storage',
           name: artifact.name,
-          subtitle: productName
-            ? `${productName} · ${hiddenArtifactSourceLabel(artifact.source, language)}`
-            : hiddenArtifactSourceLabel(artifact.source, language),
-          description: product
-            ? language === 'en-US' ? product.description.en : product.description.zh
-            : t(
-                language,
-                '当前应用清单和可执行命令目录中都没有找到与它明确匹配的项目。它可能是已卸载软件的残留，也可能属于未被识别的脚本或工具，请确认用途后再清理。',
-                'No installed application or indexed executable command clearly matches this item. It may be leftover data from uninstalled software or belong to an unrecognized script or tool, so review it before cleanup.'
-              ),
+          subtitle: hiddenArtifactSourceLabel(artifact.source, language),
+          description: t(
+            language,
+            '当前应用清单和可执行命令目录中都没有找到与它明确匹配的项目。AI 分析会继续关联本机服务、配置文件名、软件包收据和 shell 引用，请确认用途后再清理。',
+            'No installed application or indexed executable command clearly matches this item. AI analysis can correlate local services, configuration names, package receipts, and shell references before cleanup.'
+          ),
           sizeBytes,
           ageDays: ageInDays(artifact.modifiedAt),
           risk: 'review',
           status: t(language, '需确认归属', 'Ownership review'),
           location: displayPath(artifact.target),
           evidence: [
-            ...(productName ? [t(
-              language,
-              `已知归属：${productName}`,
-              `Known owner: ${productName}`
-            )] : []),
             t(language, `隐藏位置：${displayPath(artifact.target)}`, `Hidden location: ${displayPath(artifact.target)}`),
             t(language, '未匹配到已安装的 macOS 应用或可执行命令', 'No installed macOS application or executable command was matched'),
             t(language, `最近修改于 ${ageInDays(artifact.modifiedAt)} 天前`, `Last modified ${ageInDays(artifact.modifiedAt)} days ago`)
@@ -1316,141 +1289,6 @@ async function scanHiddenHomeArtifacts(
         artifact.target
       )
     })
-}
-
-interface LargeUserFile {
-  target: string
-  sizeBytes: number
-  modifiedAt: Date
-  modifiedAtMs: number
-  source: 'Downloads' | 'Desktop' | 'Movies'
-}
-
-async function findLargeUserFiles(): Promise<LargeUserFile[]> {
-  const queue = (['Downloads', 'Desktop', 'Movies'] as const).map((source) => ({
-    directory: path.join(HOME, source),
-    depth: 0,
-    source
-  }))
-  const found: LargeUserFile[] = []
-  let visited = 0
-  while (queue.length && visited < 5_000) {
-    const current = queue.shift()!
-    let entries: Dirent[]
-    try {
-      entries = await fs.readdir(current.directory, { withFileTypes: true })
-    } catch {
-      continue
-    }
-    for (const entry of entries) {
-      visited += 1
-      if (visited > 5_000) break
-      if (entry.isSymbolicLink()) continue
-      const target = path.join(current.directory, entry.name)
-      if (entry.isDirectory()) {
-        if (
-          current.depth < 3 &&
-          !entry.name.startsWith('.') &&
-          !entry.name.toLowerCase().endsWith('.app')
-        ) {
-          queue.push({ ...current, directory: target, depth: current.depth + 1 })
-        }
-        continue
-      }
-      if (!entry.isFile()) continue
-      try {
-        const stats = await fs.lstat(target)
-        if (
-          stats.isSymbolicLink() ||
-          stats.size < 500 * 1024 * 1024 ||
-          ageInDays(stats.mtime) < 7
-        ) continue
-        found.push({
-          target,
-          sizeBytes: stats.size,
-          modifiedAt: stats.mtime,
-          modifiedAtMs: stats.mtimeMs,
-          source: current.source
-        })
-      } catch {
-        // Files can disappear while the user is downloading or organizing them.
-      }
-    }
-  }
-  return found.sort((left, right) => right.sizeBytes - left.sizeBytes)
-}
-
-async function scanLargeUserFiles(
-  actions: Map<string, RegisteredAction>,
-  revealTargets: Map<string, string>,
-  language: AppLanguage
-): Promise<ScanCandidate[]> {
-  const files = await findLargeUserFiles()
-  const filesByDirectory = new Map<string, LargeUserFile[]>()
-  for (const file of files) {
-    const directory = path.dirname(file.target)
-    filesByDirectory.set(directory, [...(filesByDirectory.get(directory) ?? []), file])
-  }
-  const groups = [...filesByDirectory.entries()]
-    .map(([directory, groupedFiles]) => ({
-      directory,
-      files: groupedFiles,
-      sizeBytes: groupedFiles.reduce((sum, file) => sum + file.sizeBytes, 0),
-      modifiedAt: new Date(Math.max(...groupedFiles.map((file) => file.modifiedAtMs)))
-    }))
-    .sort((left, right) => right.sizeBytes - left.sizeBytes)
-    .slice(0, 12)
-
-  return groups.map((group) => {
-    const singleFile = group.files.length === 1 ? group.files[0] : null
-    const source = group.files[0].source
-    const target = singleFile?.target ?? group.directory
-    const registeredOperations: RegisteredOperation[] = group.files.map((file) => ({
-      action: {
-        kind: 'trash-large-file',
-        label: singleFile
-          ? t(language, '移到废纸篓', 'Move to Trash')
-          : t(language, `移走 ${path.basename(file.target)}`, `Trash ${path.basename(file.target)}`),
-        consequence: t(language, `文件 ${path.basename(file.target)} 会移到当前用户的废纸篓，不会直接永久删除。`, `${path.basename(file.target)} moves to the current user's Trash and is not deleted permanently.`),
-        reversible: true,
-        estimatedBytes: file.sizeBytes
-      },
-      registeredAction: {
-        kind: 'trash-large-file',
-        target: file.target,
-        expectedSizeBytes: file.sizeBytes,
-        expectedModifiedAtMs: file.modifiedAtMs
-      }
-    }))
-    return registerCandidate(
-      actions,
-      {
-      section: 'storage',
-      name: path.basename(target),
-      subtitle: singleFile
-        ? t(language, `${source} 中的大文件`, `Large file in ${source}`)
-        : t(language, `${source} 中含 ${group.files.length} 个大文件的目录`, `Folder with ${group.files.length} large files in ${source}`),
-      description: singleFile
-        ? t(language, '这是用户目录中的大文件。Memento 不判断内容是否仍有用，只在你确认后将它移到废纸篓。', 'This is a large file in a user folder. Memento does not decide whether its contents are still useful and moves it to the Trash only after confirmation.')
-        : t(language, '同一目录中的大文件已合并为一条建议。可以一次忽略整个目录，清理时仍逐个选择文件，不会直接删除目录。', 'Large files in the same folder are grouped into one finding. You can ignore the folder once, while cleanup remains file-by-file and never deletes the folder itself.'),
-      sizeBytes: group.sizeBytes,
-      ageDays: ageInDays(group.modifiedAt),
-      risk: 'review',
-      status: t(language, '手动确认', 'Manual review'),
-      location: displayPath(target),
-      evidence: [
-        t(language, `合计占用 ${formatBytesForEvidence(group.sizeBytes)}`, `Combined size: ${formatBytesForEvidence(group.sizeBytes)}`),
-        singleFile
-          ? t(language, `最近修改于 ${ageInDays(group.modifiedAt)} 天前`, `Last modified ${ageInDays(group.modifiedAt)} days ago`)
-          : t(language, `${group.files.length} 个文件达到大文件建议标准`, `${group.files.length} files meet the large-file finding threshold`)
-      ]
-    },
-      undefined,
-      registeredOperations,
-      revealTargets,
-      target
-    )
-  })
 }
 
 async function scanBrewVersions(
@@ -1566,15 +1404,14 @@ async function scanStorage(
     ...storageDefinitions.map((item) => item.target),
     ...storageGroupDefinitions.flatMap((item) => item.targets)
   ])
-  const [defined, groups, caches, logs, largeFiles, brewVersions] = await Promise.all([
+  const [defined, groups, caches, logs, brewVersions] = await Promise.all([
     scanDefinedStorage(actions, revealTargets, language),
     scanStorageGroups(actions, revealTargets, language),
     scanApplicationCaches(actions, revealTargets, definedTargets, language),
     scanApplicationLogs(actions, revealTargets, language),
-    scanLargeUserFiles(actions, revealTargets, language),
     scanBrewVersions(actions, revealTargets, language)
   ])
-  return [...defined, ...groups, ...caches, ...logs, ...largeFiles, ...brewVersions].sort(
+  return [...defined, ...groups, ...caches, ...logs, ...brewVersions].sort(
     (a, b) => (b.sizeBytes ?? 0) - (a.sizeBytes ?? 0)
   )
 }

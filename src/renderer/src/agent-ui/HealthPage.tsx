@@ -2,6 +2,7 @@ import {
   Activity,
   Box,
   Bolt,
+  ChevronRight,
   Ellipsis,
   EyeOff,
   FolderOpen,
@@ -92,12 +93,12 @@ function CandidateRow({
       <div className="row-actions">
         <button type="button" className="secondary-button" onClick={() => onAgentPrompt(operationCount
           ? text(
-              `分析“${candidate.name}”。第一句话直接说明它是什么软件或服务、属于哪家公司以及主要用途；再说明当前状态、影响和风险，并比较全部 ${operationCount} 个可选操作。无法确认归属时明确说不知道，不要猜测。不要直接执行或默认选择操作，等我明确选择后再加入确认计划。`,
-              `Analyze "${candidate.name}". In the first sentence, directly identify the software or service, its vendor, and its main purpose. Then explain its current state, impact, and risks and compare all ${operationCount} available actions. If ownership cannot be established, say so instead of guessing. Do not execute or select an action until I explicitly choose one.`
+              `分析“${candidate.name}”。第一句话直接说明它是什么软件或服务、属于哪家公司以及主要用途；结合关联应用、后台服务、配置文件名、软件包收据和 shell 引用说明本机状态，并区分本机确认、明确签名和未确认推断；再说明影响、风险并比较全部 ${operationCount} 个可选操作。不要直接执行或默认选择操作，等我明确选择后再加入确认计划。`,
+              `Analyze "${candidate.name}". In the first sentence, directly identify the software or service, its vendor, and its main purpose. Use related apps, background services, configuration names, package receipts, and shell references to explain its local state, distinguishing locally confirmed evidence, exact signatures, and unconfirmed inference. Then explain impact and risks and compare all ${operationCount} available actions. Do not execute or select an action until I explicitly choose one.`
             )
           : text(
-              `分析“${candidate.name}”。第一句话直接说明它是什么软件或服务、属于哪家公司以及主要用途；再说明当前状态、影响和是否需要关注。无法确认归属时明确说不知道，不要猜测；不要修改系统。`,
-              `Analyze "${candidate.name}". In the first sentence, directly identify the software or service, its vendor, and its main purpose. Then explain its current state, impact, and whether it needs attention. If ownership cannot be established, say so instead of guessing. Do not change the system.`
+              `分析“${candidate.name}”。第一句话直接说明它是什么软件或服务、属于哪家公司以及主要用途；结合关联应用、后台服务、配置文件名、软件包收据和 shell 引用说明本机状态，并区分本机确认、明确签名和未确认推断；再说明影响和是否需要关注，不要修改系统。`,
+              `Analyze "${candidate.name}". In the first sentence, directly identify the software or service, its vendor, and its main purpose. Use related apps, background services, configuration names, package receipts, and shell references to explain its local state, distinguishing locally confirmed evidence, exact signatures, and unconfirmed inference. Then explain impact and whether it needs attention without changing the system.`
             ), candidate.id)}>
           <Sparkles size={14} />{text('AI 分析', 'AI analysis')}
         </button>
@@ -183,7 +184,8 @@ export function HealthPage({
   const serviceCategories = ([
     ['orphaned', text('残留启动项', 'Orphaned startup items')],
     ['failed', text('启动异常', 'Startup failures')],
-    ['resource', text('资源占用异常', 'High resource usage')],
+    ['high-cpu', text('CPU 占用异常', 'High CPU')],
+    ['high-memory', text('内存占用异常', 'High memory')],
     ['long-running', text('长期运行', 'Long-running')],
     ['stale', text('长期未使用', 'Stale items')],
     ['other', text('其他启动项', 'Other startup items')]
@@ -204,6 +206,8 @@ export function HealthPage({
   const terminalFixes = terminalFindings.filter((item) => item.fix)
   const score = Math.max(45, 100 - storage.length * 2 - services.filter((item) => operations(item).length).length * 3 - terminalFixes.length * 2)
   const findingCount = storage.length + services.filter((item) => operations(item).length).length + terminalFixes.length
+  const priorityServiceCategory = (['high-cpu', 'high-memory', 'failed', 'orphaned'] as const)
+    .find((kind) => services.some((service) => service.serviceAnomalies?.includes(kind)))
 
   useEffect(() => {
     if (!restoreTarget || !pageRef.current) return
@@ -229,6 +233,25 @@ export function HealthPage({
     itemId,
     scrollTop: pageRef.current?.scrollTop ?? 0
   })
+
+  const reviewFindings = (): void => {
+    if (priorityServiceCategory) {
+      setServiceCategory(priorityServiceCategory)
+      onTabChange('services')
+      return
+    }
+    if (storage.length) {
+      onStorageModeChange('recommendations')
+      onTabChange('storage')
+      return
+    }
+    if (services.length) {
+      setServiceCategory('all')
+      onTabChange('services')
+      return
+    }
+    onTabChange('terminal')
+  }
 
   return (
     <section ref={pageRef} className="page content-page is-active">
@@ -256,7 +279,18 @@ export function HealthPage({
       )}
 
       <div className="health-band">
-        <div className="health-score"><strong>{score}</strong><span>{score >= 85 ? text('设备状态良好', 'Device is healthy') : text('建议进一步检查', 'Further review recommended')}</span></div>
+        <button
+          type="button"
+          className="health-score"
+          onClick={reviewFindings}
+          disabled={!result || findingCount === 0}
+          title={text('查看最需要关注的检查结果', 'Review the highest-priority finding')}
+        >
+          <strong>{score}</strong>
+          <span>{findingCount > 0
+            ? <>{text(`查看 ${findingCount} 项待确认内容`, `Review ${findingCount} ${findingCount === 1 ? 'finding' : 'findings'}`)}<ChevronRight size={12} /></>
+            : text('没有待处理项目', 'No pending findings')}</span>
+        </button>
         <div className="health-metric"><span>{text('可释放空间', 'Reclaimable')}</span><strong>{formatBytes(reclaimable)}</strong><small>{text(`${storage.length} 个建议项目`, `${storage.length} findings`)}</small></div>
         <div className="health-metric"><span>{text('后台服务', 'Services')}</span><strong>{services.length}</strong><small>{text(`${services.filter((item) => operations(item).length).length} 个建议项`, `${services.filter((item) => operations(item).length).length} findings`)}</small></div>
         <div className="health-metric"><span>{text('终端启动', 'Terminal startup')}</span><strong>{result?.terminal.startupMs === null || result?.terminal.startupMs === undefined ? '--' : `${result.terminal.startupMs} ms`}</strong><small>{text(`${terminalFixes.length} 项可以自动优化`, `${terminalFixes.length} automatic fixes`)}</small></div>

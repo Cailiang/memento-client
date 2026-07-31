@@ -117,7 +117,7 @@ The model can call these tools:
 - `present_results`
 - `prepare_action_plan`
 
-Inspection output includes stable finding IDs and is compact enough for model context. `present_results` accepts only those stable IDs and resolves them against the current scan into a persisted `AgentPresentation`. The model supplies plain summary and section-title text; Memento supplies all item data and interactive operations. Arbitrary HTML is never accepted or rendered.
+Inspection output includes stable finding IDs and is compact enough for model context. When one storage item is focused, `local-evidence.ts` derives identity tokens from that exact scan item and correlates them across storage, services, applications, allowlisted filesystem entry names, package receipts, shallow target children, and shell configuration references. Shell values that look like keys, tokens, secrets, passwords, or credentials are replaced with `[REDACTED]` before tool logging or provider requests. Evidence is labeled `confirmed-local`, `strong-signature`, or `unconfirmed`; no product ownership table is maintained. `present_results` accepts only stable IDs and resolves them against the current scan into a persisted `AgentPresentation`. The model supplies plain summary and section-title text; Memento supplies all item data and interactive operations. Arbitrary HTML is never accepted or rendered.
 
 Every tool input and output is stored in `tool_calls`. API keys, raw file contents, and unrestricted filesystem access remain excluded. Runs are limited to twelve steps, 1,400 output tokens, and a two-minute timeout.
 
@@ -146,12 +146,13 @@ Application uninstall first uses Electron's native macOS Trash API. If that API 
 
 After Agent-plan execution, service actions, or terminal fixes, Memento performs a fresh scan. Registered actions and terminal fixes whose complete local capability payload remains unchanged inherit their prior opaque IDs; changed or missing targets receive no such reconciliation. Direct Storage cleanup is narrower: once the main process has validated and completed the registered action, the Renderer reconciles that successful operation into the current candidate list during an approximately three-second Run, Update, Done sequence and does not block on a full scan. Per-operation results accumulate on the run, successful steps become non-selectable, and partial failure is reported as partial failure. Cancelling an active request aborts the provider call, while cancelling a waiting plan persists `cancelled` and clears the executable plan.
 
-Storage scanning has four cleanup boundaries:
+Storage scanning has three cleanup boundaries:
 
 - Known rebuildable cache folders for Claude, Codex, Antigravity, Grok, Xcode, package managers, and iOS simulators use exact main-process allowlists. AI credentials, settings, conversations, sessions, workspaces, and projects are not included.
-- `home-hidden-cleanup.ts` inspects direct hidden Home children plus one level below `.config`, `.cache`, and `.local/share` after application inventory completes. It protects shell, credential, package-manager, and container roots; filters items matching installed applications or command entries from `PATH`, Homebrew, and common user bin directories; excludes items modified within 30 days; and caps the size-sorted result at 40 review-only candidates. Maintained exact-name metadata identifies known products such as `.lingma` as Alibaba Cloud Tongyi Lingma without treating the directory as safe to delete. A missing identity match is evidence, not proof of orphan ownership. `trash-home-artifact` rechecks the registered real parent, type, and modification time before using native Trash; it never permanently deletes hidden settings or data.
-- Large direct children of `~/Library/Logs` are review-required permanent cleanup targets; their resolved paths are checked again before deletion.
-- Regular files at least seven days old and 500 MB under Downloads, Desktop, or Movies are review-only. The main process rechecks the allowed root, real path, file type, byte size, and modification time, then moves the file to Trash instead of deleting it permanently.
+- `home-hidden-cleanup.ts` inspects direct hidden Home directories plus one directory level below `.config`, `.cache`, and `.local/share` after application inventory completes. It protects shell, credential, package-manager, and container roots; filters directories matching installed applications or command entries from `PATH`, Homebrew, and common user bin directories; excludes directories modified within 30 days; and caps the size-sorted result at 40 review-only candidates. A missing identity match is evidence, not proof of orphan ownership. `trash-home-artifact` rechecks the registered real parent, directory type, and modification time before using native Trash; it never permanently deletes hidden settings or data.
+- Large direct directory children of `~/Library/Logs` are review-required permanent cleanup targets; their resolved paths are checked again before deletion.
+
+Automatic Storage findings are directory-only. Personal files under Downloads, Desktop, and Movies and individual files such as Docker virtual disks are available through the separately initiated Disk browser, but never become Agent cleanup actions.
 
 ## 7. Ignored Items
 
@@ -185,6 +186,7 @@ Concurrent Agent starts are kept in a Renderer workspace list even when they use
 - Structured application results use a logo grid with last-used time and size; storage, service, and terminal results use compact rows. Their buttons reference only registered application or operation IDs.
 - Model prose is parsed by `react-markdown` with GFM and soft-line-break support. Common model bullet characters are normalized into semantic lists, raw HTML remains disabled, and links are rendered as inert labels. The Renderer never uses `dangerouslySetInnerHTML` or model-generated HTML.
 - Health rows expose analysis as AI analysis, summarize the count of registered operations, and wait for the user to choose an operation from the trusted structured result before anything enters the confirmation plan.
+- Health-score review opens the highest-priority available module and service category. Runtime anomalies use separate `high-cpu` and `high-memory` classifications instead of one ambiguous resource bucket.
 - Storage, service, and application pages open their own ignored-item tab directly; Settings retains the combined manager.
 - Preload initialization must not touch the DOM before `DOMContentLoaded`; losing the preload API silently activates browser demo data instead of real device data.
 
