@@ -60,8 +60,6 @@ jobs:
             os: ubuntu-24.04-arm
             command: npm run dist:linux -- --arm64
     runs-on: ${{ matrix.os }}
-    env:
-      CSC_IDENTITY_AUTO_DISCOVERY: "false"
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -69,12 +67,85 @@ jobs:
           node-version: 22.x
           cache: npm
       - run: npm ci
-      - name: Build ${{ matrix.id }}
-        run: ${{ matrix.command }}
-      - name: Verify macOS DMG
+      - name: Import macOS signing certificate
         if: startsWith(matrix.id, 'macos-')
         shell: bash
-        run: scripts/verify-mac-dmg.sh "${{ matrix.id == 'macos-arm64' && 'arm64' || 'x64' }}"
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          certificate_path="$RUNNER_TEMP/memento-signing.p12"
+          intermediate_path="$RUNNER_TEMP/DeveloperIDG2CA.cer"
+          keychain_path="$RUNNER_TEMP/memento-signing.keychain-db"
+
+          for required in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY KEYCHAIN_PASSWORD; do
+            test -n "${!required}"
+          done
+          printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$certificate_path"
+          curl --fail --location --silent --show-error \
+            https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer \
+            --output "$intermediate_path"
+          test "$(shasum -a 256 "$intermediate_path" | awk '{print $1}')" = \
+            "f16cd3c54c7f83cea4bf1a3e6a0819c8aaa8e4a1528fd144715f350643d2df3a"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$keychain_path"
+          security import "$intermediate_path" -k "$keychain_path"
+          security import "$certificate_path" \
+            -k "$keychain_path" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$keychain_path"
+          security default-keychain -d user -s "$keychain_path"
+          security find-identity -v -p codesigning "$keychain_path" |
+            grep -F "\"$APPLE_SIGNING_IDENTITY\""
+      - name: Build signed and notarized ${{ matrix.id }}
+        if: startsWith(matrix.id, 'macos-')
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: ${{ matrix.command }}
+      - name: Build ${{ matrix.id }}
+        if: ${{ !startsWith(matrix.id, 'macos-') }}
+        run: ${{ matrix.command }}
+      - name: Sign, notarize, and verify macOS DMG
+        if: startsWith(matrix.id, 'macos-')
+        shell: bash
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          for required in APPLE_ID APPLE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_TEAM_ID; do
+            test -n "${!required}"
+          done
+          version="$(node -p "require('./package.json').version")"
+          arch="${{ matrix.id == 'macos-arm64' && 'arm64' || 'x64' }}"
+          dmg_path="release/Memento-${version}-${arch}.dmg"
+          codesign --force --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$dmg_path"
+          xcrun notarytool submit "$dmg_path" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+          xcrun stapler staple "$dmg_path"
+          scripts/verify-mac-dmg.sh "$arch" "$dmg_path" developer-id
+      - name: Remove temporary macOS signing keychain
+        if: always() && startsWith(matrix.id, 'macos-')
+        shell: bash
+        run: |
+          keychain_path="$RUNNER_TEMP/memento-signing.keychain-db"
+          security default-keychain -d user -s "$HOME/Library/Keychains/login.keychain-db"
+          if [[ -f "$keychain_path" ]]; then
+            security delete-keychain "$keychain_path"
+          fi
       - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.id }}

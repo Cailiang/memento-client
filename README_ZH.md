@@ -97,7 +97,7 @@ Memento 使用 Electron 应用数据目录中的本地 SQLite 数据库保存设
 | Windows | x64、arm64 | NSIS EXE |
 | Linux | x64、arm64 | AppImage、DEB |
 
-每个 GitHub Release 包含 8 个平台安装包和 `SHA256SUMS.txt`。macOS 安装包会完成 ad-hoc 签名，确保 Apple Silicon 能够校验应用包；在配置项目自有的 Apple 凭据前，安装包仍没有 Developer ID 签名和公证。首次启动时可能仍需右键选择“打开”，或前往“系统设置 > 隐私与安全性”手动允许。
+每个 GitHub Release 包含 8 个平台安装包和 `SHA256SUMS.txt`。macOS 安装包会使用项目的 Developer ID Application 证书签名，经 Apple 公证并装订票据后再上传；发布流程会使用 `codesign`、Gatekeeper 和 `stapler` 验证最终应用与 DMG。
 
 ## 许可证
 

@@ -97,7 +97,7 @@ The `Release` GitHub Actions workflow builds the following packages from a match
 | Windows | x64, arm64 | NSIS EXE |
 | Linux | x64, arm64 | AppImage, DEB |
 
-Each GitHub Release contains eight platform packages and `SHA256SUMS.txt`. macOS packages are fully ad-hoc signed so Apple Silicon can validate the app bundle, but they are not Developer ID signed or notarized until project-owned Apple credentials are configured. Gatekeeper may still require **Control-click > Open** or approval under **System Settings > Privacy & Security** before the first launch.
+Each GitHub Release contains eight platform packages and `SHA256SUMS.txt`. macOS packages are signed with the project's Developer ID Application certificate, notarized by Apple, and stapled before upload. The release workflow verifies the final app and DMG with `codesign`, Gatekeeper, and `stapler`.
 
 ## License
 

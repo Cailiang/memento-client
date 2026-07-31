@@ -13,7 +13,7 @@ GitHub Actions is the only supported path for publishing Memento packages. Devel
 | Linux | x64 | AppImage and DEB |
 | Linux | arm64 | AppImage and DEB |
 
-Full scanning and cleanup remain macOS-specific. macOS packages use a complete ad-hoc signature to preserve bundle integrity on Apple Silicon, but are not Developer ID signed or notarized until project-owned credentials are configured.
+Full scanning and cleanup remain macOS-specific. Public macOS packages are signed with the project Developer ID Application identity, notarized by Apple, and stapled before upload.
 
 ## Change Checklist
 
@@ -52,10 +52,10 @@ Keep it running while the UI smoke test executes in another terminal:
 npm run ui:smoke -- http://127.0.0.1:4174
 ```
 
-Build the required local package without code-signing identity discovery:
+Build the required local package with the exact project identity qualifier:
 
 ```bash
-CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist:mac -- --x64
+CSC_NAME='Beijing Digital Union Network Technology Co., Ltd. (6EDPX6CD7U)' npm run dist:mac -- --x64
 ```
 
 Before committing, verify all of the following:
@@ -64,6 +64,7 @@ Before committing, verify all of the following:
 - The mounted `Memento.app` reports the same version as `package.json`.
 - `file Memento.app/Contents/MacOS/Memento` reports an `x86_64` executable.
 - `codesign --verify --deep --strict` accepts the mounted application bundle.
+- `codesign --display --verbose=4` reports the expected Developer ID authority and Team ID `6EDPX6CD7U`.
 - A SHA-256 checksum is recorded for the DMG.
 - The source commit contains the matching version and release notes.
 
@@ -74,6 +75,7 @@ Before committing, verify all of the following:
 3. Push the tag and monitor the `Release` workflow through publication.
 4. Confirm that the GitHub Release contains eight platform packages plus `SHA256SUMS.txt`.
 5. Confirm that `SHA256SUMS.txt` has exactly eight package entries and does not include itself.
+6. Confirm that both macOS DMGs pass Gatekeeper and contain valid stapled notarization tickets.
 
 ```bash
 git switch main

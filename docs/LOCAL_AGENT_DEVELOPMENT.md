@@ -90,7 +90,7 @@ The connection test creates a two-step `ToolLoopAgent` run with a strict `connec
 
 `.github/workflows/release.yml` is the only supported path for publishing GitHub Release binaries. It uses the latest Node.js 22.x release, verifies that built-in SQLite is available, validates that a pushed tag exactly matches package metadata, runs unit tests and type checking, then builds six native runner targets: macOS x64 and arm64, Windows x64 and arm64, and Linux x64 and arm64. The resulting two DMGs, two NSIS executables, two AppImages, and two DEBs are collected into one release. `SHA256SUMS.txt` is restricted to exactly those eight packages and never includes itself.
 
-Tag-triggered runs create or safely update the bilingual GitHub Release from `RELEASE_NOTES.md`. Manual dispatches run the same validation and build matrix but intentionally stop at temporary Actions artifacts. macOS builds use a complete ad-hoc signature and verify the final mounted DMG; Developer ID signing and notarization remain unavailable until project-owned credentials are configured. The end-to-end operator checklist is in [Release process](RELEASING.md).
+Tag-triggered runs create or safely update the bilingual GitHub Release from `RELEASE_NOTES.md`. Manual dispatches run the same validation and build matrix but intentionally stop at temporary Actions artifacts. macOS builds import the project Developer ID certificate into an isolated temporary keychain, sign and notarize the app, then separately sign, notarize, staple, and verify the final DMG. The end-to-end operator checklist is in [Release process](RELEASING.md).
 
 ## 5. Agent Run
 
@@ -229,4 +229,4 @@ With the web development server on port `4174`, run `npm run ui:smoke -- http://
 
 Use `npm run audit:runtime` as the release boundary because it audits dependencies shipped inside the application. Use `npm run audit` to inspect the complete development tree. Record actionable findings in the release work instead of preserving a version-specific audit snapshot in this architecture document.
 
-Every user-requested code or UI change requires a patch-version bump, changelog and release-note update, ad-hoc-signed Intel x64 DMG build, mounted-image and bundle-signature verification, bundled version and `x86_64` architecture check, SHA-256 calculation, and a source commit. The complete checklist is maintained in `AGENTS.md` and [Release process](RELEASING.md).
+Every user-requested code or UI change requires a patch-version bump, changelog and release-note update, Developer ID-signed Intel x64 DMG build, mounted-image and bundle-signature verification, bundled version and `x86_64` architecture check, SHA-256 calculation, and a source commit. Public packages additionally require successful Apple notarization, ticket stapling, and Gatekeeper assessment. The complete checklist is maintained in `AGENTS.md` and [Release process](RELEASING.md).

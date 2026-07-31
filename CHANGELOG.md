@@ -8,6 +8,22 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.54 - 2026-07-31
+
+### English
+
+- Switched macOS packages from ad-hoc signing to the project Developer ID Application certificate with Hardened Runtime enabled.
+- Added isolated temporary-keychain certificate import and Apple ID notarization to both Intel and Apple Silicon GitHub Actions builds.
+- Made the final DMG receive its own Developer ID signature, Apple notarization submission, and stapled ticket before artifact upload.
+- Strengthened release verification to require the expected signing authority and Team ID, strict app and DMG signatures, successful Gatekeeper assessments, and valid stapled tickets.
+
+### 简体中文
+
+- macOS 安装包从 ad-hoc 签名切换为项目 Developer ID Application 证书签名，并启用 Hardened Runtime。
+- Intel 与 Apple Silicon GitHub Actions 构建新增隔离临时钥匙串证书导入和 Apple ID 公证。
+- 最终 DMG 在上传前会单独完成 Developer ID 签名、Apple 公证提交和票据装订。
+- 发布验证现在强制检查预期签名主体与 Team ID、应用和 DMG 严格签名、Gatekeeper 结果以及装订票据。
+
 ## 0.6.53 - 2026-07-31
 
 ### English

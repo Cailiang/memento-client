@@ -1,6 +1,6 @@
 {
   "name": "memento",
-  "version": "0.6.53",
+  "version": "0.6.54",
   "private": true,
   "author": {
     "name": "Cailiang",
@@ -77,9 +77,9 @@
     "mac": {
       "category": "public.app-category.utilities",
       "icon": "build/icon.icns",
-      "identity": "-",
       "forceCodeSigning": true,
-      "hardenedRuntime": false,
+      "hardenedRuntime": true,
+      "notarize": true,
       "target": [
         "dmg"
       ]
