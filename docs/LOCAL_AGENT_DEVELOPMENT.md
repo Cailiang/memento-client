@@ -146,9 +146,10 @@ Application uninstall first uses Electron's native macOS Trash API. If that API 
 
 After execution, Memento performs a fresh scan. Registered actions and terminal fixes whose complete local capability payload remains unchanged inherit their prior opaque IDs; changed or missing targets receive no such reconciliation. This lets a user execute another operation from the same trusted result after verification without accepting stale paths. Per-operation results accumulate on the run, successful steps become non-selectable, and partial failure is reported as partial failure. Cancelling an active request aborts the provider call, while cancelling a waiting plan persists `cancelled` and clears the executable plan.
 
-Storage scanning has three cleanup boundaries:
+Storage scanning has four cleanup boundaries:
 
 - Known rebuildable cache folders for Claude, Codex, Antigravity, Grok, Xcode, package managers, and iOS simulators use exact main-process allowlists. AI credentials, settings, conversations, sessions, workspaces, and projects are not included.
+- `home-hidden-cleanup.ts` inspects direct hidden Home children plus one level below `.config`, `.cache`, and `.local/share` after application inventory completes. It protects shell, credential, package-manager, and container roots, filters installed-application identity matches and items modified within 30 days, and caps the size-sorted result at 40 review-only candidates. A missing app-name match is evidence, not proof of orphan ownership. `trash-home-artifact` rechecks the registered real parent, type, and modification time before using native Trash; it never permanently deletes hidden settings or data.
 - Large direct children of `~/Library/Logs` are review-required permanent cleanup targets; their resolved paths are checked again before deletion.
 - Regular files at least seven days old and 500 MB under Downloads, Desktop, or Movies are review-only. The main process rechecks the allowed root, real path, file type, byte size, and modification time, then moves the file to Trash instead of deleting it permanently.
 

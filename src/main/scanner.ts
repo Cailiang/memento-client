@@ -41,6 +41,11 @@ import {
   type RegisteredTerminalFix
 } from './terminal-fixes'
 import { brewCleanupVersionTargets } from './brew-cleanup'
+import {
+  discoverHiddenHomeArtifacts,
+  installedApplicationIdentityTokens,
+  type HiddenHomeArtifactSource
+} from './home-hidden-cleanup'
 
 const execFileAsync = promisify(execFile)
 const HOME = os.homedir()
@@ -56,7 +61,7 @@ function t(language: AppLanguage, chinese: string, english: string): string {
 
 export type RegisteredAction =
   | {
-      kind: Exclude<ActionKind, 'trash-launch-agent-config' | 'trash-service-software' | 'trash-service-directory' | 'brew-cleanup' | 'delete-storage-group' | 'trash-large-file'>
+      kind: Exclude<ActionKind, 'trash-launch-agent-config' | 'trash-service-software' | 'trash-service-directory' | 'brew-cleanup' | 'delete-storage-group' | 'trash-large-file' | 'trash-home-artifact'>
       target: string
     }
   | {
@@ -69,6 +74,12 @@ export type RegisteredAction =
       target: string
       expectedSizeBytes: number
       expectedModifiedAtMs: number
+    }
+  | {
+      kind: 'trash-home-artifact'
+      target: string
+      expectedModifiedAtMs: number
+      expectedKind: 'directory' | 'file'
     }
   | {
       kind: 'brew-cleanup'
@@ -1209,6 +1220,84 @@ async function scanApplicationLogs(
     .slice(0, 12)
 }
 
+function hiddenArtifactSourceLabel(
+  source: HiddenHomeArtifactSource,
+  language: AppLanguage
+): string {
+  const labels: Record<HiddenHomeArtifactSource, [string, string]> = {
+    home: ['Home 隐藏项目', 'Hidden Home item'],
+    config: ['.config 隐藏配置', 'Hidden .config item'],
+    cache: ['.cache 隐藏缓存', 'Hidden .cache item'],
+    'local-share': ['.local/share 隐藏数据', 'Hidden .local/share data']
+  }
+  return language === 'en-US' ? labels[source][1] : labels[source][0]
+}
+
+async function scanHiddenHomeArtifacts(
+  actions: Map<string, RegisteredAction>,
+  revealTargets: Map<string, string>,
+  applications: readonly InstalledApplication[],
+  language: AppLanguage
+): Promise<ScanCandidate[]> {
+  const installedIdentities = installedApplicationIdentityTokens(applications)
+  const discovered = await discoverHiddenHomeArtifacts(installedIdentities, HOME)
+  const measured = await mapLimit(discovered.slice(0, 100), 6, async (artifact) => {
+    try {
+      return { artifact, sizeBytes: await getPathSize(artifact.target) }
+    } catch {
+      return null
+    }
+  })
+
+  return measured
+    .filter((item): item is NonNullable<typeof item> => item !== null)
+    .sort((left, right) => right.sizeBytes - left.sizeBytes)
+    .slice(0, 40)
+    .map(({ artifact, sizeBytes }) => registerCandidate(
+      actions,
+      {
+        section: 'storage',
+        name: artifact.name,
+        subtitle: hiddenArtifactSourceLabel(artifact.source, language),
+        description: t(
+          language,
+          '当前应用清单中没有找到名称、Bundle ID 或可执行文件与它明确匹配的项目。它可能是已卸载软件的残留，也可能属于仍在使用的命令行工具，请确认用途后再清理。',
+          'No installed application clearly matches this item by name, bundle ID, or executable. It may be leftover data from an uninstalled app or belong to a command-line tool that is still in use, so review it before cleanup.'
+        ),
+        sizeBytes,
+        ageDays: ageInDays(artifact.modifiedAt),
+        risk: 'review',
+        status: t(language, '需确认归属', 'Ownership review'),
+        location: displayPath(artifact.target),
+        evidence: [
+          t(language, `隐藏位置：${displayPath(artifact.target)}`, `Hidden location: ${displayPath(artifact.target)}`),
+          t(language, '未匹配到当前已安装的 macOS 应用', 'No currently installed macOS application was matched'),
+          t(language, `最近修改于 ${ageInDays(artifact.modifiedAt)} 天前`, `Last modified ${ageInDays(artifact.modifiedAt)} days ago`)
+        ],
+        action: {
+          kind: 'trash-home-artifact',
+          label: t(language, '移到废纸篓', 'Move to Trash'),
+          consequence: t(
+            language,
+            '整个隐藏项目及其中的配置和数据会移到废纸篓。如果它仍被应用或命令行工具使用，相关设置可能会被重置。',
+            'The entire hidden item, including its configuration and data, moves to the Trash. Settings may be reset if an app or command-line tool still uses it.'
+          ),
+          reversible: true,
+          estimatedBytes: sizeBytes
+        }
+      },
+      {
+        kind: 'trash-home-artifact',
+        target: artifact.target,
+        expectedModifiedAtMs: artifact.modifiedAtMs,
+        expectedKind: artifact.kind
+      },
+      [],
+      revealTargets,
+      artifact.target
+    ))
+}
+
 interface LargeUserFile {
   target: string
   sizeBytes: number
@@ -2243,12 +2332,11 @@ export async function runFullScan(
     })
     .finally(() => reportSectionComplete('services'))
 
-  const storagePromise = scanStorage(actions, revealTargets, language)
+  const storageBasePromise = scanStorage(actions, revealTargets, language)
     .catch((error: Error) => {
       warnings.push(t(language, `存储扫描未完成：${error.message}`, `Storage scan did not complete: ${error.message}`))
       return []
     })
-    .finally(() => reportSectionComplete('storage'))
 
   const applicationsPromise = scanApplications(actions, revealTargets, language)
     .catch((error: Error) => {
@@ -2256,6 +2344,29 @@ export async function runFullScan(
       return { candidates: [], applications: [] }
     })
     .finally(() => reportSectionComplete('applications'))
+
+  const storagePromise = Promise.all([storageBasePromise, applicationsPromise])
+    .then(async ([storage, applicationScan]) => {
+      try {
+        const hiddenHome = await scanHiddenHomeArtifacts(
+          actions,
+          revealTargets,
+          applicationScan.applications,
+          language
+        )
+        return [...storage, ...hiddenHome].sort(
+          (left, right) => (right.sizeBytes ?? 0) - (left.sizeBytes ?? 0)
+        )
+      } catch (error) {
+        warnings.push(t(
+          language,
+          `Home 隐藏项目扫描未完成：${(error as Error).message}`,
+          `Hidden Home item scan did not complete: ${(error as Error).message}`
+        ))
+        return storage
+      }
+    })
+    .finally(() => reportSectionComplete('storage'))
 
   const terminalPromise = scanTerminal(language, terminalFixes)
     .catch((error: Error) => {

@@ -77,7 +77,7 @@ function demoOperationCopy(
   if (kind.startsWith('stop-')) {
     return { label: 'Stop service', consequence: 'Stop the registered background service.' }
   }
-  if (kind === 'trash' || kind === 'trash-large-file') {
+  if (kind === 'trash' || kind === 'trash-large-file' || kind === 'trash-home-artifact') {
     return { label: 'Move to Trash', consequence: 'Move the registered item to the Trash.' }
   }
   if (kind === 'brew-cleanup') {

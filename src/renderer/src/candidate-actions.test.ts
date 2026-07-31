@@ -69,6 +69,26 @@ describe('applyCompletedCandidateActions', () => {
     expect(applyCompletedCandidateActions([storage], new Set(['cache']), 'en-US')).toEqual([])
   })
 
+  it('removes a hidden Home finding after moving it to Trash', () => {
+    const hidden: ScanCandidate = {
+      id: 'hidden-home',
+      section: 'storage',
+      name: '.retired-app',
+      subtitle: 'Hidden Home item',
+      description: 'Unmatched hidden configuration',
+      risk: 'review',
+      status: 'Ownership review',
+      evidence: [],
+      action: {
+        kind: 'trash-home-artifact',
+        label: 'Move to Trash',
+        consequence: 'Moves the hidden item to Trash.',
+        reversible: true
+      }
+    }
+    expect(applyCompletedCandidateActions([hidden], new Set(['hidden-home']), 'en-US')).toEqual([])
+  })
+
   it('runs a shared cleanup operation once and removes every service in its group', () => {
     const sibling = { ...service, id: 'service-2', name: 'Example helper' }
     const selected = selectedCandidateOperations([service, sibling], new Set(['remove']))

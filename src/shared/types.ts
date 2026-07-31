@@ -10,6 +10,7 @@ export type ActionKind =
   | 'delete-storage'
   | 'delete-storage-group'
   | 'trash-large-file'
+  | 'trash-home-artifact'
   | 'stop-brew-service'
   | 'stop-launch-agent'
   | 'trash-launch-agent-config'

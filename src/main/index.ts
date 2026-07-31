@@ -63,6 +63,7 @@ import {
   isAllowedStorageCleanupTarget
 } from './storage-cleanup'
 import { validateLargeFileCleanupTarget } from './large-file-cleanup'
+import { validateHiddenHomeArtifactCleanupTarget } from './home-hidden-cleanup'
 import { brewCleanupVersionTargets, isSafeBrewVersion } from './brew-cleanup'
 import { reconcileScanCapabilities } from './scan-capability-reconciliation'
 import {
@@ -614,6 +615,22 @@ async function executeRegisteredAction(action: RegisteredAction): Promise<void> 
     await shell.trashItem(action.target)
     if (existsSync(action.target)) {
       throw new Error(mainText('大文件仍在原位置，请重新扫描', 'The large file is still in its original location. Scan again.'))
+    }
+    return
+  }
+
+  if (action.kind === 'trash-home-artifact') {
+    const target = await validateHiddenHomeArtifactCleanupTarget(
+      action.target,
+      action.expectedModifiedAtMs,
+      action.expectedKind
+    )
+    await shell.trashItem(target)
+    if (existsSync(target)) {
+      throw new Error(mainText(
+        '隐藏项目仍在原位置，请重新扫描',
+        'The hidden item is still in its original location. Scan again.'
+      ))
     }
     return
   }

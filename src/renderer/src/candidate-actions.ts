@@ -44,6 +44,7 @@ export function applyCompletedCandidateActions(
         operation.kind === 'delete-storage' ||
         operation.kind === 'delete-storage-group' ||
         operation.kind === 'trash-large-file' ||
+        operation.kind === 'trash-home-artifact' ||
         operation.kind === 'trash'
     )
     if (removedSoftwareOrDirectory) return []

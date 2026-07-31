@@ -8,6 +8,22 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.47 - 2026-07-31
+
+### English
+
+- Added review-only scanning for hidden application data directly under the user's Home directory and one level below `.config`, `.cache`, and `.local/share`.
+- Hidden items must be unchanged for at least 30 days and must not clearly match an installed application's name, bundle ID, executable, or URL scheme; shell, credential, package-manager, and container roots remain protected.
+- Added a dedicated reversible `trash-home-artifact` action that revalidates the exact real parent, file type, and modification time before moving a confirmed item to Trash.
+- Added regression coverage and real-scan smoke reporting for unmatched hidden data, then updated the bilingual storage and release documentation.
+
+### 简体中文
+
+- 新增 Home 目录隐藏应用数据扫描，覆盖 Home 根目录的隐藏项目以及 `.config`、`.cache`、`.local/share` 的一级子项目，并统一标记为需要人工确认。
+- 候选项必须至少 30 天未修改，且不能与已安装应用的名称、Bundle ID、可执行文件或 URL 协议明确匹配；shell、凭据、包管理器和容器根目录继续受到保护。
+- 新增可恢复的 `trash-home-artifact` 动作，执行前重新校验精确的真实父目录、文件类型和修改时间，确认后只移到废纸篓。
+- 补充隐藏残留回归测试和真实扫描冒烟摘要，并同步更新中英文存储与发布文档。
+
 ## 0.6.46 - 2026-07-31
 
 ### English
