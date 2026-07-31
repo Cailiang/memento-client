@@ -770,6 +770,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     }
     setPendingDirectAction({
       id: operation.id,
+      candidateId: candidate.id,
       kind: 'action',
       verificationMode: candidate.section === 'storage' ? 'local' : 'scan',
       subject: candidate.name,
@@ -865,14 +866,20 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
         await waitUntilElapsed(startedAt, 2_250)
         setExecutionState((current) => current ? { ...current, progress: 92 } : current)
         await waitUntilElapsed(startedAt, DIRECT_STORAGE_FEEDBACK_MS)
-        setResult((current) => current ? {
-          ...current,
-          candidates: applyCompletedCandidateActions(
+        setResult((current) => {
+          if (!current) return current
+          const reconciled = applyCompletedCandidateActions(
             current.candidates,
             completedIds,
             settings.language
           )
-        } : current)
+          return {
+            ...current,
+            candidates: action.candidateId && completedIds.has(action.id)
+              ? reconciled.filter((candidate) => candidate.id !== action.candidateId)
+              : reconciled
+          }
+        })
       } else {
         setScanBusy(true)
         const verified = window.memento

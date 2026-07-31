@@ -22,7 +22,7 @@ The packages are unsigned and unnotarized until repository signing credentials a
 3. Update `CHANGELOG.md`, `RELEASE_NOTES.md`, and affected project documentation.
 4. Run the repository verification contract and build the local Intel x64 DMG.
 5. Commit the source, merge it into `main`, and push `main`.
-6. Create and push the matching tag, for example `v0.6.50` for package version `0.6.50`.
+6. Create and push the matching tag, for example `v0.6.51` for package version `0.6.51`.
 7. Monitor the `Release` workflow until every validation, platform build, and publishing job succeeds.
 8. Confirm that the GitHub Release contains eight platform packages plus `SHA256SUMS.txt`.
 
@@ -33,8 +33,8 @@ The workflow rejects a pushed tag when it does not exactly match `package.json`.
 ```bash
 git switch main
 git pull --ff-only origin main
-git tag -a v0.6.50 -m "Memento 0.6.50"
-git push origin v0.6.50
+git tag -a v0.6.51 -m "Memento 0.6.51"
+git push origin v0.6.51
 ```
 
 GitHub Actions uses the latest Node.js 22.x patch release, verifies built-in SQLite support, runs the full unit test suite and type checking once, then builds each target on its native runner. Current Node.js 24-based artifact actions transfer the packages without runtime deprecation annotations. The publishing job generates an eight-entry `SHA256SUMS.txt` without a self-reference, creates or updates the bilingual GitHub Release from `RELEASE_NOTES.md`, and uploads every file with overwrite-safe retry behavior.

@@ -78,6 +78,7 @@ function DialogFrame({
 
 export interface DirectActionRequest {
   id: string
+  candidateId?: string
   ids?: string[]
   kind: 'action' | 'terminal-fix'
   verificationMode: 'local' | 'scan'

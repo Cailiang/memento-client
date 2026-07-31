@@ -26,6 +26,7 @@ import type {
   ScanProgress,
   ScanResult
 } from '../../../shared/types'
+import { selectHealthReviewTarget } from '../health-review'
 import { useI18n } from '../i18n'
 import { DiskUsageBrowser } from './DiskUsageBrowser'
 import { formatBytes, formatDateTime } from './utils'
@@ -204,10 +205,19 @@ export function HealthPage({
   const reclaimable = storage.reduce((sum, item) => sum + (operations(item).length ? item.sizeBytes ?? 0 : 0), 0)
   const terminalFindings = result?.terminal.findings ?? []
   const terminalFixes = terminalFindings.filter((item) => item.fix)
-  const score = Math.max(45, 100 - storage.length * 2 - services.filter((item) => operations(item).length).length * 3 - terminalFixes.length * 2)
-  const findingCount = storage.length + services.filter((item) => operations(item).length).length + terminalFixes.length
-  const priorityServiceCategory = (['high-cpu', 'high-memory', 'failed', 'orphaned'] as const)
-    .find((kind) => services.some((service) => service.serviceAnomalies?.includes(kind)))
+  const actionableServices = services.filter((item) => operations(item).length)
+  const score = Math.max(45, 100 - storage.length * 2 - actionableServices.length * 3 - terminalFixes.length * 2)
+  const findingCount = storage.length + actionableServices.length + terminalFixes.length
+  const reviewTarget = selectHealthReviewTarget({
+    storage: storage.length,
+    services: actionableServices.length,
+    terminal: terminalFixes.length
+  })
+  const reviewTargetLabel = reviewTarget.tab === 'storage'
+    ? text('存储空间', 'Storage')
+    : reviewTarget.tab === 'services'
+      ? text('后台服务', 'Services')
+      : text('终端诊断', 'Terminal')
 
   useEffect(() => {
     if (!restoreTarget || !pageRef.current) return
@@ -235,22 +245,12 @@ export function HealthPage({
   })
 
   const reviewFindings = (): void => {
-    if (priorityServiceCategory) {
-      setServiceCategory(priorityServiceCategory)
-      onTabChange('services')
-      return
-    }
-    if (storage.length) {
+    if (reviewTarget.tab === 'storage') {
       onStorageModeChange('recommendations')
-      onTabChange('storage')
-      return
-    }
-    if (services.length) {
+    } else if (reviewTarget.tab === 'services') {
       setServiceCategory('all')
-      onTabChange('services')
-      return
     }
-    onTabChange('terminal')
+    onTabChange(reviewTarget.tab)
   }
 
   return (
@@ -284,11 +284,11 @@ export function HealthPage({
           className="health-score"
           onClick={reviewFindings}
           disabled={!result || findingCount === 0}
-          title={text('查看最需要关注的检查结果', 'Review the highest-priority finding')}
+          title={text(`打开待确认项最多的模块：${reviewTargetLabel}`, `Open the module with the most findings: ${reviewTargetLabel}`)}
         >
           <strong>{score}</strong>
           <span>{findingCount > 0
-            ? <>{text(`查看 ${findingCount} 项待确认内容`, `Review ${findingCount} ${findingCount === 1 ? 'finding' : 'findings'}`)}<ChevronRight size={12} /></>
+            ? <>{text(`先查看${reviewTargetLabel} ${reviewTarget.count} 项`, `Review ${reviewTarget.count} in ${reviewTargetLabel}`)}<ChevronRight size={12} /></>
             : text('没有待处理项目', 'No pending findings')}</span>
         </button>
         <div className="health-metric"><span>{text('可释放空间', 'Reclaimable')}</span><strong>{formatBytes(reclaimable)}</strong><small>{text(`${storage.length} 个建议项目`, `${storage.length} findings`)}</small></div>

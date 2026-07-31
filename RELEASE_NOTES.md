@@ -1,8 +1,8 @@
-# Memento Agent 0.6.50
+# Memento Agent 0.6.51
 
 ## 简体中文
 
-`0.6.50` 用动态本机证据替代隐藏配置厂商内置表，拆分后台服务 CPU/内存异常，明确电脑体检的下一步操作，并把自动存储建议严格限制在目录级。
+`0.6.51` 修复存储直接清理后的列表同步，并让电脑体检汇总进入项目最多、数量明确对应的模块。
 
 ### 主要变化
 
@@ -18,9 +18,9 @@
 - Agent 分析隐藏配置时不再查厂商内置表，而是按精确身份 token 关联其他存储项、后台服务、已安装应用、受限目录文件名、软件包收据、浅层目录结构和已脱敏的 shell 引用。
 - 证据明确区分“本机确认”“明确签名”和“未确认”；模型可用通用知识解释产品名，但关于本机状态的结论必须有现场证据。
 - shell、凭据、包管理器和隐藏容器根目录受保护；候选项明确标记为需要确认，执行前重新校验，并且只移到废纸篓。
-- 后台服务增加独立的 CPU 占用异常和内存占用异常分类；电脑体检评分提供“查看待确认内容”入口并直接打开最高优先级分类。
+- 后台服务增加独立的 CPU 占用异常和内存占用异常分类；电脑体检评分会标明待查看模块及其中的项目数，并打开可执行建议最多的模块。后台服务目标使用“全部”视图，不再跳进只有一项的异常子分类。
 - 自动存储清理建议只显示目录；下载、桌面、影片中的个人文件和 Docker 虚拟磁盘等单文件只保留在磁盘浏览中。
-- 存储建议中的直接清理在真实操作成功后用约 3 秒完成反馈并更新当前列表，不再等待完整电脑体检；服务、终端和 Agent 确认计划仍会重新体检。
+- 存储建议中的直接清理在真实操作成功后用约 3 秒完成反馈，并按稳定候选项 ID 从当前列表精确移除；服务、终端和 Agent 确认计划仍会重新体检。
 - 磁盘浏览删除成功后立即更新本地树，不再触发全盘重扫；同轮扫描中的其他项目可以继续删除。
 - Agent 任务标签现在按会话而不是每轮消息管理；同一会话中的追问不会再新建标签，明确新任务与隔离分析继续使用独立会话。
 - Agent 分析具体存储项或后台服务时，会先直接说明产品、厂商和用途；证据不足时明确说明未知，不会猜测。
@@ -31,7 +31,7 @@
 
 ## English
 
-`0.6.50` replaces the hidden-product lookup table with dynamic local evidence, separates high-CPU and high-memory service findings, makes the health summary actionable, and restricts automatic Storage findings to directories.
+`0.6.51` fixes list reconciliation after direct Storage cleanup and makes the health summary open the module whose displayed count covers the most findings.
 
 ### Highlights
 
@@ -47,9 +47,9 @@
 - Focused Agent analysis no longer uses a built-in vendor table. Exact identity tokens correlate storage, services, applications, allowlisted filesystem names, package receipts, shallow directory entries, and redacted shell references.
 - Evidence is explicitly separated into locally confirmed, strong-signature, and unconfirmed levels. General model knowledge may explain a product name, but local-state claims require observed evidence.
 - Shell, credential, package-manager, and hidden container roots remain protected; every candidate requires review, is revalidated before execution, and only moves to Trash.
-- Background services expose independent high-CPU and high-memory categories. The health score now offers a Review findings action that opens the highest-priority category.
+- Background services expose independent high-CPU and high-memory categories. The health score names the destination module and its count, then opens the module with the most actionable findings. Services opens in All instead of a one-item anomaly category.
 - Automatic Storage findings contain directories only. Personal files under Downloads, Desktop, and Movies and individual files such as Docker virtual disks remain in Disk browser only.
-- Direct cleanup from Storage completes its feedback and updates the current list in about three seconds after the real operation succeeds, without waiting for a full computer scan. Service, terminal, and confirmed Agent-plan actions retain full rescans.
+- Direct cleanup from Storage completes its feedback in about three seconds and removes the exact originating candidate by stable ID after the real operation succeeds. Service, terminal, and confirmed Agent-plan actions retain full rescans.
 - Successful disk-browser removal updates the local tree without a full-volume rescan, so other items from the same scan can be removed consecutively.
 - Agent task tabs are keyed by conversation rather than message turn, so follow-up questions stay in one tab while explicit new tasks and isolated analyses remain separate.
 - Specific storage-item and background-service analyses lead with the product, vendor, and purpose; insufficient evidence is reported as unknown instead of guessed.

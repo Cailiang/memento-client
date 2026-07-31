@@ -8,6 +8,20 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.51 - 2026-07-31
+
+### English
+
+- Made successful direct Storage cleanup remove the exact originating finding by its stable candidate ID, in addition to reconciling the completed operation ID.
+- Changed the health-score destination from a narrow anomaly category to the module containing the most actionable findings. The button now names that destination and its visible count; Services opens in the broad All view.
+- Added unit and browser regressions for a 37-to-1 Storage/Services split and for removing exactly one permanently cleaned finding from the current list.
+
+### 简体中文
+
+- 存储建议直接清理成功后，除核对已完成操作 ID 外，还会按稳定候选项 ID 精确移除发起操作的当前行。
+- 电脑体检评分入口不再跳进只有少量项目的异常子分类，改为打开可执行建议最多的模块；按钮会直接说明目标模块和可见数量，后台服务统一打开“全部”。
+- 新增存储 37 项、服务 1 项时的目标选择单元测试，以及永久清理后当前列表只移除一行的浏览器回归检查。
+
 ## 0.6.50 - 2026-07-31
 
 ### English

@@ -149,13 +149,14 @@ try {
   await healthReviewPage.goto(baseUrl, { waitUntil: 'networkidle' })
   await healthReviewPage.locator('.nav-button[title="电脑体检"]').click()
   const reviewButton = healthReviewPage.locator('.health-score')
-  if (!await reviewButton.getByText(/查看 \d+ 项待确认内容/).count()) {
-    failures.push('health-summary: score does not expose a concrete review action')
+  if (!await reviewButton.getByText(/先查看存储空间 \d+ 项/).count()) {
+    failures.push('health-summary: score does not expose the largest destination module')
   } else {
     await reviewButton.click()
-    if (await healthReviewPage.getByRole('tab', { name: /后台服务/ }).getAttribute('aria-selected') !== 'true') {
-      failures.push('health-summary: review action did not open the priority module')
+    if (await healthReviewPage.getByRole('tab', { name: /存储空间/ }).getAttribute('aria-selected') !== 'true') {
+      failures.push('health-summary: review action did not open the module with the most findings')
     }
+    await healthReviewPage.getByRole('tab', { name: /后台服务/ }).click()
     if (!await healthReviewPage.getByRole('tab', { name: /CPU 占用异常/ }).count()) {
       failures.push('health-services: high CPU category is missing')
     }
@@ -266,7 +267,10 @@ try {
   const candidateLocation = page.locator('.health-panel.is-active .candidate-location').first()
   if (!await candidateLocation.isVisible()) failures.push('health/storage: cleanup finding path is missing')
   else await candidateLocation.click()
-  const directActionButton = page.locator('.health-panel.is-active .direct-action-button').first()
+  const directCandidate = page.locator('.health-panel.is-active .data-row').first()
+  const directCandidateId = await directCandidate.getAttribute('data-focus-id')
+  const directCandidateCount = await page.locator('.health-panel.is-active .data-row').count()
+  const directActionButton = directCandidate.locator('.direct-action-button')
   await directActionButton.click()
   await page.locator('.health-panel.is-active .row-menu-popover [role="menuitem"]').first().click()
   const directConfirm = page.getByRole('dialog', { name: /直接执行/ })
@@ -279,6 +283,12 @@ try {
   const directDuration = Date.now() - directStartedAt
   if (directDuration < 2_400 || directDuration > 5_000) {
     failures.push(`health/storage: direct deletion feedback took ${directDuration}ms instead of about 3 seconds`)
+  }
+  if (!directCandidateId || await page.locator(`[data-focus-id="${directCandidateId}"]`).count()) {
+    failures.push('health/storage: completed permanent cleanup did not remove its current finding')
+  }
+  if (await page.locator('.health-panel.is-active .data-row').count() !== directCandidateCount - 1) {
+    failures.push('health/storage: completed permanent cleanup removed an unexpected number of findings')
   }
   await directProgress.getByRole('button', { name: '完成' }).click()
 
