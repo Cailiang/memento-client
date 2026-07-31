@@ -78,6 +78,12 @@ const unsafeHiddenHomeItem = hiddenHomeItems.find((candidate) =>
 if (unsafeHiddenHomeItem) {
   throw new Error(`hidden Home item is not review-only and reversible: ${unsafeHiddenHomeItem.name}`)
 }
+const installedIpatool = ['/opt/homebrew/bin/ipatool', '/usr/local/bin/ipatool']
+  .some((target) => existsSync(target))
+const suggestedIpatoolConfig = hiddenHomeItems.find((candidate) => candidate.location === '~/.ipatool')
+if (installedIpatool && suggestedIpatoolConfig) {
+  throw new Error('installed ipatool command was reported as hidden leftover data')
+}
 
 const expectedLocations = new Map([
   ['homebrew.mxcl.php@7.4', '/usr/local/opt/php@7.4'],

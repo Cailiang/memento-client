@@ -3,8 +3,10 @@ import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  commandSearchRoots,
   discoverHiddenHomeArtifacts,
   installedApplicationIdentityTokens,
+  installedCommandIdentityTokens,
   isAllowedHiddenHomeArtifactTarget,
   validateHiddenHomeArtifactCleanupTarget
 } from './home-hidden-cleanup'
@@ -16,6 +18,7 @@ describe('hidden Home cleanup', () => {
       const paths = [
         '.anyconnect',
         '.cursor',
+        '.ipatool',
         '.ssh',
         '.oh-my-zsh',
         '.zcompdump-test-5.9',
@@ -26,12 +29,22 @@ describe('hidden Home cleanup', () => {
         '.local/share/retired-data'
       ]
       await Promise.all(paths.map((target) => fs.mkdir(path.join(home, target), { recursive: true })))
+      const binRoot = path.join(home, '.local', 'bin')
+      const ipatool = path.join(binRoot, 'ipatool')
+      await fs.mkdir(binRoot, { recursive: true })
+      await fs.writeFile(ipatool, '#!/bin/sh\n')
+      await fs.chmod(ipatool, 0o755)
       const identities = installedApplicationIdentityTokens([{
         name: 'Cursor',
         bundleId: 'com.todesktop.230313mzl4w4u92',
         executable: 'Cursor',
         urlSchemes: ['cursor']
       }])
+      const commandIdentities = await installedCommandIdentityTokens([binRoot])
+      for (const identity of commandIdentities) identities.add(identity)
+
+      expect(commandIdentities.has('ipatool')).toBe(true)
+      expect(commandSearchRoots(home, binRoot)).toContain(binRoot)
 
       await expect(discoverHiddenHomeArtifacts(identities, home)).resolves.toEqual([])
 

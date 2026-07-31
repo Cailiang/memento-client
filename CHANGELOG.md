@@ -8,6 +8,22 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.48 - 2026-07-31
+
+### English
+
+- Fixed hidden Home leftover detection so existing command-line tools are treated as installed software instead of relying only on the macOS application inventory.
+- Indexed executable names from the inherited `PATH`, Homebrew bin directories, and common user-level bin directories before classifying hidden configuration candidates.
+- Added a regression fixture and real-scan assertion proving that an installed `ipatool` command suppresses the `~/.ipatool` cleanup finding.
+- Updated candidate copy and bilingual storage documentation to describe both application and command matching.
+
+### 简体中文
+
+- 修复 Home 隐藏残留判断，不再只依赖 macOS 应用清单；仍然存在的命令行工具也会被视为已安装软件。
+- 在分类隐藏配置候选项之前，索引当前 `PATH`、Homebrew bin 目录和常见用户级 bin 目录中的可执行命令名称。
+- 新增回归夹具和真实扫描断言，确保 `ipatool` 命令存在时不会再建议清理 `~/.ipatool`。
+- 同步更新候选项文案和中英文存储说明，使其明确包含应用与命令两类匹配。
+
 ## 0.6.47 - 2026-07-31
 
 ### English

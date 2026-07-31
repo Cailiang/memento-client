@@ -174,6 +174,42 @@ export function installedApplicationIdentityTokens(
   return tokens
 }
 
+export function commandSearchRoots(
+  home = os.homedir(),
+  pathValue = process.env.PATH ?? ''
+): string[] {
+  return [...new Set([
+    ...pathValue.split(path.delimiter),
+    '/opt/homebrew/bin',
+    '/opt/homebrew/sbin',
+    '/usr/local/bin',
+    '/usr/local/sbin',
+    path.join(home, 'bin'),
+    path.join(home, '.local', 'bin'),
+    path.join(home, '.cargo', 'bin'),
+    path.join(home, '.pub-cache', 'bin'),
+    path.join(home, '.bun', 'bin')
+  ].filter((root) => path.isAbsolute(root)).map((root) => path.resolve(root)))]
+}
+
+export async function installedCommandIdentityTokens(
+  searchRoots: readonly string[]
+): Promise<Set<string>> {
+  const roots = [...new Set(searchRoots.filter((root) => path.isAbsolute(root)).map((root) => (
+    path.resolve(root)
+  )))]
+  const entriesByRoot = await Promise.all(roots.map((root) => readEntries(root)))
+  const tokens = new Set<string>()
+  for (const entries of entriesByRoot) {
+    for (const entry of entries) {
+      if (!entry.isFile() && !entry.isSymbolicLink()) continue
+      const token = hiddenArtifactIdentity(entry.name)
+      if (token) tokens.add(token)
+    }
+  }
+  return tokens
+}
+
 function managedRootForTarget(target: string, home: string): {
   root: string
   source: HiddenHomeArtifactSource
@@ -203,7 +239,7 @@ function isProtectedArtifactName(name: string, source: HiddenHomeArtifactSource)
   return !identity || PROTECTED_CONTAINER_NAMES.has(identity)
 }
 
-function matchesInstalledApplication(
+function matchesInstalledIdentity(
   identity: string,
   installedIdentities: ReadonlySet<string>
 ): boolean {
@@ -258,7 +294,7 @@ export async function discoverHiddenHomeArtifacts(
       const target = path.join(root, entry.name)
       if (!isAllowedHiddenHomeArtifactTarget(target, home)) continue
       const identity = hiddenArtifactIdentity(entry.name)
-      if (matchesInstalledApplication(identity, installedIdentities)) continue
+      if (matchesInstalledIdentity(identity, installedIdentities)) continue
       try {
         const stats = await fs.lstat(target)
         if (stats.isSymbolicLink() || (!stats.isDirectory() && !stats.isFile())) continue

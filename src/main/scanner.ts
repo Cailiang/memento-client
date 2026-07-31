@@ -42,8 +42,10 @@ import {
 } from './terminal-fixes'
 import { brewCleanupVersionTargets } from './brew-cleanup'
 import {
+  commandSearchRoots,
   discoverHiddenHomeArtifacts,
   installedApplicationIdentityTokens,
+  installedCommandIdentityTokens,
   type HiddenHomeArtifactSource
 } from './home-hidden-cleanup'
 
@@ -1240,6 +1242,8 @@ async function scanHiddenHomeArtifacts(
   language: AppLanguage
 ): Promise<ScanCandidate[]> {
   const installedIdentities = installedApplicationIdentityTokens(applications)
+  const commandIdentities = await installedCommandIdentityTokens(commandSearchRoots(HOME))
+  for (const identity of commandIdentities) installedIdentities.add(identity)
   const discovered = await discoverHiddenHomeArtifacts(installedIdentities, HOME)
   const measured = await mapLimit(discovered.slice(0, 100), 6, async (artifact) => {
     try {
@@ -1261,8 +1265,8 @@ async function scanHiddenHomeArtifacts(
         subtitle: hiddenArtifactSourceLabel(artifact.source, language),
         description: t(
           language,
-          '当前应用清单中没有找到名称、Bundle ID 或可执行文件与它明确匹配的项目。它可能是已卸载软件的残留，也可能属于仍在使用的命令行工具，请确认用途后再清理。',
-          'No installed application clearly matches this item by name, bundle ID, or executable. It may be leftover data from an uninstalled app or belong to a command-line tool that is still in use, so review it before cleanup.'
+          '当前应用清单和可执行命令目录中都没有找到与它明确匹配的项目。它可能是已卸载软件的残留，也可能属于未被识别的脚本或工具，请确认用途后再清理。',
+          'No installed application or indexed executable command clearly matches this item. It may be leftover data from uninstalled software or belong to an unrecognized script or tool, so review it before cleanup.'
         ),
         sizeBytes,
         ageDays: ageInDays(artifact.modifiedAt),
@@ -1271,7 +1275,7 @@ async function scanHiddenHomeArtifacts(
         location: displayPath(artifact.target),
         evidence: [
           t(language, `隐藏位置：${displayPath(artifact.target)}`, `Hidden location: ${displayPath(artifact.target)}`),
-          t(language, '未匹配到当前已安装的 macOS 应用', 'No currently installed macOS application was matched'),
+          t(language, '未匹配到已安装的 macOS 应用或可执行命令', 'No installed macOS application or executable command was matched'),
           t(language, `最近修改于 ${ageInDays(artifact.modifiedAt)} 天前`, `Last modified ${ageInDays(artifact.modifiedAt)} days ago`)
         ],
         action: {
