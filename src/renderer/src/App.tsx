@@ -10,6 +10,7 @@ import type {
   AgentRunRecord,
   CcSwitchImportResult,
   DiscoverAgentModelsInput,
+  LocalAiImportResult,
   SaveAgentProviderInput
 } from '../../shared/agent-types'
 import {
@@ -1185,10 +1186,12 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     if (window.memento) return window.memento.discoverAgentProviderModels(input)
     await new Promise<void>((resolve) => window.setTimeout(resolve, 520))
     const models = input.type === 'anthropic'
-      ? ['claude-3-7-sonnet-latest', 'claude-sonnet-4-5']
+      ? ['claude-opus-4-6', 'claude-sonnet-4-5']
       : input.type === 'google' || input.type === 'antigravity'
-        ? ['gemini-2.5-flash', 'gemini-2.5-pro']
-        : ['deepseek-chat', 'deepseek-reasoner', 'gpt-4.1-mini']
+        ? ['gemini-3.1-pro-preview', 'gemini-2.5-flash']
+        : input.type === 'openai'
+          ? ['gpt-5.4', 'gpt-5.3-codex-spark']
+          : ['deepseek-chat', 'deepseek-reasoner', 'grok-4-1-fast-reasoning']
     const suffix = input.type === 'google'
       ? '/v1beta'
       : input.type === 'antigravity' ? '/antigravity/v1beta' : '/v1'
@@ -1265,9 +1268,36 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
         ? await window.memento.setDefaultAgentProvider(id)
         : providers.map((provider) => ({ ...provider, isDefault: provider.id === id }))
       setProviders(next)
-      setToast(appText('默认模型已更新', 'Default model updated.'))
+      const provider = next.find((item) => item.id === id)
+      setToast(provider
+        ? appText(
+            `${provider.name} 已设为默认供应商，新任务将使用 ${provider.model}`,
+            `${provider.name} is now the default provider. New tasks use ${provider.model}.`
+          )
+        : appText('默认供应商已更新', 'Default provider updated.'))
     } catch (error) {
       setToast(error instanceof Error ? error.message : appText('无法更新默认模型', 'Could not update the default model.'))
+      throw error
+    }
+  }
+
+  const importLocalAiConfigurations = async (): Promise<LocalAiImportResult> => {
+    try {
+      const imported = window.memento
+        ? await window.memento.importLocalAiConfigurations()
+        : { sourcesFound: 4, detected: 4, imported: 2, rejected: 2 }
+      await refreshProviders()
+      setToast(imported.sourcesFound === 0
+        ? appText('没有找到 Claude、Codex、Gemini 或 Grok 配置', 'No Claude, Codex, Gemini, or Grok configuration was found.')
+        : imported.detected === imported.rejected
+          ? appText('发现的本机 AI 配置都不完整或无法用于 API 调用，已全部过滤', 'All discovered local AI configurations were incomplete or unusable for API calls and were filtered out.')
+          : appText(
+              `发现 ${imported.detected} 个配置，新增或更新 ${imported.imported} 个，过滤 ${imported.rejected} 个无效配置`,
+              `${imported.detected} configurations found; ${imported.imported} added or updated and ${imported.rejected} invalid configurations filtered out.`
+            ))
+      return imported
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : appText('无法扫描本机 AI 配置', 'Could not scan local AI configurations.'))
       throw error
     }
   }
@@ -1418,7 +1448,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       {view === 'health' && <HealthPage result={result} settings={settings} scanBusy={scanBusy} progress={progress} tab={healthTab} storageMode={storageMode} diskUsage={diskUsage} diskUsageProgress={diskUsageProgress} diskUsageBusy={diskUsageBusy} diskUsageError={diskUsageError} restoreTarget={restoreTarget?.view === 'health' ? restoreTarget : null} onRestoreComplete={() => setRestoreTarget(null)} onScan={() => void scanNow()} onTabChange={setHealthTab} onStorageModeChange={changeStorageMode} onDiskUsageScan={() => void scanDiskUsage()} onDiskUsageCancel={cancelDiskUsageScan} onRevealDiskUsageNode={revealDiskUsageNode} onTrashDiskUsageNode={setPendingDiskUsageTrash} onAskDiskUsageNode={(node, origin) => startAgentRun(appText(`分析磁盘目录“${node.name}”（${node.location}）。直接说明它属于什么软件或用途、当前是否仍被使用，以及能否删除。结合已安装应用、后台服务、目录内容、软件包收据和 shell 引用给出证据；如果确认是已卸载软件的残留并且有已注册操作，请生成移到废纸篓的确认任务，不要直接执行。`, `Analyze the disk directory "${node.name}" (${node.location}). Directly explain what software or purpose it belongs to, whether it is still in use, and whether it can be deleted. Use installed apps, background services, directory entries, package receipts, and shell references as evidence. If it is confirmed leftover data from uninstalled software and a registered operation is available, prepare a confirmation task to move it to Trash without executing it.`), { isolated: true, origin: { view: 'health', ...origin }, diskUsageNodeId: node.id })} onRevealCandidate={revealCandidate} onAgentPrompt={(prompt, origin: HealthAgentOrigin) => startAgentRun(prompt, { isolated: true, origin: { view: 'health', ...origin } })} onDirectAction={requestDirectAction} onDirectTerminalFix={requestDirectTerminalFix} onOptimizeTerminal={requestTerminalFixBatch} onIgnore={setPendingIgnore} onManageIgnored={openIgnoredManager} />}
       {view === 'apps' && <ApplicationsPage applications={result?.applications ?? []} openingId={openingApplicationId} removingId={removingApplicationId} restoreTarget={restoreTarget?.view === 'apps' ? restoreTarget : null} onRestoreComplete={() => setRestoreTarget(null)} ignoredCount={settings.applicationWhitelist.length} onOpen={(application) => void openApplication(application)} onUninstall={setPendingUninstall} onIgnore={setPendingApplicationIgnore} onManageIgnored={() => openIgnoredManager('applications')} onAgentPrompt={(prompt, origin) => startAgentRun(prompt, { isolated: true, origin: { view: 'apps', ...origin } })} />}
       {view === 'history' && <HistoryPage runs={runs} onOpenRun={(run) => { setActiveRun(run); activeRunId.current = run.id; setSelectedPlanIds(new Set()); setView('agent') }} onDeleteRuns={setPendingHistoryDelete} />}
-      {view === 'settings' && <SettingsPage settings={settings} providers={providers} appVersion={appVersion} updateState={updateState} onUpdateSettings={updateSettings} onDiscoverModels={discoverProviderModels} onSaveProvider={saveProvider} onTestProvider={testProvider} onDeleteProvider={deleteProvider} onSetDefaultProvider={setDefaultProvider} onImportCcSwitch={importCcSwitchProviders} onCheckUpdates={checkForUpdates} onManageIgnored={() => openIgnoredManager()} onToast={setToast} />}
+      {view === 'settings' && <SettingsPage settings={settings} providers={providers} appVersion={appVersion} updateState={updateState} onUpdateSettings={updateSettings} onDiscoverModels={discoverProviderModels} onSaveProvider={saveProvider} onTestProvider={testProvider} onDeleteProvider={deleteProvider} onSetDefaultProvider={setDefaultProvider} onImportLocalAi={importLocalAiConfigurations} onImportCcSwitch={importCcSwitchProviders} onCheckUpdates={checkForUpdates} onManageIgnored={() => openIgnoredManager()} onToast={setToast} />}
 
       {pendingDirectAction && <DirectActionConfirmDialog action={pendingDirectAction} onClose={() => setPendingDirectAction(null)} onConfirm={() => void executeDirectAction()} />}
       {executionState && <ExecutionProgressDialog phase={executionState.phase} verificationMode={executionState.verificationMode} progress={executionState.progress} itemCount={executionState.itemCount} completedCount={executionState.completedCount} detail={executionState.detail} onClose={() => setExecutionState(null)} />}

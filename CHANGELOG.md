@@ -8,6 +8,22 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.56 - 2026-07-31
+
+### English
+
+- Replaced the one-time automatic CC Switch import with local discovery of usable Claude, Codex, Gemini, and Grok API configurations. Malformed, incomplete, OAuth-only, and unsupported session-token configurations are filtered without exposing credentials to the Renderer.
+- Kept CC Switch as an explicit optional import, with idempotent synchronization shared by both import paths and a new one-time local-discovery marker for existing installations.
+- Reworked provider setup around named providers with managed protocols, official endpoints, and Memento-tested recommended models. Model selection, manual model IDs, and custom endpoints now live under Advanced settings, and saved models are never silently replaced by discovery results.
+- Made default and deletion actions explicit. The UI now explains which provider and model new Agent tasks use, requires confirmation before deletion, and states that external Claude, Codex, Gemini, Grok, and CC Switch configurations are not modified.
+
+### 简体中文
+
+- 首次启动不再自动读取 CC Switch，改为发现本机可用的 Claude、Codex、Gemini 和 Grok API 配置；损坏、不完整、只有 OAuth 或使用不受支持会话令牌的配置会被过滤，密钥不会进入渲染层。
+- CC Switch 保留为用户主动触发的可选导入；两种导入路径共用幂等同步，并为现有安装新增一次性本机配置发现标记。
+- 模型供应商设置改为选择明确的供应商，由 Memento 管理协议、官方服务地址和经过测试的推荐模型；模型选择、手动模型 ID 与自定义地址移入高级设置，模型发现不会静默替换已经保存的模型。
+- “设为默认供应商”和“删除配置”现在明确说明影响；删除前必须确认，并明确不会修改 Claude、Codex、Gemini、Grok 或 CC Switch 中的原始配置。
+
 ## 0.6.55 - 2026-07-31
 
 ### English

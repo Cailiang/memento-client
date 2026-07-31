@@ -30,6 +30,7 @@ import type {
   CcSwitchImportResult,
   DiscoverAgentModelsInput,
   ExecuteAgentPlanInput,
+  LocalAiImportResult,
   SaveAgentProviderInput,
   StartAgentRunInput
 } from '../shared/agent-types'
@@ -42,6 +43,7 @@ import {
 } from '../shared/app-settings'
 import { AgentStore } from './agent/agent-store'
 import { findCcSwitchDatabase, readCcSwitchProviders } from './agent/cc-switch-import'
+import { discoverLocalAiProviders } from './agent/local-ai-config-import'
 import { LocalAgentRuntime } from './agent/local-agent-runtime'
 import { selectExecutablePlanItems } from './agent/plan-validation'
 import { providerErrorMessage, testProviderConnection } from './agent/provider-factory'
@@ -206,7 +208,17 @@ function importCcSwitchProviders(): CcSwitchImportResult {
   return {
     databaseFound: true,
     detected: candidates.length,
-    imported: agentStore!.syncCcSwitchProviders(candidates)
+    imported: agentStore!.syncImportedProviders(candidates)
+  }
+}
+
+function importLocalAiConfigurations(): LocalAiImportResult {
+  const discovery = discoverLocalAiProviders(app.getPath('home'))
+  return {
+    sourcesFound: discovery.sourcesFound,
+    detected: discovery.detected,
+    rejected: discovery.rejected,
+    imported: agentStore!.syncImportedProviders(discovery.candidates)
   }
 }
 
@@ -1079,11 +1091,11 @@ async function performScan(
 
 app.whenReady().then(async () => {
   agentStore = new AgentStore(app.getPath('userData'))
-  if (!agentStore.hasCompletedCcSwitchAutoImport()) {
+  if (!agentStore.hasCompletedLocalAiConfigImport()) {
     try {
-      importCcSwitchProviders()
+      importLocalAiConfigurations()
     } finally {
-      agentStore.markCcSwitchAutoImportCompleted()
+      agentStore.markLocalAiConfigImportCompleted()
     }
   }
   agentRuntime = new LocalAgentRuntime(agentStore)
@@ -1227,6 +1239,7 @@ app.whenReady().then(async () => {
   })
 
   ipcMain.handle('memento:agent:providers:list', () => agentStore!.listProviders())
+  ipcMain.handle('memento:agent:providers:import-local', () => importLocalAiConfigurations())
   ipcMain.handle('memento:agent:providers:import-cc-switch', () => importCcSwitchProviders())
   ipcMain.handle('memento:agent:providers:models', async (_event, input: DiscoverAgentModelsInput) => {
     const provider = agentStore!.resolveModelDiscoveryInput(input)

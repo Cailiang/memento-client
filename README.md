@@ -47,7 +47,9 @@ npm ci
 npm run dev
 ```
 
-Configure a model provider in **Settings** after the application starts. Supported provider types are OpenAI-compatible, OpenAI, Anthropic, Antigravity, and Google Gemini. Memento can also import supported Claude, Codex, and Gemini configurations from a local CC Switch installation.
+Configure a model provider in **Settings** after the application starts. Choose OpenAI, Anthropic, Google Gemini, DeepSeek, Grok/xAI, Antigravity, or a custom OpenAI-compatible endpoint; Memento supplies the protocol, official endpoint, and a tested recommended model for named providers. Model and custom endpoint overrides remain available under Advanced settings, and saved models are not silently changed when a provider publishes a newer model.
+
+On its first local-configuration scan, Memento reads usable API configurations from `~/.claude`, `~/.codex`, `~/.gemini`, and `~/.grok`. Malformed, incomplete, OAuth-only, and unsupported session-token configurations are filtered out. CC Switch is never required or read automatically; **Import CC Switch** is a separate user-initiated optional action.
 
 ## Verification
 

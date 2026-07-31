@@ -1,8 +1,11 @@
-import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { parse as parseToml } from 'smol-toml'
 import type { AgentProviderType } from '../../shared/agent-types'
+import {
+  deterministicImportedProviderId,
+  type ImportedProviderCandidate
+} from './provider-import'
 
 // Vite 5 does not yet recognize node:sqlite as a built-in during tests.
 const { DatabaseSync } = require('node:sqlite') as typeof import('node:sqlite')
@@ -16,13 +19,7 @@ interface CcSwitchProviderRow {
   is_current: number
 }
 
-export interface CcSwitchProviderCandidate {
-  id: string
-  name: string
-  type: AgentProviderType
-  baseUrl: string
-  model: string
-  apiKey: string
+export interface CcSwitchProviderCandidate extends ImportedProviderCandidate {
   isCurrent: boolean
 }
 
@@ -84,11 +81,7 @@ function providerTypeForEndpoint(type: AgentProviderType, baseUrl: string): Agen
 }
 
 function deterministicProviderId(appType: string, sourceId: string): string {
-  const digest = createHash('sha256')
-    .update(`${appType}\0${sourceId}`)
-    .digest('hex')
-    .slice(0, 24)
-  return `cc-switch-${appType}-${digest}`
+  return deterministicImportedProviderId(`cc-switch-${appType}`, sourceId)
 }
 
 function claudeCandidate(row: CcSwitchProviderRow): CcSwitchProviderCandidate | null {

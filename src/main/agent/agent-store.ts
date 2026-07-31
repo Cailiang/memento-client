@@ -24,7 +24,7 @@ import {
   normalizeProviderBaseUrl,
   type PrivateModelDiscoveryInput
 } from './provider-config'
-import type { CcSwitchProviderCandidate } from './cc-switch-import'
+import type { ImportedProviderCandidate } from './provider-import'
 
 // Vite 5 does not yet recognize node:sqlite as a built-in during tests.
 const { DatabaseSync } = require('node:sqlite') as typeof import('node:sqlite')
@@ -193,17 +193,17 @@ export class AgentStore {
     return next
   }
 
-  hasCompletedCcSwitchAutoImport(): boolean {
+  hasCompletedLocalAiConfigImport(): boolean {
     const row = this.database.prepare(`
-      SELECT value_json FROM app_settings WHERE key = 'cc_switch_auto_import_v1'
+      SELECT value_json FROM app_settings WHERE key = 'local_ai_config_import_v1'
     `).get() as { value_json: string } | undefined
     return row?.value_json === 'true'
   }
 
-  markCcSwitchAutoImportCompleted(): void {
+  markLocalAiConfigImportCompleted(): void {
     this.database.prepare(`
       INSERT INTO app_settings (key, value_json, updated_at)
-      VALUES ('cc_switch_auto_import_v1', 'true', ?)
+      VALUES ('local_ai_config_import_v1', 'true', ?)
       ON CONFLICT(key) DO UPDATE SET
         value_json = excluded.value_json,
         updated_at = excluded.updated_at
@@ -334,7 +334,7 @@ export class AgentStore {
     return this.publicProvider(this.providerRow(provider.id)!)
   }
 
-  syncCcSwitchProviders(inputs: CcSwitchProviderCandidate[]): number {
+  syncImportedProviders(inputs: ImportedProviderCandidate[]): number {
     let imported = 0
     for (const input of inputs) {
       try {

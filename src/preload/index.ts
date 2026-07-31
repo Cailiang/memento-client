@@ -52,6 +52,7 @@ const api: MementoApi = {
   deleteAgentProvider: (id) => ipcRenderer.invoke('memento:agent:providers:delete', id),
   setDefaultAgentProvider: (id) => ipcRenderer.invoke('memento:agent:providers:set-default', id),
   testAgentProvider: (input) => ipcRenderer.invoke('memento:agent:providers:test', input),
+  importLocalAiConfigurations: () => ipcRenderer.invoke('memento:agent:providers:import-local'),
   importCcSwitchProviders: () => ipcRenderer.invoke('memento:agent:providers:import-cc-switch'),
   startAgentRun: (input) => ipcRenderer.invoke('memento:agent:runs:start', input),
   cancelAgentRun: (runId) => ipcRenderer.invoke('memento:agent:runs:cancel', runId),

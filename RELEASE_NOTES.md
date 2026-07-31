@@ -1,37 +1,27 @@
-# Memento Agent 0.6.55
+# Memento Agent 0.6.56
 
 ## 简体中文
 
-`0.6.55` 新增应用内后台自动更新。Memento 会自动下载新版本，并只在版本号旁提供安装入口，不再弹出单独的更新提示。
+`0.6.56` 简化了模型供应商配置，并改为从已经配置好的本机 AI 工具中发现可用 API 配置。CC Switch 不再自动读取，只保留为可选导入。
 
 ### 主要变化
 
-- 启动后和每小时自动检查稳定版本；发现新版本后直接在后台下载。
-- 侧边栏版本号旁显示准备状态和下载百分比，下载完成后变为“更新”按钮。
-- 点击“更新”后安装已经下载的版本并重启 Memento，无需打开 GitHub Release 页面手动下载安装。
-- 设置页保留“立即检查”，并显示检查、下载、就绪、安装、失败和安装包不支持等状态。
-- GitHub Release 新增 macOS ZIP、更新块映射和分架构元数据；工作流会严格验证完整的 19 个发布资产。
-
-### 安装说明
-
-应用内更新从本版本开始可用，因此首次安装 `0.6.55` 仍需从 GitHub Release 下载对应平台安装包。完整扫描和清理目前支持 macOS；Windows 与 Linux 安装包用于桌面外壳的可移植性验证。
-
-macOS 安装包继续使用 Developer ID 签名、Apple 公证和票据装订。若从第三方镜像或缓存下载，请先确认安装包校验和与 GitHub Release 中的 `SHA256SUMS.txt` 一致。
+- 首次扫描 `~/.claude`、`~/.codex`、`~/.gemini` 和 `~/.grok`，只导入能够解析出有效密钥、服务地址和模型的配置。
+- 自动过滤损坏、不完整、只有 OAuth 或使用不受支持会话令牌的配置；密钥仍只在主进程中完成校验与加密。
+- CC Switch 改为用户主动点击的可选入口，没有安装 CC Switch 不影响本机配置发现。
+- 普通设置只需选择供应商并填写密钥；协议与官方服务地址由 Memento 确定，推荐模型随应用版本维护。
+- 模型选择、手动模型 ID 和自定义服务地址移入高级设置；已经保存的模型不会被模型发现或新推荐静默替换。
+- 默认和删除操作显示完整文字及具体影响；删除前会确认，并明确不会修改第三方工具中的原始配置。
 
 ## English
 
-`0.6.55` adds background in-app updates. Memento downloads a new version automatically and exposes installation only beside the sidebar version, without a separate update popup.
+`0.6.56` simplifies model-provider setup and discovers usable API configurations from AI tools already configured on the Mac. CC Switch is no longer read automatically and remains an optional import.
 
 ### Highlights
 
-- Checks the stable release channel after startup and every hour, then downloads a newer version in the background.
-- Shows preparation and download progress beside the sidebar version; the control becomes an Update button when the package is ready.
-- Installs the downloaded version and restarts Memento when Update is selected, without opening GitHub Releases for a manual download.
-- Keeps Check now in Settings and reports checking, downloading, ready, installing, failure, and unsupported-package states.
-- Adds macOS ZIPs, updater blockmaps, and architecture-aware metadata to GitHub Releases, with strict validation of all 19 assets.
-
-### Installation
-
-In-app updates begin with this version, so the first installation of `0.6.55` still requires the matching package from GitHub Releases. Full scanning and cleanup currently support macOS; Windows and Linux packages validate portability of the desktop shell.
-
-macOS packages remain Developer ID signed, Apple-notarized, and stapled. When downloading from a mirror or cache, verify the installer against `SHA256SUMS.txt` from the GitHub Release first.
+- Scans `~/.claude`, `~/.codex`, `~/.gemini`, and `~/.grok` on the first attempt, importing only configurations with a valid credential, endpoint, and model.
+- Filters malformed, incomplete, OAuth-only, and unsupported session-token configurations. Credentials remain in the main process for validation and encryption.
+- Makes CC Switch a user-initiated optional source; local discovery does not depend on CC Switch being installed.
+- Keeps ordinary setup to a provider choice and API key. Memento determines official protocols and endpoints and maintains tested recommended models with app releases.
+- Moves model selection, manual model IDs, and custom endpoints into Advanced settings. Saved models are never silently replaced by discovery or newer recommendations.
+- Gives default and deletion actions explicit labels and consequences. Deletion requires confirmation and does not modify original third-party configurations.

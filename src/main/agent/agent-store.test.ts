@@ -123,19 +123,18 @@ describe('AgentStore', () => {
     migrated.close()
   })
 
-  it('imports CC Switch providers idempotently and de-duplicates matching manual providers', () => {
+  it('imports external providers idempotently and de-duplicates matching manual providers', () => {
     const directory = temporaryDirectory()
     const store = new AgentStore(directory)
     store.saveProvider(providerInput('Existing provider', 'same-secret'))
-    const imported = store.syncCcSwitchProviders([
+    const imported = store.syncImportedProviders([
       {
         id: 'cc-switch-claude-source',
         name: 'Duplicate external provider',
         type: 'openai-compatible',
         baseUrl: 'https://models.example.com/v1',
         model: 'agent-model',
-        apiKey: 'same-secret',
-        isCurrent: true
+        apiKey: 'same-secret'
       },
       {
         id: 'cc-switch-codex-source',
@@ -143,35 +142,33 @@ describe('AgentStore', () => {
         type: 'openai',
         baseUrl: 'https://codex.example.com',
         model: 'gpt-test',
-        apiKey: 'external-secret',
-        isCurrent: false
+        apiKey: 'external-secret'
       }
     ])
     expect(imported).toBe(1)
     expect(store.listProviders()).toHaveLength(2)
     expect(store.getPrivateProvider('cc-switch-codex-source').apiKey).toBe('external-secret')
-    expect(store.syncCcSwitchProviders([{
+    expect(store.syncImportedProviders([{
       id: 'cc-switch-codex-source',
       name: 'CC Switch provider',
       type: 'openai',
       baseUrl: 'https://codex.example.com',
       model: 'gpt-test',
-      apiKey: 'external-secret',
-      isCurrent: false
+      apiKey: 'external-secret'
     }])).toBe(0)
     store.close()
   })
 
-  it('persists completion of the one-time CC Switch auto import', () => {
+  it('persists completion of the one-time local AI configuration import', () => {
     const directory = temporaryDirectory()
     const store = new AgentStore(directory)
-    expect(store.hasCompletedCcSwitchAutoImport()).toBe(false)
-    store.markCcSwitchAutoImportCompleted()
-    expect(store.hasCompletedCcSwitchAutoImport()).toBe(true)
+    expect(store.hasCompletedLocalAiConfigImport()).toBe(false)
+    store.markLocalAiConfigImportCompleted()
+    expect(store.hasCompletedLocalAiConfigImport()).toBe(true)
     store.close()
 
     const reopened = new AgentStore(directory)
-    expect(reopened.hasCompletedCcSwitchAutoImport()).toBe(true)
+    expect(reopened.hasCompletedLocalAiConfigImport()).toBe(true)
     reopened.close()
   })
 

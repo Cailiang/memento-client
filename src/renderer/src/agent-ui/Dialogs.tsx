@@ -5,6 +5,7 @@ import {
   CircleAlert,
   Eye,
   EyeOff,
+  KeyRound,
   LoaderCircle,
   Play,
   RadioTower,
@@ -14,7 +15,7 @@ import {
   X
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { AgentRunRecord } from '../../../shared/agent-types'
+import type { AgentProvider, AgentRunRecord } from '../../../shared/agent-types'
 import {
   applicationWhitelistValue,
   candidateWhitelistValue
@@ -333,6 +334,34 @@ export function DeleteHistoryDialog({
   return (
     <DialogFrame title={text(multiple ? `删除 ${runs.length} 条任务记录？` : '删除任务记录？', multiple ? `Delete ${runs.length} task records?` : 'Delete task history?')} description={text('这会删除本机保存的对话、分析结果和工具调用记录，无法恢复。', 'This permanently deletes the locally stored conversation, analysis results, and tool-call records.')} busy={busy} onClose={onClose} actions={<><button type="button" className="secondary-button" onClick={onClose} disabled={busy}>{text('取消', 'Cancel')}</button><button type="button" className="danger-button" onClick={onConfirm} disabled={busy}>{busy ? <LoaderCircle className="spinner" size={15} /> : <Trash2 size={15} />}{busy ? text('正在删除', 'Deleting') : text(multiple ? '全部删除' : '删除记录', multiple ? 'Delete all' : 'Delete history')}</button></>}>
       <div className="dialog-body"><div className="confirm-row"><span><Archive size={13} /></span><div><strong>{multiple ? text(`${runs.length} 条所选记录`, `${runs.length} selected records`) : runs[0]?.prompt}</strong><small>{text('只删除历史数据，不会撤销已经完成的操作', 'Completed system changes are not undone')}</small></div><span className="risk-label review">{text('不可恢复', 'Permanent')}</span></div></div>
+    </DialogFrame>
+  )
+}
+
+export function DeleteProviderDialog({
+  provider,
+  busy,
+  onClose,
+  onConfirm
+}: {
+  provider: AgentProvider
+  busy: boolean
+  onClose: () => void
+  onConfirm: () => void
+}): React.JSX.Element {
+  const { text } = useI18n()
+  return (
+    <DialogFrame
+      title={text(`删除“${provider.name}”配置？`, `Delete “${provider.name}”?`)}
+      description={text(
+        '将从 Memento 删除该供应商、加密密钥和连接状态。不会修改 Claude、Codex、Gemini、Grok 或 CC Switch 中的原始配置。',
+        'This removes the provider, encrypted key, and connection state from Memento. Original Claude, Codex, Gemini, Grok, and CC Switch configurations are not changed.'
+      )}
+      busy={busy}
+      onClose={onClose}
+      actions={<><button type="button" className="secondary-button" onClick={onClose} disabled={busy}>{text('取消', 'Cancel')}</button><button type="button" className="danger-button" onClick={onConfirm} disabled={busy}>{busy ? <LoaderCircle className="spinner" size={15} /> : <Trash2 size={15} />}{busy ? text('正在删除', 'Deleting') : text('删除配置', 'Delete configuration')}</button></>}
+    >
+      <div className="dialog-body"><div className="confirm-row"><span><KeyRound size={13} /></span><div><strong>{provider.name}</strong><small>{text(`${provider.model} · 密钥、模型设置和连接状态`, `${provider.model} · key, model settings, and connection state`)}</small></div><span className="risk-label review">{text('不可恢复', 'Permanent')}</span></div></div>
     </DialogFrame>
   )
 }

@@ -47,7 +47,9 @@ npm ci
 npm run dev
 ```
 
-应用启动后，在**设置**中配置模型供应商。当前支持 OpenAI 兼容接口、OpenAI、Anthropic、Antigravity 和 Google Gemini。Memento 也可以从本机 CC Switch 导入受支持的 Claude、Codex 和 Gemini 配置。
+应用启动后，在**设置**中配置模型供应商。可以选择 OpenAI、Anthropic、Google Gemini、DeepSeek、Grok/xAI、Antigravity 或自定义 OpenAI 兼容地址；具名供应商的协议、官方地址和经过测试的推荐模型由 Memento 提供。模型和自定义地址仍可在“高级设置”中调整，供应商发布新模型时不会静默修改已经保存的配置。
+
+首次执行本机配置扫描时，Memento 会读取 `~/.claude`、`~/.codex`、`~/.gemini` 和 `~/.grok` 中可用于 API 调用的配置；损坏、不完整、只有 OAuth 或使用不受支持会话令牌的配置会被过滤。Memento 不要求安装 CC Switch，也不会自动读取它；“导入 CC Switch”是需要用户主动触发的可选操作。
 
 ## 验证
 

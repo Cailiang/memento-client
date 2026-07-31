@@ -95,8 +95,20 @@ try {
   const settingsPage = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   await settingsPage.goto(baseUrl, { waitUntil: 'networkidle' })
   await settingsPage.locator('.nav-button[title="设置"]').click()
-  if (!await settingsPage.getByRole('button', { name: '重新导入 CC Switch' }).isVisible()) {
-    failures.push('settings: manual CC Switch import is missing')
+  if (!await settingsPage.getByRole('button', { name: '扫描本机 AI 配置' }).isVisible()) {
+    failures.push('settings: local AI configuration scan is missing')
+  }
+  if (!await settingsPage.getByRole('button', { name: '导入 CC Switch' }).isVisible()) {
+    failures.push('settings: optional CC Switch import is missing')
+  }
+  if (!await settingsPage.getByText(/CC Switch 仅在你选择导入时读取/).isVisible()) {
+    failures.push('settings: CC Switch import is not explained as optional')
+  }
+  if (await settingsPage.getByLabel('接口类型').count()) {
+    failures.push('settings: API type is still exposed as a user choice')
+  }
+  if (!await settingsPage.getByText('Memento 推荐模型', { exact: true }).isVisible()) {
+    failures.push('settings: built-in recommended model is missing')
   }
   if (!await settingsPage.getByRole('button', { name: '立即检查' }).isVisible()) {
     failures.push('settings: manual update check is missing')
@@ -417,17 +429,28 @@ try {
   await page.locator('.ignored-row small').filter({ hasText: 'com.anthropic.claude-code-url-handler' }).waitFor()
   await page.getByRole('dialog', { name: '忽略列表' }).getByRole('button', { name: '完成' }).click()
   await page.locator('button[aria-label="添加供应商"]').click()
+  await page.locator('#provider-preset').selectOption('antigravity')
   await page.locator('#provider-name').fill('测试供应商')
-  await page.locator('#provider-type').selectOption('antigravity')
-  if (await page.locator('#provider-url').inputValue() !== 'https://code.tczor.cn/antigravity/v1beta') {
-    failures.push('settings: Antigravity did not select its dedicated API base')
+  if (!await page.locator('.recommended-model code').getByText('gemini-3.1-pro-high', { exact: true }).isVisible()) {
+    failures.push('settings: Antigravity recommended model is missing')
+  }
+  if (await page.locator('#provider-type').count() || await page.locator('#provider-url').count()) {
+    failures.push('settings: official provider protocol or base URL is exposed')
   }
   await page.locator('#provider-key').fill('test-key')
+  await page.getByText('高级设置', { exact: true }).click()
   await page.locator('#provider-model').waitFor({ state: 'visible' })
-  await page.locator('#provider-model').selectOption('gemini-2.5-pro', { timeout: 4_000 })
+  await page.locator('#provider-model').selectOption('gemini-3.1-pro-preview', { timeout: 4_000 })
   await page.screenshot({ path: '/tmp/memento-interaction-provider-models.png' })
-  await page.getByRole('button', { name: '保存', exact: true }).click()
+  await page.getByRole('button', { name: '保存配置', exact: true }).click()
   await page.getByText('测试供应商', { exact: true }).first().waitFor()
+  await page.getByRole('button', { name: '删除配置', exact: true }).click()
+  const providerDeleteDialog = page.getByRole('dialog', { name: /删除“测试供应商”配置/ })
+  await providerDeleteDialog.waitFor()
+  if (!await providerDeleteDialog.getByText(/不会修改 Claude、Codex、Gemini、Grok 或 CC Switch/).count()) {
+    failures.push('settings: provider deletion does not explain its external configuration boundary')
+  }
+  await providerDeleteDialog.getByRole('button', { name: '取消' }).click()
   await page.close()
 
   for (const [name, viewport] of [

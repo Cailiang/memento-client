@@ -1,6 +1,8 @@
 import {
   Check,
+  ChevronRight,
   CircleCheck,
+  Download,
   Eye,
   EyeOff,
   ListFilter,
@@ -9,6 +11,7 @@ import {
   PlugZap,
   RefreshCw,
   Save,
+  ScanSearch,
   Trash2
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -18,11 +21,13 @@ import type {
   AgentProviderTestResult,
   CcSwitchImportResult,
   DiscoverAgentModelsInput,
+  LocalAiImportResult,
   SaveAgentProviderInput
 } from '../../../shared/agent-types'
 import type { AppLanguage, AppSettings, AppTheme, UpdateAppSettingsInput } from '../../../shared/app-settings'
 import type { AppUpdateState } from '../../../shared/types'
 import { useI18n } from '../i18n'
+import { DeleteProviderDialog } from './Dialogs'
 
 const PROVIDER_LABELS: Record<AgentProvider['type'], [string, string]> = {
   'openai-compatible': ['OpenAI 兼容接口', 'OpenAI-compatible'],
@@ -32,12 +37,47 @@ const PROVIDER_LABELS: Record<AgentProvider['type'], [string, string]> = {
   google: ['Google Gemini', 'Google Gemini']
 }
 
-const PROVIDER_URLS: Record<AgentProvider['type'], string> = {
-  'openai-compatible': '',
-  openai: 'https://api.openai.com/v1',
-  anthropic: 'https://api.anthropic.com/v1',
-  antigravity: 'https://code.tczor.cn/antigravity/v1beta',
-  google: 'https://generativelanguage.googleapis.com/v1beta'
+type ProviderPresetId = 'deepseek' | 'openai' | 'anthropic' | 'google' | 'grok' | 'antigravity' | 'custom'
+
+interface ProviderPreset {
+  id: ProviderPresetId
+  label: [string, string]
+  type: AgentProvider['type']
+  baseUrl: string
+  recommendedModel: string
+}
+
+const PROVIDER_CATALOG: ProviderPreset[] = [
+  { id: 'deepseek', label: ['DeepSeek', 'DeepSeek'], type: 'openai-compatible', baseUrl: 'https://api.deepseek.com/v1', recommendedModel: 'deepseek-chat' },
+  { id: 'openai', label: ['OpenAI', 'OpenAI'], type: 'openai', baseUrl: 'https://api.openai.com/v1', recommendedModel: 'gpt-5.4' },
+  { id: 'anthropic', label: ['Anthropic', 'Anthropic'], type: 'anthropic', baseUrl: 'https://api.anthropic.com/v1', recommendedModel: 'claude-opus-4-6' },
+  { id: 'google', label: ['Google Gemini', 'Google Gemini'], type: 'google', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', recommendedModel: 'gemini-3.1-pro-preview' },
+  { id: 'grok', label: ['Grok / xAI', 'Grok / xAI'], type: 'openai-compatible', baseUrl: 'https://api.x.ai/v1', recommendedModel: 'grok-4-1-fast-reasoning' },
+  { id: 'antigravity', label: ['Antigravity', 'Antigravity'], type: 'antigravity', baseUrl: 'https://code.tczor.cn/antigravity/v1beta', recommendedModel: 'gemini-3.1-pro-high' },
+  { id: 'custom', label: ['自定义 OpenAI 兼容接口', 'Custom OpenAI-compatible API'], type: 'openai-compatible', baseUrl: '', recommendedModel: '' }
+]
+
+const PROVIDER_PRESETS = new Map(PROVIDER_CATALOG.map((preset) => [preset.id, preset]))
+
+function normalizedUrl(value: string): string {
+  return value.replace(/\/+$/, '')
+}
+
+function inferProviderPreset(provider: Pick<AgentProvider, 'type' | 'baseUrl'>): ProviderPresetId {
+  return PROVIDER_CATALOG.find((preset) => (
+    preset.id !== 'custom' &&
+    preset.type === provider.type &&
+    normalizedUrl(preset.baseUrl) === normalizedUrl(provider.baseUrl)
+  ))?.id ?? 'custom'
+}
+
+function providerSource(id: string): [string, string] | null {
+  if (id.startsWith('cc-switch-')) return ['CC Switch', 'CC Switch']
+  if (id.startsWith('local-config-claude-')) return ['Claude', 'Claude']
+  if (id.startsWith('local-config-codex-')) return ['Codex', 'Codex']
+  if (id.startsWith('local-config-gemini-')) return ['Gemini', 'Gemini']
+  if (id.startsWith('local-config-grok-')) return ['Grok', 'Grok']
+  return null
 }
 
 const THEMES: Array<{ id: AppTheme; label: [string, string] }> = [
@@ -52,7 +92,14 @@ const THEMES: Array<{ id: AppTheme; label: [string, string] }> = [
 ]
 
 function blankProvider(): SaveAgentProviderInput {
-  return { name: '', type: 'openai-compatible', baseUrl: '', model: '', apiKey: '' }
+  const preset = PROVIDER_PRESETS.get('deepseek')!
+  return {
+    name: preset.label[0],
+    type: preset.type,
+    baseUrl: preset.baseUrl,
+    model: preset.recommendedModel,
+    apiKey: ''
+  }
 }
 
 export function SettingsPage({
@@ -66,6 +113,7 @@ export function SettingsPage({
   onTestProvider,
   onDeleteProvider,
   onSetDefaultProvider,
+  onImportLocalAi,
   onImportCcSwitch,
   onCheckUpdates,
   onManageIgnored,
@@ -81,6 +129,7 @@ export function SettingsPage({
   onTestProvider: (input: SaveAgentProviderInput) => Promise<AgentProviderTestResult>
   onDeleteProvider: (id: string) => Promise<void>
   onSetDefaultProvider: (id: string) => Promise<void>
+  onImportLocalAi: () => Promise<LocalAiImportResult>
   onImportCcSwitch: () => Promise<CcSwitchImportResult>
   onCheckUpdates: () => Promise<void>
   onManageIgnored: () => void
@@ -90,6 +139,7 @@ export function SettingsPage({
   const [selectedId, setSelectedId] = useState<string | 'new'>(() => providers[0]?.id ?? 'new')
   const selected = useMemo(() => providers.find((provider) => provider.id === selectedId) ?? null, [providers, selectedId])
   const [draft, setDraft] = useState<SaveAgentProviderInput>(blankProvider)
+  const [presetId, setPresetId] = useState<ProviderPresetId>('deepseek')
   const [secretVisible, setSecretVisible] = useState(false)
   const [busy, setBusy] = useState<'save' | 'test' | 'delete' | 'default' | null>(null)
   const [connectionMessage, setConnectionMessage] = useState<string | null>(null)
@@ -98,7 +148,9 @@ export function SettingsPage({
   const [modelState, setModelState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
   const [modelMessage, setModelMessage] = useState<string | null>(null)
   const [manualModel, setManualModel] = useState(false)
+  const [localImportBusy, setLocalImportBusy] = useState(false)
   const [ccSwitchBusy, setCcSwitchBusy] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState<AgentProvider | null>(null)
   const [updateBusy, setUpdateBusy] = useState(false)
   const discoverySequence = useRef(0)
 
@@ -115,6 +167,7 @@ export function SettingsPage({
       model: selected.model,
       apiKey: ''
     })
+    setPresetId(inferProviderPreset(selected))
     setConnectionMessage(null)
     setConnectionOk(null)
     setAvailableModels([])
@@ -131,10 +184,6 @@ export function SettingsPage({
       const result = await onDiscoverModels(input)
       if (sequence !== discoverySequence.current) return
       setAvailableModels(result.models)
-      setDraft((current) => ({
-        ...current,
-        model: result.models.includes(current.model) ? current.model : result.models[0] ?? ''
-      }))
       setModelState('ready')
       setModelMessage(text(
         result.excludedModelCount
@@ -144,7 +193,6 @@ export function SettingsPage({
           ? `${result.models.length} Agent models found; ${result.excludedModelCount} incompatible models filtered out`
           : `${result.models.length} models found at ${result.resolvedBaseUrl}`
       ))
-      setManualModel(false)
     } catch (error) {
       if (sequence !== discoverySequence.current) return
       setAvailableModels([])
@@ -189,6 +237,7 @@ export function SettingsPage({
   const selectNew = (): void => {
     setSelectedId('new')
     setDraft(blankProvider())
+    setPresetId('deepseek')
     setConnectionMessage(null)
     setConnectionOk(null)
     setAvailableModels([])
@@ -196,6 +245,22 @@ export function SettingsPage({
     setModelMessage(null)
     setManualModel(false)
     setSecretVisible(false)
+  }
+
+  const selectPreset = (nextId: ProviderPresetId): void => {
+    const next = PROVIDER_PRESETS.get(nextId)!
+    setPresetId(nextId)
+    setDraft((current) => ({
+      ...current,
+      name: text(...next.label),
+      type: next.type,
+      baseUrl: next.baseUrl,
+      model: next.recommendedModel || current.model
+    }))
+    setAvailableModels([])
+    setModelState('idle')
+    setModelMessage(null)
+    setManualModel(false)
   }
 
   const save = async (): Promise<void> => {
@@ -249,6 +314,32 @@ export function SettingsPage({
     }
   }
 
+  const importLocalAi = async (): Promise<void> => {
+    setLocalImportBusy(true)
+    try {
+      await onImportLocalAi()
+    } catch {
+      // App owns the user-facing error toast.
+    } finally {
+      setLocalImportBusy(false)
+    }
+  }
+
+  const deleteProvider = async (): Promise<void> => {
+    if (!pendingDelete) return
+    const removed = pendingDelete
+    setBusy('delete')
+    try {
+      await onDeleteProvider(removed.id)
+      setPendingDelete(null)
+      setSelectedId(providers.find((item) => item.id !== removed.id)?.id ?? 'new')
+    } catch {
+      // App owns the user-facing error toast.
+    } finally {
+      setBusy(null)
+    }
+  }
+
   const checkUpdates = async (): Promise<void> => {
     setUpdateBusy(true)
     try {
@@ -298,12 +389,32 @@ export function SettingsPage({
     'downloaded',
     'installing'
   ].includes(updateState.phase))
+  const activePreset = PROVIDER_PRESETS.get(presetId)!
+  const selectableModels = [...new Set([draft.model, ...availableModels])].filter(Boolean)
+  const defaultProviderNote = selected?.isDefault
+    ? text(
+        `Agent 新任务将使用 ${draft.name || selected.name} · ${draft.model}。`,
+        `New Agent tasks use ${draft.name || selected.name} · ${draft.model}.`
+      )
+    : selected
+      ? text(
+          `设为默认后，Agent 新任务将使用 ${draft.name || selected.name} · ${draft.model}。`,
+          `After making this the default, new Agent tasks use ${draft.name || selected.name} · ${draft.model}.`
+        )
+      : text('保存后可将这个配置设为默认供应商。', 'Save this configuration before making it the default.')
 
   return (
     <section className="page content-page is-active">
       <div className="settings-layout">
         <section className="settings-section provider-settings-section">
-          <div className="settings-label"><h2>{text('模型供应商', 'Model providers')}</h2><p>{text('首次启动自动导入 CC Switch，之后由你决定何时重新导入。', 'CC Switch is imported once on first launch. Re-import it manually when needed.')}</p><button type="button" className="secondary-button" disabled={ccSwitchBusy} onClick={() => void importCcSwitch()}>{ccSwitchBusy ? <LoaderCircle className="spinner" size={14} /> : <RefreshCw size={14} />}{ccSwitchBusy ? text('正在导入', 'Importing') : text('重新导入 CC Switch', 'Re-import CC Switch')}</button></div>
+          <div className="settings-label">
+            <h2>{text('模型供应商', 'Model providers')}</h2>
+            <p>{text('自动读取本机已经配置好的 Claude、Codex、Gemini 和 Grok；无效配置不会加入列表。CC Switch 仅在你选择导入时读取。', 'Read configured Claude, Codex, Gemini, and Grok credentials from this Mac. Invalid configurations are filtered out. CC Switch is read only when you choose to import it.')}</p>
+            <div className="provider-import-actions">
+              <button type="button" className="secondary-button" disabled={localImportBusy || ccSwitchBusy} onClick={() => void importLocalAi()}>{localImportBusy ? <LoaderCircle className="spinner" size={14} /> : <ScanSearch size={14} />}{localImportBusy ? text('正在扫描', 'Scanning') : text('扫描本机 AI 配置', 'Scan local AI configurations')}</button>
+              <button type="button" className="quiet-button" disabled={localImportBusy || ccSwitchBusy} onClick={() => void importCcSwitch()}>{ccSwitchBusy ? <LoaderCircle className="spinner" size={14} /> : <Download size={14} />}{ccSwitchBusy ? text('正在导入', 'Importing') : text('导入 CC Switch', 'Import CC Switch')}</button>
+            </div>
+          </div>
           <div className="provider-manager">
             <aside className="provider-list-pane" aria-label={text('已配置供应商', 'Configured providers')}>
               <div className="provider-list-header"><span>{text(`${providers.length} 个配置`, `${providers.length} configured`)}</span><button type="button" className="icon-button" onClick={selectNew} title={text('添加供应商', 'Add provider')} aria-label={text('添加供应商', 'Add provider')}><Plus size={15} /></button></div>
@@ -311,7 +422,7 @@ export function SettingsPage({
                 {providers.map((provider) => (
                   <button key={provider.id} type="button" className={`provider-item ${selectedId === provider.id ? 'is-active' : ''}`} onClick={() => setSelectedId(provider.id)} aria-pressed={selectedId === provider.id}>
                     <span className="provider-mark">{provider.name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase()}</span>
-                    <span><strong>{provider.name}</strong><small>{provider.model}{provider.id.startsWith('cc-switch-') ? ' · CC Switch' : ''}</small></span>
+                    <span><strong>{provider.name}</strong><small>{provider.model}{providerSource(provider.id) ? ` · ${text(...providerSource(provider.id)!)}` : ''}</small></span>
                     {provider.isDefault && <span className="default-chip">{text('默认', 'Default')}</span>}
                   </button>
                 ))}
@@ -321,31 +432,36 @@ export function SettingsPage({
 
             <div className="provider-editor">
               <div className="provider-editor-header">
-                <div><strong>{draft.name || text('新供应商', 'New provider')}</strong><small>{text(...PROVIDER_LABELS[draft.type])}</small></div>
+                <div><strong>{draft.name || text('新供应商', 'New provider')}</strong><small>{text(...activePreset.label)}{selected && providerSource(selected.id) ? ` · ${text(...providerSource(selected.id)!)}` : ''}</small></div>
                 <span className={`risk-label ${connectionClass}`}>{connectionLabel}</span>
               </div>
               <form className="provider-form" onSubmit={(event) => { event.preventDefault(); void save() }}>
                 {connectionOk === false && connectionMessage && <div className="provider-error-panel" role="alert"><strong>{text('连接测试失败', 'Connection test failed')}</strong><p>{connectionMessage}</p></div>}
                 {modelState === 'error' && modelMessage && <div className="provider-error-panel" role="alert"><strong>{text('模型列表获取失败', 'Could not fetch models')}</strong><p>{modelMessage}</p></div>}
-                <div className="field"><label htmlFor="provider-name">{text('名称', 'Name')}</label><input id="provider-name" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} autoComplete="off" /></div>
-                <div className="field"><label htmlFor="provider-type">{text('接口类型', 'API type')}</label><select id="provider-type" value={draft.type} onChange={(event) => { const type = event.target.value as AgentProvider['type']; const baseUrl = !draft.baseUrl || draft.baseUrl === PROVIDER_URLS[draft.type] ? PROVIDER_URLS[type] : draft.baseUrl; setDraft({ ...draft, type, baseUrl }) }}><option value="openai-compatible">OpenAI {text('兼容', 'compatible')}</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="antigravity">Antigravity</option><option value="google">Google Gemini</option></select></div>
-                <div className="field is-wide"><label htmlFor="provider-url">{text('服务地址', 'Base URL')}</label><input id="provider-url" type="url" value={draft.baseUrl} onChange={(event) => setDraft({ ...draft, baseUrl: event.target.value })} placeholder={draft.type === 'openai-compatible' ? 'https://api.example.com/v1' : PROVIDER_URLS[draft.type]} /></div>
-                <div className="field"><label htmlFor="provider-key">{text('请求密钥', 'API key')}</label><div className="secret-field"><input id="provider-key" type={secretVisible ? 'text' : 'password'} value={draft.apiKey ?? ''} onChange={(event) => setDraft({ ...draft, apiKey: event.target.value })} placeholder={selected?.keyHint ?? 'sk-...'} autoComplete="new-password" /><button type="button" onClick={() => setSecretVisible((value) => !value)} title={text('显示或隐藏密钥', 'Show or hide key')} aria-label={text('显示或隐藏密钥', 'Show or hide key')}>{secretVisible ? <EyeOff size={15} /> : <Eye size={15} />}</button></div></div>
-                <div className="field model-field"><label htmlFor="provider-model">{text('模型', 'Model')}</label><div className="model-picker">
-                  {manualModel ? <input id="provider-model" value={draft.model} onChange={(event) => setDraft({ ...draft, model: event.target.value })} placeholder="model-name" autoComplete="off" /> : <select id="provider-model" value={draft.model} onChange={(event) => setDraft({ ...draft, model: event.target.value })} disabled={modelState === 'loading' || !availableModels.length}>
-                    {!availableModels.length && <option value={draft.model}>{draft.model || (modelState === 'loading' ? text('正在获取模型…', 'Fetching models…') : text('等待获取模型', 'Waiting for models'))}</option>}
-                    {availableModels.map((model) => <option key={model} value={model}>{model}</option>)}
-                  </select>}
-                  <button type="button" className="icon-button" onClick={() => void discoverModels({ id: draft.id, type: draft.type, baseUrl: draft.baseUrl, apiKey: draft.apiKey })} disabled={!discoveryReady || modelState === 'loading'} title={text('重新获取模型', 'Refresh models')} aria-label={text('重新获取模型', 'Refresh models')}><RefreshCw className={modelState === 'loading' ? 'spinner' : ''} size={14} /></button>
-                </div><div className={`field-help ${modelState === 'error' ? 'is-error' : ''}`} role="status">{modelState === 'loading' && <LoaderCircle className="spinner" size={11} />}<span>{modelState === 'error' ? text('获取失败，完整信息见上方', 'Fetch failed. See the full error above.') : modelMessage}</span>{modelState === 'error' && <button type="button" onClick={() => setManualModel(true)}>{text('手动填写', 'Enter manually')}</button>}</div></div>
+                <div className="field"><label htmlFor="provider-preset">{text('供应商', 'Provider')}</label><select id="provider-preset" value={presetId} onChange={(event) => selectPreset(event.target.value as ProviderPresetId)}>{PROVIDER_CATALOG.map((preset) => <option key={preset.id} value={preset.id}>{preset.id === 'custom' && presetId === 'custom' && draft.type !== 'openai-compatible' ? text('已导入 / 自定义配置', 'Imported / custom configuration') : text(...preset.label)}</option>)}</select></div>
+                <div className="field"><label htmlFor="provider-name">{text('配置名称', 'Configuration name')}</label><input id="provider-name" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} autoComplete="off" /></div>
+                <div className="field is-wide"><label htmlFor="provider-key">{text('请求密钥', 'API key')}</label><div className="secret-field"><input id="provider-key" type={secretVisible ? 'text' : 'password'} value={draft.apiKey ?? ''} onChange={(event) => setDraft({ ...draft, apiKey: event.target.value })} placeholder={selected?.keyHint ?? 'sk-...'} autoComplete="new-password" /><button type="button" onClick={() => setSecretVisible((value) => !value)} title={text('显示或隐藏密钥', 'Show or hide key')} aria-label={text('显示或隐藏密钥', 'Show or hide key')}>{secretVisible ? <EyeOff size={15} /> : <Eye size={15} />}</button></div></div>
+                <div className="recommended-model"><span><strong>{text('Memento 推荐模型', 'Memento recommended model')}</strong><small>{text('随应用版本更新；已保存的配置不会被静默切换', 'Updated with Memento; saved configurations are never switched silently')}</small></span><code>{activePreset.recommendedModel || draft.model || text('手动选择', 'Choose manually')}</code></div>
+                <details className="provider-advanced">
+                  <summary><ChevronRight size={14} />{text('高级设置', 'Advanced settings')}</summary>
+                  <div className="provider-advanced-grid">
+                    {presetId === 'custom' && <div className="field is-wide"><label htmlFor="provider-url">{text('服务地址', 'Base URL')}</label><input id="provider-url" type="url" value={draft.baseUrl} onChange={(event) => setDraft({ ...draft, baseUrl: event.target.value })} placeholder="https://api.example.com/v1" /></div>}
+                    <div className="field is-wide model-field"><label htmlFor="provider-model">{text('模型', 'Model')}</label><div className="model-picker">
+                      {manualModel ? <input id="provider-model" value={draft.model} onChange={(event) => setDraft({ ...draft, model: event.target.value })} placeholder="model-name" autoComplete="off" /> : <select id="provider-model" value={draft.model} onChange={(event) => setDraft({ ...draft, model: event.target.value })} disabled={modelState === 'loading'}>{selectableModels.length ? selectableModels.map((model) => <option key={model} value={model}>{model}</option>) : <option value="">{modelState === 'loading' ? text('正在获取模型…', 'Fetching models…') : text('等待获取模型', 'Waiting for models')}</option>}</select>}
+                      <button type="button" className="icon-button" onClick={() => void discoverModels({ id: draft.id, type: draft.type, baseUrl: draft.baseUrl, apiKey: draft.apiKey })} disabled={!discoveryReady || modelState === 'loading'} title={text('重新获取模型', 'Refresh models')} aria-label={text('重新获取模型', 'Refresh models')}><RefreshCw className={modelState === 'loading' ? 'spinner' : ''} size={14} /></button>
+                    </div><div className={`field-help ${modelState === 'error' ? 'is-error' : ''}`} role="status">{modelState === 'loading' && <LoaderCircle className="spinner" size={11} />}<span>{modelState === 'error' ? text('获取失败，完整信息见上方', 'Fetch failed. See the full error above.') : modelMessage}</span><button type="button" onClick={() => setManualModel((value) => !value)}>{manualModel ? text('使用模型列表', 'Use model list') : text('手动填写模型 ID', 'Enter model ID')}</button></div></div>
+                    <p className="provider-advanced-note">{presetId === 'custom' ? text(`接口协议由导入配置或供应商类型自动确定：${text(...PROVIDER_LABELS[draft.type])}。`, `The API protocol is determined automatically from the imported configuration or provider: ${text(...PROVIDER_LABELS[draft.type])}.`) : text(`官方服务地址由 Memento 管理：${activePreset.baseUrl}`, `Memento manages the official endpoint: ${activePreset.baseUrl}`)}</p>
+                  </div>
+                </details>
+                <p className="default-provider-note">{defaultProviderNote}</p>
                 <div className="provider-form-actions">
                   <div>
-                    <button type="button" className="quiet-button" disabled={!selected || selected.isDefault || busy !== null} onClick={() => { if (!selected) return; setBusy('default'); void onSetDefaultProvider(selected.id).catch(() => undefined).finally(() => setBusy(null)) }}><CircleCheck size={15} />{selected?.isDefault ? text('当前默认', 'Current default') : text('设为默认', 'Set default')}</button>
-                    <button type="button" className="icon-button" disabled={!selected || selected.isDefault || busy !== null} onClick={() => { if (!selected) return; setBusy('delete'); void onDeleteProvider(selected.id).then(() => { setSelectedId(providers.find((item) => item.id !== selected.id)?.id ?? 'new') }).catch(() => undefined).finally(() => setBusy(null)) }} title={text('删除供应商', 'Delete provider')} aria-label={text('删除供应商', 'Delete provider')}><Trash2 size={15} /></button>
+                    <button type="button" className="quiet-button" disabled={!selected || selected.isDefault || busy !== null} onClick={() => { if (!selected) return; setBusy('default'); void onSetDefaultProvider(selected.id).catch(() => undefined).finally(() => setBusy(null)) }}><CircleCheck size={15} />{selected?.isDefault ? text('当前默认供应商', 'Current default provider') : text('设为默认供应商', 'Set as default provider')}</button>
+                    <button type="button" className="danger-button" disabled={!selected || selected.isDefault || busy !== null} onClick={() => selected && setPendingDelete(selected)} title={selected?.isDefault ? text('请先将另一个供应商设为默认', 'Make another provider the default first') : undefined}><Trash2 size={15} />{text('删除配置', 'Delete configuration')}</button>
                   </div>
                   <div>
-                    <button type="button" className="secondary-button" onClick={() => void testConnection()} disabled={busy !== null || modelState === 'loading' || !draft.model.trim()}>{busy === 'test' ? <LoaderCircle className="spinner" size={15} /> : <PlugZap size={15} />}{busy === 'test' ? text('测试中', 'Testing') : text('测试', 'Test')}</button>
-                    <button type="submit" className="primary-button" disabled={busy !== null || modelState === 'loading' || !draft.model.trim()}>{busy === 'save' ? <LoaderCircle className="spinner" size={15} /> : <Save size={15} />}{text('保存', 'Save')}</button>
+                    <button type="button" className="secondary-button" onClick={() => void testConnection()} disabled={busy !== null || modelState === 'loading' || !draft.model.trim()}>{busy === 'test' ? <LoaderCircle className="spinner" size={15} /> : <PlugZap size={15} />}{busy === 'test' ? text('测试中', 'Testing') : text('测试连接', 'Test connection')}</button>
+                    <button type="submit" className="primary-button" disabled={busy !== null || modelState === 'loading' || !draft.model.trim()}>{busy === 'save' ? <LoaderCircle className="spinner" size={15} /> : <Save size={15} />}{text('保存配置', 'Save configuration')}</button>
                   </div>
                 </div>
               </form>
@@ -383,6 +499,7 @@ export function SettingsPage({
           <div className="setting-row"><span><strong>{text('界面语言', 'Interface language')}</strong><small>{text('更改后立即生效', 'Applies immediately')}</small></span><select value={settings.language} onChange={(event) => updateSettings({ language: event.target.value as AppLanguage })}><option value="zh-CN">简体中文</option><option value="en-US">English</option></select></div>
         </section>
       </div>
+      {pendingDelete && <DeleteProviderDialog provider={pendingDelete} busy={busy === 'delete'} onClose={() => busy !== 'delete' && setPendingDelete(null)} onConfirm={() => void deleteProvider()} />}
     </section>
   )
 }

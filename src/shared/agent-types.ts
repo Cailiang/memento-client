@@ -59,6 +59,13 @@ export interface CcSwitchImportResult {
   imported: number
 }
 
+export interface LocalAiImportResult {
+  sourcesFound: number
+  detected: number
+  imported: number
+  rejected: number
+}
+
 export type AgentRunStatus =
   | 'preparing'
   | 'analyzing'
@@ -231,6 +238,7 @@ export interface MementoAgentApi {
   deleteAgentProvider: (id: string) => Promise<void>
   setDefaultAgentProvider: (id: string) => Promise<AgentProvider[]>
   testAgentProvider: (input: SaveAgentProviderInput) => Promise<AgentProviderTestResult>
+  importLocalAiConfigurations: () => Promise<LocalAiImportResult>
   importCcSwitchProviders: () => Promise<CcSwitchImportResult>
   startAgentRun: (input: StartAgentRunInput) => Promise<AgentRunRecord>
   cancelAgentRun: (runId: string) => Promise<void>
