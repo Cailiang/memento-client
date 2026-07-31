@@ -34,7 +34,15 @@ function scan(): ScanResult {
       sizeBytes: 1, lastUsedAt: null, scope: 'shared', unused: false
     }],
     ignoredApplications: [],
-    terminal: { shell: '/bin/zsh', baselineMs: 1, startupMs: 1, sampleCount: 1, findings: [], configFiles: [] },
+    terminal: {
+      shell: '/bin/zsh', baselineMs: 1, startupMs: 1, sampleCount: 1, configFiles: [],
+      findings: [{
+        id: 'terminal-postgresql', code: 'stale_environment_path',
+        title: 'POSTGRESQL_HOME points to a missing directory',
+        detail: '/usr/local/Cellar/postgresql/12.3_2 no longer exists',
+        severity: 'notice', attributes: { variable: 'POSTGRESQL_HOME', product: 'postgresql' }
+      }]
+    },
     warnings: []
   }
 }
@@ -47,7 +55,22 @@ describe('local artifact evidence', () => {
     expect(related.storage.map((item) => item.id)).toEqual(['hidden-cisco'])
     expect(related.services.map((item) => item.id)).toEqual(['service-cisco'])
     expect(related.applications.map((item) => item.id)).toEqual(['cisco-app'])
+    expect(related.terminal).toEqual([])
     expect(related.matchedTokens).toEqual(['cisco'])
+  })
+
+  it('correlates a stale environment variable with a focused service', () => {
+    const value = scan()
+    value.candidates[0] = {
+      id: 'service-postgresql', section: 'services', name: 'homebrew.mxcl.postgresql@14',
+      subtitle: 'Launch agent', description: 'PostgreSQL 14', location: '/opt/homebrew/opt/postgresql@14',
+      risk: 'review', status: 'Loaded', evidence: []
+    }
+    const related = relatedScanEvidence(value, [{
+      kind: 'services', id: 'service-postgresql', name: 'homebrew.mxcl.postgresql@14'
+    }])
+    expect(related.identityTokens).toContain('postgresql')
+    expect(related.terminal.map((item) => item.id)).toEqual(['terminal-postgresql'])
   })
 
   it('collects shallow path evidence and redacts shell secrets', async () => {
@@ -79,7 +102,7 @@ describe('local artifact evidence', () => {
       expect(JSON.stringify(evidence)).not.toContain('do-not-leak')
       expect(evidence.packageReceipts).toEqual(['com.google.antigravity.ide'])
       expect(artifactEvidenceConfidence({
-        identityTokens: ['antigravity'], storage: [], services: [], applications: [], matchedTokens: []
+        identityTokens: ['antigravity'], storage: [], services: [], applications: [], terminal: [], matchedTokens: []
       }, evidence)).toMatchObject({ level: 'confirmed-local' })
     } finally {
       await fs.rm(home, { recursive: true, force: true })

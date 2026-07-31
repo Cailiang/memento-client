@@ -8,6 +8,24 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.52 - 2026-07-31
+
+### English
+
+- Added deterministic detection of stale literal `*_HOME` exports in zsh startup files. Focused service analysis now correlates registered terminal fixes and keeps them visible in the same result as optional plan items, including old `POSTGRESQL_HOME` paths found while inspecting PostgreSQL 14.
+- Added filtered select-all and confirmed bulk deletion to Task History. The main process validates every selected run before deleting all records and cascaded tool calls in one SQLite transaction.
+- Extended review-only leftover discovery to first-level directories in `~/Library/Application Support`, retaining the 30-day age gate, installed app and CLI identity filtering, directory-only scope, symlink rejection, and explicit Apple/shared-data protection.
+- Added **Ask AI** to disk-browser directory context menus. The main process resolves the opaque scanned node, provides focused shallow evidence, registers Trash only for validated targets, revalidates before execution, and removes the completed subtree without rescanning the disk.
+- Synchronized the interactive prototype, bilingual product documentation, release notes, tests, and release examples for version 0.6.52.
+
+### 简体中文
+
+- 新增 zsh 启动文件中过期字面量 `*_HOME` 导出的确定性检测。聚焦分析服务时会关联已注册的终端修复，并把它作为同一结果中的可选计划项；例如分析 PostgreSQL 14 时发现旧的 `POSTGRESQL_HOME` 路径。
+- 任务记录新增当前筛选结果全选和确认后批量删除；主进程先验证全部所选任务，再用一个 SQLite 事务删除任务及级联工具调用记录。
+- 需要确认的卸载残留扫描扩展到 `~/Library/Application Support` 一级目录，继续执行 30 天门槛、已安装应用与 CLI 身份过滤、仅目录、拒绝符号链接以及 Apple/共享数据保护。
+- 磁盘浏览目录右键菜单新增“询问 AI”。主进程解析不透明扫描节点、提供聚焦浅层证据，只为通过校验的目标注册废纸篓操作，执行前再次校验，并在不重扫磁盘的情况下移除已完成子树。
+- 同步更新交互原型、中英文项目文档、发布说明、测试和 0.6.52 发布示例。
+
 ## 0.6.51 - 2026-07-31
 
 ### English

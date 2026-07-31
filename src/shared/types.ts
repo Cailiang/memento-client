@@ -10,6 +10,7 @@ export type ActionKind =
   | 'delete-storage'
   | 'delete-storage-group'
   | 'trash-home-artifact'
+  | 'trash-disk-usage'
   | 'stop-brew-service'
   | 'stop-launch-agent'
   | 'trash-launch-agent-config'
@@ -95,6 +96,7 @@ export type TerminalFindingCode =
   | 'compinit_detected'
   | 'network_call_during_startup'
   | 'shell_file_large'
+  | 'stale_environment_path'
   | 'path_missing_entries'
   | 'path_duplicate_entries'
 
@@ -226,6 +228,7 @@ export interface MementoApi extends MementoAgentApi, MementoSettingsApi {
   cancelDiskUsageScan: () => Promise<void>
   revealDiskUsageNode: (id: string) => Promise<void>
   trashDiskUsageNode: (id: string) => Promise<void>
+  onDiskUsageNodeRemoved: (callback: (id: string) => void) => () => void
   getApplicationIcon: (id: string) => Promise<string | null>
   openApplication: (id: string) => Promise<void>
   runActions: (ids: string[]) => Promise<ActionResult[]>

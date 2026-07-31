@@ -35,6 +35,11 @@ const api: MementoApi = {
   cancelDiskUsageScan: () => ipcRenderer.invoke('memento:disk-usage:cancel'),
   revealDiskUsageNode: (id) => ipcRenderer.invoke('memento:disk-usage:reveal', id),
   trashDiskUsageNode: (id) => ipcRenderer.invoke('memento:disk-usage:trash', id),
+  onDiskUsageNodeRemoved: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, id: string): void => callback(id)
+    ipcRenderer.on('memento:disk-usage-node-removed', listener)
+    return () => ipcRenderer.removeListener('memento:disk-usage-node-removed', listener)
+  },
   getApplicationIcon: (id) => ipcRenderer.invoke('memento:get-application-icon', id),
   openApplication: (id) => ipcRenderer.invoke('memento:open-application', id),
   runActions: (ids) => ipcRenderer.invoke('memento:run-actions', ids),
@@ -55,6 +60,7 @@ const api: MementoApi = {
   listAgentRuns: () => ipcRenderer.invoke('memento:agent:runs:list'),
   getAgentRun: (runId) => ipcRenderer.invoke('memento:agent:runs:get', runId),
   deleteAgentRun: (runId) => ipcRenderer.invoke('memento:agent:runs:delete', runId),
+  deleteAgentRuns: (runIds) => ipcRenderer.invoke('memento:agent:runs:delete-many', runIds),
   onAgentRunEvent: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, runEvent: AgentRunEvent): void => {
       callback(runEvent)

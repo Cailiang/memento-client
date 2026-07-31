@@ -1,11 +1,15 @@
-# Memento Agent 0.6.51
+# Memento Agent 0.6.52
 
 ## 简体中文
 
-`0.6.51` 修复存储直接清理后的列表同步，并让电脑体检汇总进入项目最多、数量明确对应的模块。
+`0.6.52` 将服务分析中发现的关联配置问题纳入同一任务，并补齐任务记录批量删除、Application Support 残留扫描和磁盘目录询问 AI。
 
 ### 主要变化
 
+- 分析具体服务时会关联终端配置发现；过期的字面量 `*_HOME` 路径会成为可备份、可撤销的终端修复，并确定性显示在同一结果中供用户加入计划。
+- 任务记录支持全选当前筛选结果和一次确认后批量删除；全部 ID 会先验证，再在一个 SQLite 事务中删除。
+- 清理建议新增 `~/Library/Application Support` 一级目录的卸载残留检查，同时排除已安装应用、现存 CLI、30 天内更新目录、符号链接及 Apple/共享系统目录。
+- 磁盘浏览目录右键新增“询问 AI”；AI 可以解释目录归属和本机使用证据，确认是卸载残留时提供已注册的废纸篓任务，完成后立即从磁盘树移除而不重扫。
 - 推送与项目版本一致的标签后，自动校验源码并在 macOS、Windows 和 Linux 原生 runner 上构建。
 - 构建环境使用最新补丁版 Node.js 22.x，并在开始测试前确认内置 SQLite 可用。
 - Actions 产物上传与下载步骤使用当前 Node.js 24 运行时版本，不再产生 Node.js 20 弃用注解。
@@ -31,10 +35,14 @@
 
 ## English
 
-`0.6.51` fixes list reconciliation after direct Storage cleanup and makes the health summary open the module whose displayed count covers the most findings.
+`0.6.52` keeps related configuration problems in the same focused service task and adds Task History bulk deletion, Application Support leftover discovery, and disk-directory Ask AI.
 
 ### Highlights
 
+- Focused service analysis now correlates terminal configuration findings. Stale literal `*_HOME` paths become backed-up, reversible fixes and are deterministically shown in the same result for optional plan selection.
+- Task History supports selecting all currently filtered records and deleting them after one confirmation. Every ID is validated before one SQLite transaction removes the selected runs.
+- Cleanup findings now inspect first-level directories below `~/Library/Application Support` while excluding installed apps, existing CLIs, recently modified directories, symlinks, and protected Apple/shared infrastructure.
+- Disk-browser directory context menus now include **Ask AI**. AI can explain ownership and observed local use, expose a registered Trash task for confirmed leftovers, and remove the completed subtree immediately without a disk rescan.
 - A matching version tag now validates the source and builds on native macOS, Windows, and Linux runners.
 - Builds use the latest patched Node.js 22.x runtime and verify built-in SQLite support before tests begin.
 - Artifact upload and download steps use their current Node.js 24 action runtimes without Node.js 20 deprecation annotations.

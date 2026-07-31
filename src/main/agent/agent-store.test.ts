@@ -207,4 +207,21 @@ describe('AgentStore', () => {
     database.close()
     store.close()
   })
+
+  it('deletes multiple runs in one transaction', () => {
+    const store = new AgentStore(temporaryDirectory())
+    const provider = store.saveProvider(providerInput('Provider', 'batch-secret'))
+    const first = store.createRun('First task', provider)
+    const second = store.createRun('Second task', provider)
+    const retained = store.createRun('Retained task', provider)
+    store.logToolCall(first.id, 'inspect_device', {}, { ok: true })
+
+    store.deleteRuns([first.id, second.id, first.id])
+
+    expect(store.getRun(first.id)).toBeNull()
+    expect(store.getRun(second.id)).toBeNull()
+    expect(store.getRun(retained.id)).not.toBeNull()
+    expect(() => store.deleteRuns([])).toThrow()
+    store.close()
+  })
 })

@@ -318,20 +318,21 @@ export function ApplicationIgnoreConfirmDialog({
 }
 
 export function DeleteHistoryDialog({
-  run,
+  runs,
   busy,
   onClose,
   onConfirm
 }: {
-  run: AgentRunRecord
+  runs: AgentRunRecord[]
   busy: boolean
   onClose: () => void
   onConfirm: () => void
 }): React.JSX.Element {
   const { text } = useI18n()
+  const multiple = runs.length > 1
   return (
-    <DialogFrame title={text('删除任务记录？', 'Delete task history?')} description={text('这会删除本机保存的对话、分析结果和工具调用记录，无法恢复。', 'This permanently deletes the locally stored conversation, analysis results, and tool-call records.')} busy={busy} onClose={onClose} actions={<><button type="button" className="secondary-button" onClick={onClose} disabled={busy}>{text('取消', 'Cancel')}</button><button type="button" className="danger-button" onClick={onConfirm} disabled={busy}>{busy ? <LoaderCircle className="spinner" size={15} /> : <Trash2 size={15} />}{busy ? text('正在删除', 'Deleting') : text('删除记录', 'Delete history')}</button></>}>
-      <div className="dialog-body"><div className="confirm-row"><span><Archive size={13} /></span><div><strong>{run.prompt}</strong><small>{text('只删除历史数据，不会撤销已经完成的操作', 'Completed system changes are not undone')}</small></div><span className="risk-label review">{text('不可恢复', 'Permanent')}</span></div></div>
+    <DialogFrame title={text(multiple ? `删除 ${runs.length} 条任务记录？` : '删除任务记录？', multiple ? `Delete ${runs.length} task records?` : 'Delete task history?')} description={text('这会删除本机保存的对话、分析结果和工具调用记录，无法恢复。', 'This permanently deletes the locally stored conversation, analysis results, and tool-call records.')} busy={busy} onClose={onClose} actions={<><button type="button" className="secondary-button" onClick={onClose} disabled={busy}>{text('取消', 'Cancel')}</button><button type="button" className="danger-button" onClick={onConfirm} disabled={busy}>{busy ? <LoaderCircle className="spinner" size={15} /> : <Trash2 size={15} />}{busy ? text('正在删除', 'Deleting') : text(multiple ? '全部删除' : '删除记录', multiple ? 'Delete all' : 'Delete history')}</button></>}>
+      <div className="dialog-body"><div className="confirm-row"><span><Archive size={13} /></span><div><strong>{multiple ? text(`${runs.length} 条所选记录`, `${runs.length} selected records`) : runs[0]?.prompt}</strong><small>{text('只删除历史数据，不会撤销已经完成的操作', 'Completed system changes are not undone')}</small></div><span className="risk-label review">{text('不可恢复', 'Permanent')}</span></div></div>
     </DialogFrame>
   )
 }

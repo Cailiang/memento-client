@@ -188,6 +188,7 @@ export interface AgentRunRecord {
 export interface StartAgentRunInput {
   prompt: string
   conversationId?: string
+  diskUsageNodeId?: string
 }
 
 export type AgentRunEvent =
@@ -238,5 +239,6 @@ export interface MementoAgentApi {
   listAgentRuns: () => Promise<AgentRunRecord[]>
   getAgentRun: (runId: string) => Promise<AgentRunRecord | null>
   deleteAgentRun: (runId: string) => Promise<void>
+  deleteAgentRuns: (runIds: string[]) => Promise<void>
   onAgentRunEvent: (callback: (event: AgentRunEvent) => void) => () => void
 }

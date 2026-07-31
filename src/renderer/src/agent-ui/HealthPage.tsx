@@ -142,6 +142,7 @@ export function HealthPage({
   onDiskUsageCancel,
   onRevealDiskUsageNode,
   onTrashDiskUsageNode,
+  onAskDiskUsageNode,
   onRevealCandidate,
   onAgentPrompt,
   onDirectAction,
@@ -169,6 +170,7 @@ export function HealthPage({
   onDiskUsageCancel: () => void
   onRevealDiskUsageNode: (id: string) => void
   onTrashDiskUsageNode: (node: import('../../../shared/types').DiskUsageNode) => void
+  onAskDiskUsageNode: (node: import('../../../shared/types').DiskUsageNode, origin: HealthAgentOrigin) => void
   onRevealCandidate: (candidate: ScanCandidate) => void
   onAgentPrompt: (prompt: string, origin: HealthAgentOrigin) => void
   onDirectAction: (candidate: ScanCandidate, operation: CandidateOperation) => void
@@ -325,7 +327,7 @@ export function HealthPage({
               <div className="data-list">{storage.length ? storage.map((candidate) => <CandidateRow key={candidate.id} candidate={candidate} onAgentPrompt={askAgent} onDirectAction={onDirectAction} onIgnore={onIgnore} onReveal={onRevealCandidate} />) : <div className="module-empty">{text('没有发现存储建议', 'No storage findings')}</div>}</div>
             </>
           ) : (
-            <DiskUsageBrowser result={diskUsage} progress={diskUsageProgress} busy={diskUsageBusy} error={diskUsageError} onScan={onDiskUsageScan} onCancel={onDiskUsageCancel} onReveal={onRevealDiskUsageNode} onRequestTrash={onTrashDiskUsageNode} />
+            <DiskUsageBrowser result={diskUsage} progress={diskUsageProgress} busy={diskUsageBusy} error={diskUsageError} onScan={onDiskUsageScan} onCancel={onDiskUsageCancel} onReveal={onRevealDiskUsageNode} onAskAI={(node) => onAskDiskUsageNode(node, { tab: 'storage', itemId: node.id, scrollTop: pageRef.current?.scrollTop ?? 0 })} onRequestTrash={onTrashDiskUsageNode} />
           )}
         </div>
       )}

@@ -26,7 +26,12 @@ describe('hidden Home cleanup', () => {
         '.config/git',
         '.config/github-copilot',
         '.cache/retired-cache',
-        '.local/share/retired-data'
+        '.local/share/retired-data',
+        'Library/Application Support/Retired Editor',
+        'Library/Application Support/Cursor',
+        'Library/Application Support/com.apple.CloudDocs',
+        'Library/Application Support/MobileSync',
+        'Library/Application Support/Retired Editor/nested-data'
       ]
       await Promise.all(paths.map((target) => fs.mkdir(path.join(home, target), { recursive: true })))
       await fs.writeFile(path.join(home, '.retired-toolrc'), 'legacy=true\n')
@@ -59,11 +64,20 @@ describe('hidden Home cleanup', () => {
         '.anyconnect',
         '.cache/retired-cache',
         '.config/old-client',
-        '.local/share/retired-data'
+        '.local/share/retired-data',
+        'Library/Application Support/Retired Editor'
       ])
       expect(artifacts.every((artifact) => artifact.kind === 'directory')).toBe(true)
       expect(isAllowedHiddenHomeArtifactTarget(path.join(home, '.config'), home)).toBe(false)
       expect(isAllowedHiddenHomeArtifactTarget(path.join(home, '.ssh'), home)).toBe(false)
+      expect(isAllowedHiddenHomeArtifactTarget(
+        path.join(home, 'Library', 'Application Support', 'MobileSync'),
+        home
+      )).toBe(false)
+      expect(isAllowedHiddenHomeArtifactTarget(
+        path.join(home, 'Library', 'Application Support', 'Retired Editor', 'nested-data'),
+        home
+      )).toBe(false)
     } finally {
       await fs.rm(home, { recursive: true, force: true })
     }

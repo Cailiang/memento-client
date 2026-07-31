@@ -8,6 +8,7 @@ import {
   Maximize2,
   Minimize2,
   RefreshCw,
+  Sparkles,
   Square,
   Trash2
 } from 'lucide-react'
@@ -52,6 +53,7 @@ export function DiskUsageBrowser({
   onScan,
   onCancel,
   onReveal,
+  onAskAI,
   onRequestTrash
 }: {
   result: DiskUsageScanResult | null
@@ -61,6 +63,7 @@ export function DiskUsageBrowser({
   onScan: () => void
   onCancel: () => void
   onReveal: (id: string) => void
+  onAskAI: (node: DiskUsageNode) => void
   onRequestTrash: (node: DiskUsageNode) => void
 }): React.JSX.Element {
   const { language, text } = useI18n()
@@ -199,7 +202,7 @@ export function DiskUsageBrowser({
                   setContextMenu({
                     node,
                     x: Math.min(event.clientX, window.innerWidth - 190),
-                    y: Math.min(event.clientY, window.innerHeight - 92)
+                    y: Math.min(event.clientY, window.innerHeight - 132)
                   })
                 }}
               >
@@ -218,6 +221,7 @@ export function DiskUsageBrowser({
       <div className="disk-browser-foot"><span>{text(`显示不小于 ${formatBytes(result.minimumDisplayBytes)} 的项目`, `Showing items at least ${formatBytes(result.minimumDisplayBytes)}`)}</span></div>
       {contextMenu && <div className="disk-context-menu" role="menu" style={{ left: contextMenu.x, top: contextMenu.y }} onPointerDown={(event) => event.stopPropagation()}>
         <button type="button" role="menuitem" onClick={() => { onReveal(contextMenu.node.id); setContextMenu(null) }}><FolderOpen size={14} />{text('在 Finder 中显示', 'Show in Finder')}</button>
+        {contextMenu.node.kind === 'directory' && <button type="button" role="menuitem" onClick={() => { onAskAI(contextMenu.node); setContextMenu(null) }}><Sparkles size={14} />{text('询问 AI', 'Ask AI')}</button>}
         {canTrashNode(contextMenu.node) && <button type="button" role="menuitem" className="is-danger" onClick={() => { onRequestTrash(contextMenu.node); setContextMenu(null) }}><Trash2 size={14} />{text('移到废纸篓', 'Move to Trash')}</button>}
       </div>}
     </div>

@@ -6,6 +6,7 @@ import type { AgentPlanItem } from '../../shared/agent-types'
 import type { ScanResult } from '../../shared/types'
 import { AgentStore } from './agent-store'
 import {
+  appendCorrelatedTerminalProblems,
   availablePlanItems,
   compactConversationContext,
   inferPromptFocus,
@@ -28,6 +29,27 @@ afterEach(() => {
 })
 
 describe('LocalAgentRuntime boundaries', () => {
+  it('keeps correlated terminal fixes visible as optional results', () => {
+    const presentation = appendCorrelatedTerminalProblems({
+      summary: 'PostgreSQL is running.',
+      sections: [{ kind: 'services', title: 'Services', items: [] }]
+    }, [{
+      id: 'stale-postgresql-home', code: 'stale_environment_path',
+      title: 'POSTGRESQL_HOME points to a missing directory', detail: 'Old PostgreSQL 12 path',
+      severity: 'notice', fix: {
+        id: 'stale-postgresql-home', label: 'Clean up POSTGRESQL_HOME',
+        consequence: 'Back up .zshrc and comment the stale export'
+      }
+    }], 'en-US')
+
+    expect(presentation.sections).toHaveLength(2)
+    expect(presentation.sections[1]).toMatchObject({
+      kind: 'terminal',
+      title: 'Related configuration issues',
+      items: [{ id: 'stale-postgresql-home' }]
+    })
+  })
+
   it('maps only registered scan, application, and terminal operations into plans', () => {
     const scan: ScanResult = {
       scanId: 'scan-1',

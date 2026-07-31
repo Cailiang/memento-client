@@ -332,7 +332,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
   const [restoreBusyValue, setRestoreBusyValue] = useState<string | null>(null)
   const [openingApplicationId, setOpeningApplicationId] = useState<string | null>(null)
   const [addingOperationId, setAddingOperationId] = useState<string | null>(null)
-  const [pendingHistoryDelete, setPendingHistoryDelete] = useState<AgentRunRecord | null>(null)
+  const [pendingHistoryDelete, setPendingHistoryDelete] = useState<AgentRunRecord[] | null>(null)
   const [historyDeleteBusy, setHistoryDeleteBusy] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const started = useRef(false)
@@ -392,6 +392,9 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
         : current)
     })
     const unsubscribeDiskUsage = window.memento?.onDiskUsageProgress(setDiskUsageProgress)
+    const unsubscribeDiskUsageRemoval = window.memento?.onDiskUsageNodeRemoved((id) => {
+      setDiskUsage((current) => current ? withoutDiskUsageNode(current, id) : current)
+    })
     const unsubscribeUpdate = window.memento?.onUpdateState(setUpdateState)
     const unsubscribeAgent = window.memento?.onAgentRunEvent((event: AgentRunEvent) => {
       if (event.type === 'status') {
@@ -439,6 +442,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     return () => {
       unsubscribeProgress?.()
       unsubscribeDiskUsage?.()
+      unsubscribeDiskUsageRemoval?.()
       unsubscribeUpdate?.()
       unsubscribeAgent?.()
     }
@@ -576,7 +580,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     }
   }
 
-  const startAgentRun = (prompt: string, options: { isolated?: boolean; origin?: AgentOrigin } = {}): void => {
+  const startAgentRun = (prompt: string, options: { isolated?: boolean; origin?: AgentOrigin; diskUsageNodeId?: string } = {}): void => {
     const uiText = (chinese: string, english: string): string => (
       settings.language === 'en-US' ? english : chinese
     )
@@ -646,7 +650,8 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
 
     void window.memento.startAgentRun({
       prompt,
-      conversationId: options.isolated ? undefined : activeRun?.conversationId
+      conversationId: options.isolated ? undefined : activeRun?.conversationId,
+      diskUsageNodeId: options.diskUsageNodeId
     }).then((run) => {
       setRuns((current) => [run, ...current.filter((item) => item.id !== run.id)])
       setWorkspaceConversationIds((current) => appendWorkspaceConversation(
@@ -1093,25 +1098,25 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
 
   const deleteHistoryRun = async (): Promise<void> => {
     if (!pendingHistoryDelete) return
-    const run = pendingHistoryDelete
+    const selectedRuns = pendingHistoryDelete
+    const selectedIds = new Set(selectedRuns.map((run) => run.id))
     setHistoryDeleteBusy(true)
     try {
-      if (window.memento) await window.memento.deleteAgentRun(run.id)
-      setRuns((current) => current.filter((item) => item.id !== run.id))
-      const conversationStillExists = runs.some((item) => (
-        item.id !== run.id && item.conversationId === run.conversationId
-      ))
-      if (!conversationStillExists) {
-        setWorkspaceConversationIds((current) => current.filter((id) => id !== run.conversationId))
-      }
-      if (activeRun?.id === run.id) {
+      if (window.memento) await window.memento.deleteAgentRuns([...selectedIds])
+      const remainingRuns = window.memento
+        ? await window.memento.listAgentRuns()
+        : runs.filter((item) => !selectedIds.has(item.id))
+      setRuns(remainingRuns)
+      const remainingConversationIds = new Set(remainingRuns.map((run) => run.conversationId))
+      setWorkspaceConversationIds((current) => current.filter((id) => remainingConversationIds.has(id)))
+      if (activeRun && selectedIds.has(activeRun.id)) {
         setActiveRun(null)
         activeRunId.current = null
         setSelectedPlanIds(new Set())
         setRunStatusMessage('')
       }
       setPendingHistoryDelete(null)
-      setToast(appText('任务记录已删除', 'Task history deleted.'))
+      setToast(appText(`已删除 ${selectedRuns.length} 条任务记录`, `${selectedRuns.length} task records deleted.`))
     } catch (error) {
       setToast(error instanceof Error ? error.message : appText('无法删除任务记录', 'Could not delete task history.'))
     } finally {
@@ -1380,9 +1385,9 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       onOpenUpdate={openUpdatePage}
     >
       {view === 'agent' && <AgentPage scan={result} run={activeRun} conversationRuns={conversationRuns} workspaceRuns={workspaceRuns} statusMessage={runStatusMessage} selectedPlanIds={selectedPlanIds} providerConfigured={Boolean(defaultProvider)} addingOperationId={addingOperationId} openingApplicationId={openingApplicationId} returnLabel={agentOriginLabel} onSubmit={startAgentRun} onSelectWorkspaceRun={selectWorkspaceRun} onCloseWorkspaceRun={closeWorkspaceRun} onNewTask={() => { setActiveRun(null); activeRunId.current = null; setSelectedPlanIds(new Set()); setRunStatusMessage(''); setAgentOrigin(null) }} onOpenHistory={() => setView('history')} onOpenSettings={() => setView('settings')} onReturn={returnToAgentOrigin} onOpenApplication={openAgentApplication} onAddPlanItem={(id) => void addAgentPlanItem(id)} onTogglePlanItem={(id) => setSelectedPlanIds((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next })} onExecutePlan={() => void executePlan()} onDiscardPlan={discardPlan} />}
-      {view === 'health' && <HealthPage result={result} settings={settings} scanBusy={scanBusy} progress={progress} tab={healthTab} storageMode={storageMode} diskUsage={diskUsage} diskUsageProgress={diskUsageProgress} diskUsageBusy={diskUsageBusy} diskUsageError={diskUsageError} restoreTarget={restoreTarget?.view === 'health' ? restoreTarget : null} onRestoreComplete={() => setRestoreTarget(null)} onScan={() => void scanNow()} onTabChange={setHealthTab} onStorageModeChange={changeStorageMode} onDiskUsageScan={() => void scanDiskUsage()} onDiskUsageCancel={cancelDiskUsageScan} onRevealDiskUsageNode={revealDiskUsageNode} onTrashDiskUsageNode={setPendingDiskUsageTrash} onRevealCandidate={revealCandidate} onAgentPrompt={(prompt, origin: HealthAgentOrigin) => startAgentRun(prompt, { isolated: true, origin: { view: 'health', ...origin } })} onDirectAction={requestDirectAction} onDirectTerminalFix={requestDirectTerminalFix} onOptimizeTerminal={requestTerminalFixBatch} onIgnore={setPendingIgnore} onManageIgnored={openIgnoredManager} />}
+      {view === 'health' && <HealthPage result={result} settings={settings} scanBusy={scanBusy} progress={progress} tab={healthTab} storageMode={storageMode} diskUsage={diskUsage} diskUsageProgress={diskUsageProgress} diskUsageBusy={diskUsageBusy} diskUsageError={diskUsageError} restoreTarget={restoreTarget?.view === 'health' ? restoreTarget : null} onRestoreComplete={() => setRestoreTarget(null)} onScan={() => void scanNow()} onTabChange={setHealthTab} onStorageModeChange={changeStorageMode} onDiskUsageScan={() => void scanDiskUsage()} onDiskUsageCancel={cancelDiskUsageScan} onRevealDiskUsageNode={revealDiskUsageNode} onTrashDiskUsageNode={setPendingDiskUsageTrash} onAskDiskUsageNode={(node, origin) => startAgentRun(appText(`分析磁盘目录“${node.name}”（${node.location}）。直接说明它属于什么软件或用途、当前是否仍被使用，以及能否删除。结合已安装应用、后台服务、目录内容、软件包收据和 shell 引用给出证据；如果确认是已卸载软件的残留并且有已注册操作，请生成移到废纸篓的确认任务，不要直接执行。`, `Analyze the disk directory "${node.name}" (${node.location}). Directly explain what software or purpose it belongs to, whether it is still in use, and whether it can be deleted. Use installed apps, background services, directory entries, package receipts, and shell references as evidence. If it is confirmed leftover data from uninstalled software and a registered operation is available, prepare a confirmation task to move it to Trash without executing it.`), { isolated: true, origin: { view: 'health', ...origin }, diskUsageNodeId: node.id })} onRevealCandidate={revealCandidate} onAgentPrompt={(prompt, origin: HealthAgentOrigin) => startAgentRun(prompt, { isolated: true, origin: { view: 'health', ...origin } })} onDirectAction={requestDirectAction} onDirectTerminalFix={requestDirectTerminalFix} onOptimizeTerminal={requestTerminalFixBatch} onIgnore={setPendingIgnore} onManageIgnored={openIgnoredManager} />}
       {view === 'apps' && <ApplicationsPage applications={result?.applications ?? []} openingId={openingApplicationId} removingId={removingApplicationId} restoreTarget={restoreTarget?.view === 'apps' ? restoreTarget : null} onRestoreComplete={() => setRestoreTarget(null)} ignoredCount={settings.applicationWhitelist.length} onOpen={(application) => void openApplication(application)} onUninstall={setPendingUninstall} onIgnore={setPendingApplicationIgnore} onManageIgnored={() => openIgnoredManager('applications')} onAgentPrompt={(prompt, origin) => startAgentRun(prompt, { isolated: true, origin: { view: 'apps', ...origin } })} />}
-      {view === 'history' && <HistoryPage runs={runs} onOpenRun={(run) => { setActiveRun(run); activeRunId.current = run.id; setSelectedPlanIds(new Set()); setView('agent') }} onDeleteRun={setPendingHistoryDelete} />}
+      {view === 'history' && <HistoryPage runs={runs} onOpenRun={(run) => { setActiveRun(run); activeRunId.current = run.id; setSelectedPlanIds(new Set()); setView('agent') }} onDeleteRuns={setPendingHistoryDelete} />}
       {view === 'settings' && <SettingsPage settings={settings} providers={providers} appVersion={appVersion} updateState={updateState} onUpdateSettings={updateSettings} onDiscoverModels={discoverProviderModels} onSaveProvider={saveProvider} onTestProvider={testProvider} onDeleteProvider={deleteProvider} onSetDefaultProvider={setDefaultProvider} onImportCcSwitch={importCcSwitchProviders} onCheckUpdates={checkForUpdates} onManageIgnored={() => openIgnoredManager()} onToast={setToast} />}
 
       {pendingDirectAction && <DirectActionConfirmDialog action={pendingDirectAction} onClose={() => setPendingDirectAction(null)} onConfirm={() => void executeDirectAction()} />}
@@ -1392,7 +1397,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       {pendingIgnore && <IgnoreConfirmDialog candidate={pendingIgnore} busy={ignoreBusy} onClose={() => setPendingIgnore(null)} onConfirm={() => void confirmIgnore()} />}
       {pendingApplicationIgnore && <ApplicationIgnoreConfirmDialog application={pendingApplicationIgnore} busy={ignoreBusy} onClose={() => setPendingApplicationIgnore(null)} onConfirm={() => void confirmApplicationIgnore()} />}
       {ignoredManagerOpen && <IgnoredItemsDialog initialKind={ignoredManagerKind} serviceValues={settings.serviceWhitelist} storageValues={settings.storageWhitelist} applicationValues={settings.applicationWhitelist} ignoredApplications={result?.ignoredApplications ?? []} busyValue={restoreBusyValue} onRestore={(kind, value) => void restoreIgnored(kind, value)} onClose={() => setIgnoredManagerOpen(false)} />}
-      {pendingHistoryDelete && <DeleteHistoryDialog run={pendingHistoryDelete} busy={historyDeleteBusy} onClose={() => setPendingHistoryDelete(null)} onConfirm={() => void deleteHistoryRun()} />}
+      {pendingHistoryDelete && <DeleteHistoryDialog runs={pendingHistoryDelete} busy={historyDeleteBusy} onClose={() => setPendingHistoryDelete(null)} onConfirm={() => void deleteHistoryRun()} />}
       {toast && <div className="toast is-visible" role="status"><CheckCircle2 size={16} /><span>{toast}</span></div>}
     </Shell>
   )

@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import type { AgentFocus } from '../../shared/agent-types'
-import type { InstalledApplication, ScanCandidate, ScanResult } from '../../shared/types'
+import type { InstalledApplication, ScanCandidate, ScanResult, TerminalFinding } from '../../shared/types'
 
 const execFileAsync = promisify(execFile)
 
@@ -59,6 +59,7 @@ export interface RelatedScanEvidence {
   storage: ScanCandidate[]
   services: ScanCandidate[]
   applications: InstalledApplication[]
+  terminal: TerminalFinding[]
   matchedTokens: string[]
 }
 
@@ -116,6 +117,15 @@ function itemTokens(item: ScanCandidate | InstalledApplication): Set<string> {
   return new Set(itemIdentityValues(item).flatMap(normalizedTokens))
 }
 
+function terminalFindingTokens(finding: TerminalFinding): Set<string> {
+  return new Set([
+    finding.title,
+    finding.detail,
+    finding.source ?? '',
+    ...Object.values(finding.attributes ?? {}).map(String)
+  ].flatMap(normalizedTokens))
+}
+
 function focusedItems(scan: ScanResult, focus: readonly AgentFocus[]): Array<ScanCandidate | InstalledApplication> {
   const focusIds = new Set(focus.map((item) => item.id))
   return [
@@ -141,12 +151,18 @@ export function relatedScanEvidence(
     matches.forEach((token) => matchedTokens.add(token))
     return matches.length > 0
   }
+  const relatedTerminal = (finding: TerminalFinding): boolean => {
+    const matches = [...terminalFindingTokens(finding)].filter((token) => tokenSet.has(token))
+    matches.forEach((token) => matchedTokens.add(token))
+    return matches.length > 0
+  }
 
   return {
     identityTokens,
     storage: scan.candidates.filter((item) => item.section === 'storage' && related(item)),
     services: scan.candidates.filter((item) => item.section === 'services' && related(item)),
     applications: scan.applications.filter(related),
+    terminal: scan.terminal.findings.filter(relatedTerminal),
     matchedTokens: [...matchedTokens]
   }
 }
@@ -322,6 +338,7 @@ export function artifactEvidenceConfidence(
   const reasons: string[] = []
   if (related.services.length) reasons.push('matching scanned background service')
   if (related.applications.length) reasons.push('matching installed application')
+  if (related.terminal.length) reasons.push('matching terminal configuration finding')
   if (related.storage.length > 1) reasons.push('matching storage finding')
   if (local.matchingPaths.length) reasons.push('matching allowlisted filesystem path')
   if (local.shellReferences.length) reasons.push('matching shell configuration reference')

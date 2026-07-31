@@ -338,6 +338,37 @@ function fallbackPresentation(
   return presentationFromReferences(summary, sections, registry, language)
 }
 
+export function appendCorrelatedTerminalProblems(
+  presentation: AgentPresentation,
+  findings: readonly TerminalFinding[],
+  language: AppLanguage
+): AgentPresentation {
+  const presentedIds = new Set(presentation.sections.flatMap((section) => (
+    section.items.map((item) => item.id)
+  )))
+  const missing = findings
+    .filter((finding) => finding.severity !== 'good' && finding.fix && !presentedIds.has(finding.id))
+    .map(terminalResult)
+  if (!missing.length) return presentation
+  const terminalIndex = presentation.sections.findIndex((section) => section.kind === 'terminal')
+  if (terminalIndex < 0) {
+    return {
+      ...presentation,
+      sections: [...presentation.sections, {
+        kind: 'terminal',
+        title: t(language, '关联配置问题', 'Related configuration issues'),
+        items: missing
+      }]
+    }
+  }
+  return {
+    ...presentation,
+    sections: presentation.sections.map((section, index) => index === terminalIndex
+      ? { ...section, items: [...section.items, ...missing] }
+      : section)
+  }
+}
+
 export function compactConversationContext(runs: AgentRunRecord[]): Array<Record<string, unknown>> {
   return runs.slice(-8).map((run) => ({
     userRequest: run.prompt,
@@ -375,7 +406,8 @@ export class LocalAgentRuntime {
     input: StartAgentRunInput,
     scan: ScanResult,
     language: AppLanguage,
-    emit: EmitAgentEvent
+    emit: EmitAgentEvent,
+    explicitFocusIds: readonly string[] = []
   ): AgentRunRecord {
     const cleanPrompt = typeof input?.prompt === 'string' ? input.prompt.trim().slice(0, 4000) : ''
     if (!cleanPrompt) {
@@ -387,7 +419,10 @@ export class LocalAgentRuntime {
       : null
     const conversationId = requestedConversationId ?? randomUUID()
     const provider = this.store.getDefaultPrivateProvider()
-    const directFocus = inferPromptFocus(cleanPrompt, scan)
+    const explicitFocus = focusForItems(explicitFocusIds
+      .map((id) => resultRegistry(scan).get(id))
+      .filter((item): item is AgentResultItem => Boolean(item)))
+    const directFocus = explicitFocus.length ? explicitFocus : inferPromptFocus(cleanPrompt, scan)
     const run = this.store.createRun(cleanPrompt, provider, language, conversationId, directFocus)
     const controller = new AbortController()
     this.controllers.set(run.id, controller)
@@ -461,7 +496,8 @@ export class LocalAgentRuntime {
     const contextualInspectionIds = new Set([
       ...relatedEvidence.storage.map((item) => item.id),
       ...relatedEvidence.services.map((item) => item.id),
-      ...relatedEvidence.applications.map((item) => item.id)
+      ...relatedEvidence.applications.map((item) => item.id),
+      ...relatedEvidence.terminal.map((item) => item.id)
     ])
     const inspectedKinds = new Set<AgentResultKind>()
     let proposedPlan: AgentPlanItem[] = []
@@ -537,19 +573,21 @@ export class LocalAgentRuntime {
           }
         }),
         inspect_background_services: tool({
-          description: 'List background-service findings, stable item IDs, impact, and registered operation IDs.',
+          description: 'List background-service findings, stable item IDs, impact, registered operation IDs, and correlated terminal configuration problems.',
           inputSchema: z.object({}),
           execute: async (input) => {
             inspectedKinds.add('services')
             setStatus('analyzing', '正在检查后台服务', 'Inspecting background services')
-            return recordTool(
-              'inspect_background_services',
-              input,
-              scan.candidates
+            const items = scan.candidates
                 .filter((item) => item.section === 'services')
                 .filter((item) => !contextualFocusIds.size || contextualInspectionIds.has(item.id))
                 .map(compactCandidate)
-            )
+            return recordTool('inspect_background_services', input, contextualFocusIds.size
+              ? {
+                  items,
+                  correlatedTerminal: relatedEvidence.terminal.map(compactFinding)
+                }
+              : items)
           }
         }),
         inspect_applications: tool({
@@ -579,7 +617,7 @@ export class LocalAgentRuntime {
               baselineMs: scan.terminal.baselineMs,
               startupMs: scan.terminal.startupMs,
               findings: scan.terminal.findings
-                .filter((item) => !contextualFocusIds.size || contextualFocusIds.has(item.id))
+                .filter((item) => !contextualFocusIds.size || contextualInspectionIds.has(item.id))
                 .map(compactFinding)
             })
           }
@@ -661,6 +699,7 @@ export class LocalAgentRuntime {
           'Memento has native Application Management, Storage, Background Services, and Terminal Diagnostics modules.',
           'After inspection, call present_results exactly once with the most relevant stable item IDs so Memento can render compact interactive controls. Do not output HTML, Markdown tables, shell commands, or a wall of text.',
           'Only operations returned by inspection tools are real and executable.',
+          'When focused inspection reveals additional correlated problems with registered operations, present them in the same task as separate optional items. Explain the relationship and do not select or execute them automatically.',
           'When the user asks to change, stop, remove, uninstall, fix, or clean something, call prepare_action_plan with exact operation IDs.',
           'Never claim an operation was executed. Execution only happens after user confirmation in Memento.',
           'Do not give manual steps when a registered Memento operation exists.',
@@ -690,6 +729,13 @@ export class LocalAgentRuntime {
           presented = fallback.presentation
           presentedFocus = fallback.focus
         }
+      }
+      if (presented) {
+        presented = appendCorrelatedTerminalProblems(
+          presented,
+          relatedEvidence.terminal,
+          language
+        )
       }
       const status = proposedPlan.length > 0 ? 'awaiting-confirmation' : 'completed'
       const completed = this.store.updateRun(initialRun.id, {

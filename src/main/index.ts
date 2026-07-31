@@ -10,6 +10,7 @@ import {
   type MenuItemConstructorOptions
 } from 'electron'
 import { execFile } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { existsSync, lstatSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, readdir, rename, rmdir, unlink } from 'node:fs/promises'
 import os from 'node:os'
@@ -19,6 +20,7 @@ import type {
   ActionResult,
   AppUpdateState,
   DiskUsageProgress,
+  DiskUsageNode,
   ScanProgress,
   ScanResult,
   TerminalFixRunResult
@@ -91,6 +93,7 @@ let scanInProgress = false
 let currentScanResult: ScanResult | null = null
 let diskUsageScanner: DiskUsageScanner | null = null
 let registeredDiskUsageTargets = new Map<string, string>()
+let registeredDiskUsageNodes = new Map<string, DiskUsageNode>()
 let agentStore: AgentStore | null = null
 let agentRuntime: LocalAgentRuntime | null = null
 let appSettings: AppSettings = { ...DEFAULT_APP_SETTINGS }
@@ -108,6 +111,92 @@ function mainText(chinese: string, english: string): string {
 function mainDisplayPath(target: string): string {
   const home = os.homedir()
   return target.startsWith(home) ? `~${target.slice(home.length)}` : target
+}
+
+function indexDiskUsageNodes(root: DiskUsageNode): Map<string, DiskUsageNode> {
+  const nodes = new Map<string, DiskUsageNode>()
+  const visit = (node: DiskUsageNode): void => {
+    nodes.set(node.id, node)
+    node.children.forEach(visit)
+  }
+  visit(root)
+  return nodes
+}
+
+function discardDiskUsageTarget(target: string): void {
+  registeredDiskUsageTargets = withoutDiskUsageTargets(registeredDiskUsageTargets, target)
+  registeredDiskUsageNodes = new Map([...registeredDiskUsageNodes].filter(([id]) => (
+    registeredDiskUsageTargets.has(id)
+  )))
+}
+
+async function prepareDiskUsageAgentFocus(nodeId: string): Promise<string> {
+  if (!currentScanResult || typeof nodeId !== 'string' || nodeId.length > 100) {
+    throw new Error(mainText('磁盘项目入口无效，请重新扫描', 'The disk item is invalid. Scan again.'))
+  }
+  const node = registeredDiskUsageNodes.get(nodeId)
+  const target = registeredDiskUsageTargets.get(nodeId)
+  if (!node || !target || node.kind !== 'directory' || !existsSync(target)) {
+    throw new Error(mainText('磁盘目录已经不存在，请重新扫描', 'The disk directory no longer exists. Scan again.'))
+  }
+  const stats = lstatSync(target)
+  if (stats.isSymbolicLink() || !stats.isDirectory()) {
+    throw new Error(mainText('所选项目不是可分析的目录', 'The selected item is not an analyzable directory.'))
+  }
+
+  const candidateId = randomUUID()
+  let action: ScanResult['candidates'][number]['action']
+  try {
+    await validateDiskUsageTrashTarget(target, diskUsageScanRoot())
+    action = {
+      kind: 'trash-disk-usage',
+      label: mainText(`将 ${node.name} 移到废纸篓`, `Move ${node.name} to Trash`),
+      consequence: mainText(
+        '整个目录会移到废纸篓。目录内的数据可能属于仍在使用的软件，请先确认 AI 分析结果。',
+        'The entire directory moves to Trash. Its data may belong to software still in use, so review the AI analysis first.'
+      ),
+      reversible: true,
+      estimatedBytes: node.sizeBytes
+    }
+    registeredActions.set(candidateId, {
+      kind: 'trash-disk-usage',
+      target,
+      root: diskUsageScanRoot(),
+      nodeId
+    })
+  } catch {
+    // Protected roots can still be explained, but do not receive a deletion operation.
+  }
+
+  const candidate: ScanResult['candidates'][number] = {
+    id: candidateId,
+    section: 'storage',
+    name: node.name,
+    subtitle: mainText('磁盘浏览所选目录', 'Directory selected in Disk browser'),
+    description: mainText(
+      '这是从磁盘浏览中选择的目录。AI 会结合目录内容、已安装应用、后台服务、软件包收据和 shell 引用判断归属及是否可以删除。',
+      'This directory was selected in Disk browser. AI will correlate its contents, installed apps, background services, package receipts, and shell references to assess ownership and whether it can be deleted.'
+    ),
+    sizeBytes: node.sizeBytes,
+    ageDays: Math.max(0, Math.floor((Date.now() - stats.mtimeMs) / 86_400_000)),
+    risk: action ? 'review' : 'protected',
+    status: action
+      ? mainText('等待 AI 判断', 'Awaiting AI assessment')
+      : mainText('受保护，仅分析', 'Protected, analysis only'),
+    location: mainDisplayPath(target),
+    evidence: [
+      mainText(`扫描位置：${mainDisplayPath(target)}`, `Scanned location: ${mainDisplayPath(target)}`),
+      mainText(`扫描大小：${node.sizeBytes.toLocaleString()} 字节`, `Scanned size: ${node.sizeBytes.toLocaleString()} bytes`),
+      mainText('仅检查一级目录内容，不读取文件正文', 'Only shallow directory entries are inspected; file contents are not read')
+    ],
+    action
+  }
+  registeredRevealTargets.set(candidateId, target)
+  currentScanResult = {
+    ...currentScanResult,
+    candidates: [...currentScanResult.candidates, candidate]
+  }
+  return candidateId
 }
 
 function importCcSwitchProviders(): CcSwitchImportResult {
@@ -621,6 +710,23 @@ async function executeRegisteredAction(action: RegisteredAction): Promise<void> 
     return
   }
 
+  if (action.kind === 'trash-disk-usage') {
+    const registeredTarget = registeredDiskUsageTargets.get(action.nodeId)
+    if (!registeredTarget || path.resolve(registeredTarget) !== path.resolve(action.target)) {
+      throw new Error(mainText('磁盘项目已经失效，请重新扫描', 'The disk item is stale. Scan again.'))
+    }
+    let target: string
+    try {
+      target = await validateDiskUsageTrashTarget(action.target, action.root)
+    } catch {
+      throw new Error(mainText('这个磁盘项目不能移除', 'This disk item cannot be removed.'))
+    }
+    await trashDiskUsageTarget(target)
+    discardDiskUsageTarget(target)
+    mainWindow?.webContents.send('memento:disk-usage-node-removed', action.nodeId)
+    return
+  }
+
   if (action.kind === 'trash') {
     if (!existsSync(action.target)) throw new Error(mainText('项目已不存在，可能已经被移动或删除', 'The item no longer exists. It may have been moved or deleted.'))
     await trashApplication(action.target)
@@ -1022,6 +1128,7 @@ app.whenReady().then(async () => {
         if (!event.sender.isDestroyed()) event.sender.send('memento:disk-usage-progress', progress)
       })
       registeredDiskUsageTargets = bundle.targets
+      registeredDiskUsageNodes = indexDiskUsageNodes(bundle.result.root)
       return bundle.result
     } finally {
       if (diskUsageScanner === scanner) diskUsageScanner = null
@@ -1063,7 +1170,8 @@ app.whenReady().then(async () => {
       throw new Error(mainText('这个磁盘项目不能从浏览器中移除', 'This disk item cannot be removed from the browser.'))
     }
     await trashDiskUsageTarget(validatedTarget)
-    registeredDiskUsageTargets = withoutDiskUsageTargets(registeredDiskUsageTargets, target)
+    discardDiskUsageTarget(target)
+    mainWindow?.webContents.send('memento:disk-usage-node-removed', id)
   })
 
   ipcMain.handle('memento:agent:providers:list', () => agentStore!.listProviders())
@@ -1105,7 +1213,21 @@ app.whenReady().then(async () => {
     }
     agentStore!.deleteRun(runId)
   })
-  ipcMain.handle('memento:agent:runs:start', (event, input: StartAgentRunInput) => {
+  ipcMain.handle('memento:agent:runs:delete-many', (_event, runIds: string[]) => {
+    if (!Array.isArray(runIds) || runIds.length === 0 || runIds.length > 500) {
+      throw new Error(mainText('请选择有效的任务记录', 'Select valid task history records.'))
+    }
+    const uniqueIds = [...new Set(runIds)]
+    const runs = uniqueIds.map((id) => agentStore!.getRun(typeof id === 'string' ? id : ''))
+    if (runs.some((run) => !run)) {
+      throw new Error(mainText('部分任务记录已经不存在', 'Some task history records no longer exist.'))
+    }
+    if (runs.some((run) => run && ['preparing', 'analyzing', 'plan-ready', 'executing', 'verifying'].includes(run.status))) {
+      throw new Error(mainText('所选记录中有任务仍在运行，完成后才能删除', 'A selected task is still running. Delete it after it finishes.'))
+    }
+    agentStore!.deleteRuns(uniqueIds)
+  })
+  ipcMain.handle('memento:agent:runs:start', async (event, input: StartAgentRunInput) => {
     if (!currentScanResult) {
       throw new Error(mainText('请先完成一次电脑体检', 'Complete a computer health scan first.'))
     }
@@ -1115,9 +1237,12 @@ app.whenReady().then(async () => {
         'The computer health scan is still running. Start the Agent after it completes.'
       ))
     }
+    const explicitFocusIds = input?.diskUsageNodeId
+      ? [await prepareDiskUsageAgentFocus(input.diskUsageNodeId)]
+      : []
     return agentRuntime!.start(input, currentScanResult, appSettings.language, (agentEvent) => {
       if (!event.sender.isDestroyed()) event.sender.send('memento:agent-run-event', agentEvent)
-    })
+    }, explicitFocusIds)
   })
   ipcMain.handle('memento:agent:runs:cancel', (_event, runId: string) => {
     agentRuntime!.cancel(runId)

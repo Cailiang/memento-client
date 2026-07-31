@@ -179,6 +179,19 @@ try {
   if (await diskPage.locator('.disk-usage-surface [role="progressbar"]').count()) {
     failures.push('disk-browser: asynchronous scan uses a fake percentage progress bar')
   }
+  const askTarget = diskPage.locator('.disk-column').last().locator('.disk-node').first()
+  await askTarget.click({ button: 'right' })
+  const askItem = diskPage.locator('.disk-context-menu').getByRole('menuitem', { name: '询问 AI' })
+  if (!await askItem.isVisible()) {
+    failures.push('disk-browser: directory context menu does not expose Ask AI')
+  } else {
+    await askItem.click()
+    await diskPage.locator('.message.user').filter({ hasText: '分析磁盘目录' }).waitFor()
+    await diskPage.locator('.nav-button[title="电脑体检"]').click()
+    await diskPage.getByRole('tab', { name: '磁盘浏览' }).click()
+    await diskPage.locator('.disk-column').first().locator('.disk-node').first().click()
+    await diskPage.locator('.disk-column').nth(1).locator('.disk-node').first().click()
+  }
   await diskPage.getByRole('button', { name: '全屏浏览' }).click()
   for (let removal = 0; removal < 2; removal += 1) {
     const trashTarget = diskPage.locator('.disk-column').last().locator('.disk-node').first()
@@ -245,11 +258,17 @@ try {
   await historySearch.fill(firstHistoryTitle ?? '')
   if (await historyEntries.count() !== 1) failures.push('history-search: task filtering did not narrow the list')
   await historySearch.fill('')
-  await historyEntries.first().locator('.history-delete').click()
-  await page.getByRole('dialog', { name: '删除任务记录？' }).waitFor()
+  await page.getByRole('checkbox', { name: '全选当前任务记录' }).check()
+  const bulkDelete = page.getByRole('button', { name: new RegExp(`删除所选（${historyCount}）`) })
+  if (!await bulkDelete.isVisible()) failures.push('history-delete: bulk deletion action is missing')
+  else await bulkDelete.click()
+  const bulkDeleteDialog = page.getByRole('dialog', {
+    name: historyCount > 1 ? new RegExp(`删除 ${historyCount} 条任务记录`) : '删除任务记录？'
+  })
+  await bulkDeleteDialog.waitFor()
   await page.screenshot({ path: '/tmp/memento-interaction-history-delete.png' })
-  await page.getByRole('dialog', { name: '删除任务记录？' }).locator('.danger-button').click()
-  if (await historyEntries.count() !== historyCount - 1) failures.push('history-delete: task row was not removed')
+  await bulkDeleteDialog.locator('.danger-button').click()
+  if (await historyEntries.count() !== 0) failures.push('history-delete: selected task rows were not removed')
 
   await page.locator('.nav-button[title="电脑体检"]').click()
   for (const tab of ['存储空间', '后台服务', '终端诊断']) {

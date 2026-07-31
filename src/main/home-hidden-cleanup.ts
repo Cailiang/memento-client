@@ -105,6 +105,28 @@ const PROTECTED_CONTAINER_NAMES = new Set([
   'zsh'
 ])
 
+const PROTECTED_APPLICATION_SUPPORT_NAMES = new Set([
+  'addressbook',
+  'appstore',
+  'callhistorydb',
+  'cloudDocs',
+  'cloudkit',
+  'coreparsec',
+  'crashreporter',
+  'dock',
+  'fileprovider',
+  'icloud',
+  'knowledge',
+  'mobilesync',
+  'sharedfilelist',
+  'syncservices'
+].map((name) => hiddenArtifactIdentity(name)))
+
+const PROTECTED_APPLICATION_SUPPORT_PREFIXES = [
+  'comapple',
+  'groupcomapple'
+]
+
 const GENERIC_IDENTITY_PARTS = new Set([
   'agent',
   'app',
@@ -122,13 +144,19 @@ const GENERIC_IDENTITY_PARTS = new Set([
 const MANAGED_CONTAINERS = [
   { parts: ['.config'], source: 'config' as const },
   { parts: ['.cache'], source: 'cache' as const },
-  { parts: ['.local', 'share'], source: 'local-share' as const }
+  { parts: ['.local', 'share'], source: 'local-share' as const },
+  { parts: ['Library', 'Application Support'], source: 'application-support' as const }
 ]
 
 export const HIDDEN_HOME_MINIMUM_AGE_DAYS = 30
 const DAY_MS = 86_400_000
 
-export type HiddenHomeArtifactSource = 'home' | 'config' | 'cache' | 'local-share'
+export type HiddenHomeArtifactSource =
+  | 'home'
+  | 'config'
+  | 'cache'
+  | 'local-share'
+  | 'application-support'
 
 export interface HiddenHomeArtifact {
   target: string
@@ -236,6 +264,11 @@ function isProtectedArtifactName(name: string, source: HiddenHomeArtifactSource)
       PROTECTED_HOME_PREFIXES.some((prefix) => name.startsWith(prefix))
   }
   const identity = hiddenArtifactIdentity(name)
+  if (source === 'application-support') {
+    return !identity ||
+      PROTECTED_APPLICATION_SUPPORT_NAMES.has(identity) ||
+      PROTECTED_APPLICATION_SUPPORT_PREFIXES.some((prefix) => identity.startsWith(prefix))
+  }
   return !identity || PROTECTED_CONTAINER_NAMES.has(identity)
 }
 

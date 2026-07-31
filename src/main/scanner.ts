@@ -63,7 +63,7 @@ function t(language: AppLanguage, chinese: string, english: string): string {
 
 export type RegisteredAction =
   | {
-      kind: Exclude<ActionKind, 'trash-launch-agent-config' | 'trash-service-software' | 'trash-service-directory' | 'brew-cleanup' | 'delete-storage-group' | 'trash-home-artifact'>
+      kind: Exclude<ActionKind, 'trash-launch-agent-config' | 'trash-service-software' | 'trash-service-directory' | 'brew-cleanup' | 'delete-storage-group' | 'trash-home-artifact' | 'trash-disk-usage'>
       target: string
     }
   | {
@@ -76,6 +76,12 @@ export type RegisteredAction =
       target: string
       expectedModifiedAtMs: number
       expectedKind: 'directory'
+    }
+  | {
+      kind: 'trash-disk-usage'
+      target: string
+      root: string
+      nodeId: string
     }
   | {
       kind: 'brew-cleanup'
@@ -1217,7 +1223,8 @@ function hiddenArtifactSourceLabel(
     home: ['Home 隐藏项目', 'Hidden Home item'],
     config: ['.config 隐藏配置', 'Hidden .config item'],
     cache: ['.cache 隐藏缓存', 'Hidden .cache item'],
-    'local-share': ['.local/share 隐藏数据', 'Hidden .local/share data']
+    'local-share': ['.local/share 隐藏数据', 'Hidden .local/share data'],
+    'application-support': ['Application Support 应用数据', 'Application Support data']
   }
   return language === 'en-US' ? labels[source][1] : labels[source][0]
 }
@@ -1232,7 +1239,7 @@ async function scanHiddenHomeArtifacts(
   const commandIdentities = await installedCommandIdentityTokens(commandSearchRoots(HOME))
   for (const identity of commandIdentities) installedIdentities.add(identity)
   const discovered = await discoverHiddenHomeArtifacts(installedIdentities, HOME)
-  const measured = await mapLimit(discovered.slice(0, 100), 6, async (artifact) => {
+  const measured = await mapLimit(discovered.slice(0, 300), 6, async (artifact) => {
     try {
       return { artifact, sizeBytes: await getPathSize(artifact.target) }
     } catch {
@@ -1243,7 +1250,7 @@ async function scanHiddenHomeArtifacts(
   return measured
     .filter((item): item is NonNullable<typeof item> => item !== null)
     .sort((left, right) => right.sizeBytes - left.sizeBytes)
-    .slice(0, 40)
+    .slice(0, 80)
     .map(({ artifact, sizeBytes }) => {
       return registerCandidate(
         actions,
@@ -1262,7 +1269,7 @@ async function scanHiddenHomeArtifacts(
           status: t(language, '需确认归属', 'Ownership review'),
           location: displayPath(artifact.target),
           evidence: [
-            t(language, `隐藏位置：${displayPath(artifact.target)}`, `Hidden location: ${displayPath(artifact.target)}`),
+            t(language, `应用数据位置：${displayPath(artifact.target)}`, `Application data location: ${displayPath(artifact.target)}`),
             t(language, '未匹配到已安装的 macOS 应用或可执行命令', 'No installed macOS application or executable command was matched'),
             t(language, `最近修改于 ${ageInDays(artifact.modifiedAt)} 天前`, `Last modified ${ageInDays(artifact.modifiedAt)} days ago`)
           ],
@@ -1271,8 +1278,8 @@ async function scanHiddenHomeArtifacts(
             label: t(language, '移到废纸篓', 'Move to Trash'),
             consequence: t(
               language,
-              '整个隐藏项目及其中的配置和数据会移到废纸篓。如果它仍被应用或命令行工具使用，相关设置可能会被重置。',
-              'The entire hidden item, including its configuration and data, moves to the Trash. Settings may be reset if an app or command-line tool still uses it.'
+              '整个项目及其中的配置和数据会移到废纸篓。如果它仍被应用或命令行工具使用，相关设置可能会被重置。',
+              'The entire item, including its configuration and data, moves to the Trash. Settings may be reset if an app or command-line tool still uses it.'
             ),
             reversible: true,
             estimatedBytes: sizeBytes
@@ -1876,6 +1883,21 @@ function shellFixCopy(
   }
 }
 
+export interface LiteralHomeExport {
+  variable: string
+  value: string
+}
+
+export function parseLiteralHomeExport(line: string): LiteralHomeExport | null {
+  const match = line.match(
+    /^\s*export\s+([A-Za-z_][A-Za-z0-9_]*_HOME)=(?:"([^"$`\\]*)"|'([^'\\]*)'|([^\s#"'$`\\]+))\s*(?:#.*)?$/
+  )
+  if (!match) return null
+  const value = match[2] ?? match[3] ?? match[4] ?? ''
+  if (!path.isAbsolute(value) || path.normalize(value) !== value) return null
+  return { variable: match[1], value }
+}
+
 async function inspectShellFiles(
   language: AppLanguage,
   terminalFixes: Map<string, RegisteredTerminalFix>,
@@ -1924,6 +1946,58 @@ async function inspectShellFiles(
         source: displayPath(target),
         recommendation: t(language, '按功能拆分配置，并删除已经停用的插件初始化片段。', 'Split the configuration by purpose and remove initialization blocks for disabled plug-ins.'),
         attributes: { lineCount: lines.length, sizeBytes }
+      })
+    }
+
+    for (let index = 0; index < lines.length; index += 1) {
+      const exported = parseLiteralHomeExport(lines[index])
+      if (!exported || await pathExists(exported.value)) continue
+      const id = randomUUID()
+      terminalFixes.set(id, {
+        kind: 'comment-lines',
+        target,
+        expectedHash: contentHash,
+        lineNumbers: [index]
+      })
+      const productName = exported.variable.replace(/_HOME$/, '').replace(/_/g, ' ')
+      findings.push({
+        id,
+        code: 'stale_environment_path',
+        title: t(
+          language,
+          `${exported.variable} 指向已不存在的目录`,
+          `${exported.variable} points to a missing directory`
+        ),
+        detail: t(
+          language,
+          `${exported.value} 已不存在，可能是 ${productName} 旧版本留下的环境变量。`,
+          `${exported.value} no longer exists and may be an environment variable left by an older ${productName} installation.`
+        ),
+        severity: 'notice',
+        source: `${displayPath(target)}:${index + 1}`,
+        recommendation: t(
+          language,
+          `停用这条 ${exported.variable} 导出，避免工具继续引用旧版本。`,
+          `Disable this ${exported.variable} export so tools no longer reference the old version.`
+        ),
+        attributes: {
+          variable: exported.variable,
+          path: exported.value,
+          product: productName.toLocaleLowerCase()
+        },
+        fix: {
+          id,
+          label: t(
+            language,
+            `清理旧的 ${exported.variable}`,
+            `Clean up stale ${exported.variable}`
+          ),
+          consequence: t(
+            language,
+            `注释 ${displayPath(target)} 中指向 ${exported.value} 的旧环境变量。修改前会自动备份配置。`,
+            `Comment out the stale environment variable in ${displayPath(target)} that points to ${exported.value}. The configuration is backed up first.`
+          )
+        }
       })
     }
 

@@ -447,14 +447,31 @@ export class AgentStore {
   }
 
   deleteRun(id: string): void {
-    if (typeof id !== 'string' || !/^[a-zA-Z0-9-]{1,100}$/.test(id)) {
+    this.deleteRuns([id])
+  }
+
+  deleteRuns(ids: readonly string[]): void {
+    const uniqueIds = [...new Set(ids)]
+    if (
+      uniqueIds.length === 0 ||
+      uniqueIds.length > 500 ||
+      uniqueIds.some((id) => typeof id !== 'string' || !/^[a-zA-Z0-9-]{1,100}$/.test(id))
+    ) {
       throw new Error(storeText(
         this.getAppSettings().language,
         '任务记录 ID 无效',
         'The task history ID is invalid.'
       ))
     }
-    this.database.prepare('DELETE FROM agent_runs WHERE id = ?').run(id)
+    const remove = this.database.prepare('DELETE FROM agent_runs WHERE id = ?')
+    this.database.exec('BEGIN IMMEDIATE')
+    try {
+      for (const id of uniqueIds) remove.run(id)
+      this.database.exec('COMMIT')
+    } catch (error) {
+      if (this.database.isTransaction) this.database.exec('ROLLBACK')
+      throw error
+    }
   }
 
   listConversationRuns(conversationId: string, limit = 12): AgentRunRecord[] {
