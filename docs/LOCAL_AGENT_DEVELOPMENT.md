@@ -4,7 +4,7 @@ This document describes the implementation that ships in Memento Agent. It is an
 
 ## 1. Product Baseline
 
-The approved prototype at [`../../prototypes/memento-agent/index.html`](../../prototypes/memento-agent/index.html) is the source of truth for layout, copy, density, responsive behavior, and interaction. Production changes begin in the prototype when they alter that contract.
+The approved prototype is stored at `../prototypes/memento-agent/index.html` in the local workspace, next to this repository. It is the source of truth for layout, copy, density, responsive behavior, and interaction. Production changes begin in the prototype when they alter that contract. The prototype is not part of the public client repository, so project documentation must remain understandable without that file.
 
 The old Renderer, hosted AI analysis, Memento Server, OAuth flow, AI Gateway protocol, and Gateway examples are not compatibility surfaces. The rebuild reuses only deterministic local capabilities that remain useful: scanning, storage cleanup, Homebrew cleanup, background-service handling, app inventory, terminal fixes, path validation, and operation registries.
 
@@ -31,13 +31,13 @@ Electron Main Process
 
 The Renderer has no database handle, API key, filesystem target, or arbitrary command capability. The preload exposes only typed operations from `MementoApi`. The main process owns provider creation, decryption, scanning, operation validation, execution, and persistence.
 
-Electron `43.2.0` supplies Node `24` and the built-in `node:sqlite` module. No native database dependency or post-install rebuild is required.
+The Electron version pinned in `package.json` supplies Node 24 and the built-in `node:sqlite` module. No native database dependency or post-install rebuild is required.
 
 ## 3. SQLite and Secrets
 
 `AgentStore` opens `<userData>/memento.sqlite`, enables WAL and foreign keys, and applies migrations through `PRAGMA user_version`.
 
-Schema version 2 contains:
+The current database schema version is 3. Its core tables are:
 
 | Table | Purpose |
 | --- | --- |
@@ -46,7 +46,7 @@ Schema version 2 contains:
 | `agent_runs` | Conversation ID, language, prompt, provider snapshot, status, response, focused entities, structured presentation, plan, results, and error |
 | `tool_calls` | Structured input and output for each Agent tool call |
 
-A legacy `app-settings.json` file is read once when the SQLite settings row does not exist. Values pass through `normalizeAppSettings` before insertion.
+A legacy `app-settings.json` file is read once when the SQLite settings row does not exist. Values pass through `normalizeAppSettings` before insertion. Schema migration 3 separates Antigravity from the generic Google provider type and migrates matching saved endpoints.
 
 API keys use this format:
 
@@ -90,7 +90,7 @@ The connection test creates a two-step `ToolLoopAgent` run with a strict `connec
 
 `.github/workflows/release.yml` is the only supported path for publishing GitHub Release binaries. It uses the latest Node.js 22.x release, verifies that built-in SQLite is available, validates that a pushed tag exactly matches package metadata, runs unit tests and type checking, then builds six native runner targets: macOS x64 and arm64, Windows x64 and arm64, and Linux x64 and arm64. The resulting two DMGs, two NSIS executables, two AppImages, and two DEBs are collected into one release. `SHA256SUMS.txt` is restricted to exactly those eight packages and never includes itself.
 
-Tag-triggered runs create or safely update the bilingual GitHub Release from `RELEASE_NOTES.md`. Artifact transfer uses the current Node.js 24-based upload and download actions. Manual dispatches run the same validation and build matrix but intentionally stop at temporary Actions artifacts. Packages remain unsigned until signing secrets and platform credentials are explicitly configured. The end-to-end operator checklist is in [`docs/RELEASING.md`](RELEASING.md).
+Tag-triggered runs create or safely update the bilingual GitHub Release from `RELEASE_NOTES.md`. Manual dispatches run the same validation and build matrix but intentionally stop at temporary Actions artifacts. macOS builds use a complete ad-hoc signature and verify the final mounted DMG; Developer ID signing and notarization remain unavailable until project-owned credentials are configured. The end-to-end operator checklist is in [Release process](RELEASING.md).
 
 ## 5. Agent Run
 
@@ -211,7 +211,7 @@ Do not add `run_shell`, model-generated filesystem paths, model-generated servic
 
 ## 10. Verification and Release
 
-Development requires Node.js 22.13 or newer so `node:sqlite` is available without an experimental flag. The supported frontend and packaging chain is Vite 7.3.6, electron-vite 5.0.0, electron-builder 26.15.3, `@vitejs/plugin-react` 5.2.0, and Vitest 3.2.7. Vite 8 is intentionally deferred until electron-vite declares stable support for it.
+Development requires Node.js 22.13 or newer so `node:sqlite` is available without an experimental flag. `package.json` and `package-lock.json` are the source of truth for the supported Electron, Vite, electron-vite, electron-builder, React plugin, and Vitest versions.
 
 Run:
 
@@ -227,6 +227,6 @@ git diff --check
 
 With the web development server on port `4174`, run `npm run ui:smoke -- http://127.0.0.1:4174`. It captures all pages at four viewports and exercises structured Agent results, correlated terminal operations, disk-directory Ask AI, filtered history bulk deletion, application-result grids, English-only Agent output, plan confirmation, health tabs, application filtering, and provider editing. The Electron smoke test launches the production output and requires the preload API, real application inventory, and at least one real application icon; this prevents browser demo data from masking a main/preload regression.
 
-Use `npm run audit:runtime` as the release boundary because it audits dependencies shipped inside the application. Use `npm run audit` to inspect the complete development tree. At 0.6.32 the runtime audit has zero findings; the full audit has 16 high-severity findings inherited from the latest stable electron-builder's ASAR, universal-binary, Windows-installer, and legacy file-matching dependencies. The previous chain had 33 findings including 2 critical findings. npm's proposed downgrade to electron-builder 25 restores those critical findings, and broad overrides cross incompatible CommonJS/ESM and package APIs, so the remaining upstream build-only advisories are tracked rather than forcibly replaced.
+Use `npm run audit:runtime` as the release boundary because it audits dependencies shipped inside the application. Use `npm run audit` to inspect the complete development tree. Record actionable findings in the release work instead of preserving a version-specific audit snapshot in this architecture document.
 
-Every change then requires a patch-version bump, changelog and release-note update, unsigned Intel x64 DMG build, mounted-image verification, bundled version and `x86_64` architecture check, SHA-256 calculation, and a source commit. This rule is also recorded in `AGENTS.md` so it survives future development sessions.
+Every user-requested code or UI change requires a patch-version bump, changelog and release-note update, ad-hoc-signed Intel x64 DMG build, mounted-image and bundle-signature verification, bundled version and `x86_64` architecture check, SHA-256 calculation, and a source commit. The complete checklist is maintained in `AGENTS.md` and [Release process](RELEASING.md).

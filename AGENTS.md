@@ -15,4 +15,4 @@ For every user-requested code or UI change in this repository, complete every it
 
 When the user requests a public release, merge the verified source into `main`, push `main`, create the matching `v<package-version>` tag, and monitor `.github/workflows/release.yml` through successful publication. Confirm all expected platform assets and `SHA256SUMS.txt` in the GitHub Release before reporting completion.
 
-Local packages are unsigned and unnotarized unless working signing credentials are available.
+Local macOS packages are ad-hoc signed for bundle integrity but are not Developer ID signed or notarized unless project-owned signing credentials are available.

@@ -11,7 +11,3 @@ test-results
 !.env.example
 .idea
 .artifacts/*
-!.artifacts/memento-overview.png
-!.artifacts/memento-service-ai-result.png
-!.artifacts/memento-service-cleanup.png
-!.artifacts/memento-ai-settings.png

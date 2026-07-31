@@ -1,67 +1,37 @@
-# Memento Agent 0.6.52
+# Memento Agent 0.6.53
 
 ## 简体中文
 
-`0.6.52` 将服务分析中发现的关联配置问题纳入同一任务，并补齐任务记录批量删除、Application Support 残留扫描和磁盘目录询问 AI。
+`0.6.53` 修复 Apple Silicon 安装包被 macOS 提示“已损坏”的签名问题，并为最终 DMG 增加自动校验。
 
 ### 主要变化
 
-- 分析具体服务时会关联终端配置发现；过期的字面量 `*_HOME` 路径会成为可备份、可撤销的终端修复，并确定性显示在同一结果中供用户加入计划。
-- 任务记录支持全选当前筛选结果和一次确认后批量删除；全部 ID 会先验证，再在一个 SQLite 事务中删除。
-- 清理建议新增 `~/Library/Application Support` 一级目录的卸载残留检查，同时排除已安装应用、现存 CLI、30 天内更新目录、符号链接及 Apple/共享系统目录。
-- 磁盘浏览目录右键新增“询问 AI”；AI 可以解释目录归属和本机使用证据，确认是卸载残留时提供已注册的废纸篓任务，完成后立即从磁盘树移除而不重扫。
-- 推送与项目版本一致的标签后，自动校验源码并在 macOS、Windows 和 Linux 原生 runner 上构建。
-- 构建环境使用最新补丁版 Node.js 22.x，并在开始测试前确认内置 SQLite 可用。
-- Actions 产物上传与下载步骤使用当前 Node.js 24 运行时版本，不再产生 Node.js 20 弃用注解。
-- 发布包含 Intel 与 Apple Silicon DMG、x64 与 arm64 Windows EXE、x64 与 arm64 Linux AppImage 和 DEB，以及统一的 `SHA256SUMS.txt`。
-- `SHA256SUMS.txt` 只包含上述 8 个安装包并在发布前校验条目数量，不包含自身引用。
-- 设置中新增 Antigravity 接口类型，复用 Vercel Google 适配器并明确兼容 Sub2API 的 Gemini 原生协议，无需额外 SDK。
-- Antigravity 的 `connection_probe` 现在声明为严格工具，首轮请求会实际使用 Gemini `VALIDATED`，不会因退化为 `AUTO` 而只返回普通文本。
-- 存储建议现在扫描 Home 根目录隐藏目录及 `.config`、`.cache`、`.local/share` 一级子目录，只显示至少 30 天未修改且未与当前应用或命令明确匹配的候选项。
-- 隐藏残留匹配现在同时索引 `PATH`、Homebrew 和常见用户 bin 目录中的命令；例如 `ipatool` 命令存在时，`~/.ipatool` 不再进入清理建议。
-- Agent 分析隐藏配置时不再查厂商内置表，而是按精确身份 token 关联其他存储项、后台服务、已安装应用、受限目录文件名、软件包收据、浅层目录结构和已脱敏的 shell 引用。
-- 证据明确区分“本机确认”“明确签名”和“未确认”；模型可用通用知识解释产品名，但关于本机状态的结论必须有现场证据。
-- shell、凭据、包管理器和隐藏容器根目录受保护；候选项明确标记为需要确认，执行前重新校验，并且只移到废纸篓。
-- 后台服务增加独立的 CPU 占用异常和内存占用异常分类；电脑体检评分会标明待查看模块及其中的项目数，并打开可执行建议最多的模块。后台服务目标使用“全部”视图，不再跳进只有一项的异常子分类。
-- 自动存储清理建议只显示目录；下载、桌面、影片中的个人文件和 Docker 虚拟磁盘等单文件只保留在磁盘浏览中。
-- 存储建议中的直接清理在真实操作成功后用约 3 秒完成反馈，并按稳定候选项 ID 从当前列表精确移除；服务、终端和 Agent 确认计划仍会重新体检。
-- 磁盘浏览删除成功后立即更新本地树，不再触发全盘重扫；同轮扫描中的其他项目可以继续删除。
-- Agent 任务标签现在按会话而不是每轮消息管理；同一会话中的追问不会再新建标签，明确新任务与隔离分析继续使用独立会话。
-- Agent 分析具体存储项或后台服务时，会先直接说明产品、厂商和用途；证据不足时明确说明未知，不会猜测。
+- arm64 和 x64 应用现在都会对主应用、Electron Framework 及所有 Helper 应用执行完整 ad-hoc 签名，不再只保留无法通过应用包校验的链接器签名。
+- ad-hoc 打包明确关闭 Hardened Runtime，避免 Electron 内置 Framework 因 Team ID 不一致而在启动时被 Library Validation 拒绝。
+- GitHub Actions 会挂载最终 DMG，并在上传前检查镜像校验和、应用版本、可执行架构、Bundle ID 以及 `codesign --verify --deep --strict` 结果。
+- 打包过程不会自动使用构建机器上的第三方证书；未来配置项目自有 Apple 凭据后，才会启用 Developer ID 签名和公证。
+- 中英文 README 和开发、发布文档已经收敛到当前本地 Agent 架构，旧服务端界面截图与本地生成产物已经移除。
 
 ### 安装说明
 
-完整扫描和清理目前支持 macOS；Windows 与 Linux 安装包用于桌面外壳的可移植性验证。当前安装包未签名、未公证，操作系统可能显示安全提示；macOS 可在“系统设置 > 隐私与安全性”中手动允许。
+完整扫描和清理目前支持 macOS；Windows 与 Linux 安装包用于桌面外壳的可移植性验证。
+
+macOS 安装包已经完成 ad-hoc 签名，因此不会再因应用包签名无效而显示“已损坏”。在配置 Developer ID 与公证前，Gatekeeper 仍可能提示无法验证开发者；首次启动时可右键 Memento 选择“打开”，或前往“系统设置 > 隐私与安全性”手动允许。
 
 ## English
 
-`0.6.52` keeps related configuration problems in the same focused service task and adds Task History bulk deletion, Application Support leftover discovery, and disk-directory Ask AI.
+`0.6.53` fixes the invalid app-bundle signature that caused macOS to report the Apple Silicon package as damaged and adds automated verification of the final DMG.
 
 ### Highlights
 
-- Focused service analysis now correlates terminal configuration findings. Stale literal `*_HOME` paths become backed-up, reversible fixes and are deterministically shown in the same result for optional plan selection.
-- Task History supports selecting all currently filtered records and deleting them after one confirmation. Every ID is validated before one SQLite transaction removes the selected runs.
-- Cleanup findings now inspect first-level directories below `~/Library/Application Support` while excluding installed apps, existing CLIs, recently modified directories, symlinks, and protected Apple/shared infrastructure.
-- Disk-browser directory context menus now include **Ask AI**. AI can explain ownership and observed local use, expose a registered Trash task for confirmed leftovers, and remove the completed subtree immediately without a disk rescan.
-- A matching version tag now validates the source and builds on native macOS, Windows, and Linux runners.
-- Builds use the latest patched Node.js 22.x runtime and verify built-in SQLite support before tests begin.
-- Artifact upload and download steps use their current Node.js 24 action runtimes without Node.js 20 deprecation annotations.
-- Each release contains Intel and Apple Silicon DMGs, x64 and arm64 Windows EXEs, x64 and arm64 Linux AppImage and DEB packages, plus a shared `SHA256SUMS.txt`.
-- `SHA256SUMS.txt` covers exactly those eight packages, is count-checked before publication, and does not reference itself.
-- Settings includes a dedicated Antigravity provider that reuses the Vercel Google adapter while explicitly supporting Sub2API's native Gemini protocol without another SDK.
-- Antigravity now declares `connection_probe` as strict, so the first request actually uses Gemini `VALIDATED` instead of falling back to a text-only `AUTO` response.
-- Storage findings now inspect hidden directories directly under Home and one directory level below `.config`, `.cache`, and `.local/share`, retaining only candidates unchanged for at least 30 days and not clearly matched to current apps or commands.
-- Hidden leftover matching now also indexes commands in `PATH`, Homebrew, and common user bin directories; when `ipatool` exists, for example, `~/.ipatool` is no longer offered for cleanup.
-- Focused Agent analysis no longer uses a built-in vendor table. Exact identity tokens correlate storage, services, applications, allowlisted filesystem names, package receipts, shallow directory entries, and redacted shell references.
-- Evidence is explicitly separated into locally confirmed, strong-signature, and unconfirmed levels. General model knowledge may explain a product name, but local-state claims require observed evidence.
-- Shell, credential, package-manager, and hidden container roots remain protected; every candidate requires review, is revalidated before execution, and only moves to Trash.
-- Background services expose independent high-CPU and high-memory categories. The health score names the destination module and its count, then opens the module with the most actionable findings. Services opens in All instead of a one-item anomaly category.
-- Automatic Storage findings contain directories only. Personal files under Downloads, Desktop, and Movies and individual files such as Docker virtual disks remain in Disk browser only.
-- Direct cleanup from Storage completes its feedback in about three seconds and removes the exact originating candidate by stable ID after the real operation succeeds. Service, terminal, and confirmed Agent-plan actions retain full rescans.
-- Successful disk-browser removal updates the local tree without a full-volume rescan, so other items from the same scan can be removed consecutively.
-- Agent task tabs are keyed by conversation rather than message turn, so follow-up questions stay in one tab while explicit new tasks and isolated analyses remain separate.
-- Specific storage-item and background-service analyses lead with the product, vendor, and purpose; insufficient evidence is reported as unknown instead of guessed.
+- Both arm64 and x64 packages now apply a complete ad-hoc signature to the main app, Electron Framework, and every helper app instead of retaining only linker signatures that fail bundle validation.
+- Ad-hoc packages explicitly disable Hardened Runtime so Electron's bundled frameworks are not rejected by Library Validation because of mismatched Team IDs.
+- GitHub Actions mounts each final DMG and checks its image checksum, app version, executable architecture, bundle identifier, and `codesign --verify --deep --strict` result before upload.
+- Packaging never adopts an unrelated certificate from the build machine. Developer ID signing and notarization will be enabled only after project-owned Apple credentials are configured.
+- The bilingual README and development and release documentation now describe the current local Agent architecture; obsolete server-era screenshots and generated local artifacts were removed.
 
 ### Installation
 
-Full scanning and cleanup currently support macOS; Windows and Linux packages validate portability of the desktop shell. Packages are currently unsigned and unnotarized, so the operating system may show a security warning. On macOS, manual approval may be required under System Settings > Privacy & Security.
+Full scanning and cleanup currently support macOS; Windows and Linux packages validate portability of the desktop shell.
+
+macOS packages are now fully ad-hoc signed, so an invalid bundle signature no longer produces the damaged-app warning. Until Developer ID signing and notarization are configured, Gatekeeper may still report an unidentified developer. Use **Control-click > Open** or approve Memento under **System Settings > Privacy & Security** for the first launch.

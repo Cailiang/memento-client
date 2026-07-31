@@ -8,6 +8,22 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.53 - 2026-07-31
+
+### English
+
+- Fixed Apple Silicon packages being reported as damaged because the arm64 application bundle contained only linker signatures instead of a valid complete bundle signature.
+- Made macOS packaging explicitly apply an ad-hoc signature to the app, nested frameworks, and helper applications without using unrelated certificates, while disabling Hardened Runtime for compatibility with ad-hoc Electron signatures.
+- Added release verification that mounts each final DMG and checks its checksum, package version, executable architecture, bundle identifier, and strict deep code signature before upload.
+- Reworked the bilingual README and release documentation, removed obsolete server-era screenshots, and cleaned generated local build artifacts.
+
+### 简体中文
+
+- 修复 Apple Silicon 安装包因 arm64 应用只有链接器签名、缺少完整应用包签名而被 macOS 提示“已损坏”的问题。
+- macOS 打包现在会明确对主应用、嵌套 Framework 和 Helper 应用执行 ad-hoc 签名，不使用无关证书；同时关闭与 Electron ad-hoc 签名不兼容的 Hardened Runtime。
+- 发布流程新增最终 DMG 挂载验证，上传前检查镜像校验和、应用版本、可执行架构、Bundle ID 和严格深层代码签名。
+- 重写中英文 README 与发布文档，移除旧服务端时期的过时截图，并清理本地生成的构建产物。
+
 ## 0.6.52 - 2026-07-31
 
 ### English
