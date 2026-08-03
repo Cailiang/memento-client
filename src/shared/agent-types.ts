@@ -64,6 +64,7 @@ export interface LocalAiImportResult {
   detected: number
   imported: number
   rejected: number
+  removed: number
 }
 
 export type AgentRunStatus =

@@ -195,7 +195,7 @@ export class AgentStore {
 
   hasCompletedLocalAiConfigImport(): boolean {
     const row = this.database.prepare(`
-      SELECT value_json FROM app_settings WHERE key = 'local_ai_config_import_v1'
+      SELECT value_json FROM app_settings WHERE key = 'local_ai_config_import_v2'
     `).get() as { value_json: string } | undefined
     return row?.value_json === 'true'
   }
@@ -203,7 +203,7 @@ export class AgentStore {
   markLocalAiConfigImportCompleted(): void {
     this.database.prepare(`
       INSERT INTO app_settings (key, value_json, updated_at)
-      VALUES ('local_ai_config_import_v1', 'true', ?)
+      VALUES ('local_ai_config_import_v2', 'true', ?)
       ON CONFLICT(key) DO UPDATE SET
         value_json = excluded.value_json,
         updated_at = excluded.updated_at
@@ -362,6 +362,40 @@ export class AgentStore {
       }
     }
     return imported
+  }
+
+  syncLocalImportedProviders(inputs: ImportedProviderCandidate[]): { imported: number; removed: number } {
+    this.database.exec('BEGIN IMMEDIATE')
+    try {
+      const imported = this.syncImportedProviders(inputs)
+      const retainedIds = new Set(
+        inputs.map((provider) => provider.id).filter((id) => id.startsWith('local-config-'))
+      )
+      const existing = this.database.prepare(`
+        SELECT id, is_default FROM ai_providers
+        WHERE id GLOB 'local-config-*'
+      `).all() as unknown as Array<{ id: string; is_default: number }>
+      const removed = existing.filter((provider) => !retainedIds.has(provider.id))
+      for (const provider of removed) {
+        this.database.prepare('DELETE FROM ai_providers WHERE id = ?').run(provider.id)
+      }
+      if (removed.some((provider) => provider.is_default === 1)) {
+        this.database.prepare('UPDATE ai_providers SET is_default = 0').run()
+        this.database.prepare(`
+          UPDATE ai_providers SET is_default = 1
+          WHERE id = (
+            SELECT id FROM ai_providers
+            ORDER BY updated_at DESC
+            LIMIT 1
+          )
+        `).run()
+      }
+      this.database.exec('COMMIT')
+      return { imported, removed: removed.length }
+    } catch (error) {
+      this.database.exec('ROLLBACK')
+      throw error
+    }
   }
 
   deleteProvider(id: string): void {

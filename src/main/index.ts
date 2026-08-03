@@ -43,7 +43,7 @@ import {
 } from '../shared/app-settings'
 import { AgentStore } from './agent/agent-store'
 import { findCcSwitchDatabase, readCcSwitchProviders } from './agent/cc-switch-import'
-import { discoverLocalAiProviders } from './agent/local-ai-config-import'
+import { discoverUsableLocalAiProviders } from './agent/local-ai-config-import'
 import { LocalAgentRuntime } from './agent/local-agent-runtime'
 import { selectExecutablePlanItems } from './agent/plan-validation'
 import { providerErrorMessage, testProviderConnection } from './agent/provider-factory'
@@ -218,13 +218,14 @@ function importCcSwitchProviders(): CcSwitchImportResult {
   }
 }
 
-function importLocalAiConfigurations(): LocalAiImportResult {
-  const discovery = discoverLocalAiProviders(app.getPath('home'))
+async function importLocalAiConfigurations(): Promise<LocalAiImportResult> {
+  const discovery = await discoverUsableLocalAiProviders(app.getPath('home'))
+  const synchronized = agentStore!.syncLocalImportedProviders(discovery.candidates)
   return {
     sourcesFound: discovery.sourcesFound,
     detected: discovery.detected,
     rejected: discovery.rejected,
-    imported: agentStore!.syncImportedProviders(discovery.candidates)
+    ...synchronized
   }
 }
 
@@ -1111,7 +1112,7 @@ app.whenReady().then(async () => {
   agentStore = new AgentStore(app.getPath('userData'))
   if (!agentStore.hasCompletedLocalAiConfigImport()) {
     try {
-      importLocalAiConfigurations()
+      await importLocalAiConfigurations()
     } finally {
       agentStore.markLocalAiConfigImportCompleted()
     }

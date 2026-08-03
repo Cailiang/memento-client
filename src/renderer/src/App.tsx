@@ -1285,15 +1285,27 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     try {
       const imported = window.memento
         ? await window.memento.importLocalAiConfigurations()
-        : { sourcesFound: 4, detected: 4, imported: 2, rejected: 2 }
+        : { sourcesFound: 4, detected: 4, imported: 2, rejected: 2, removed: 0 }
       await refreshProviders()
+      const removedText = imported.removed > 0
+        ? appText(
+            `；同时移除 ${imported.removed} 个先前错误导入的配置`,
+            `; ${imported.removed} previously imported invalid configurations removed`
+          )
+        : ''
       setToast(imported.sourcesFound === 0
-        ? appText('没有找到 Claude、Codex、Gemini 或 Grok 配置', 'No Claude, Codex, Gemini, or Grok configuration was found.')
+        ? appText(
+            `没有找到 Claude、Codex、Gemini 或 Grok 配置${removedText}`,
+            `No Claude, Codex, Gemini, or Grok configuration was found${removedText}.`
+          )
         : imported.detected === imported.rejected
-          ? appText('发现的本机 AI 配置都不完整或无法用于 API 调用，已全部过滤', 'All discovered local AI configurations were incomplete or unusable for API calls and were filtered out.')
+          ? appText(
+              `发现的本机 AI 配置均未通过密钥、服务地址和模型校验，已全部过滤${removedText}`,
+              `All discovered local AI configurations failed credential, endpoint, or model validation and were filtered out${removedText}.`
+            )
           : appText(
-              `发现 ${imported.detected} 个配置，新增或更新 ${imported.imported} 个，过滤 ${imported.rejected} 个无效配置`,
-              `${imported.detected} configurations found; ${imported.imported} added or updated and ${imported.rejected} invalid configurations filtered out.`
+              `发现 ${imported.detected} 个配置，新增或更新 ${imported.imported} 个，过滤 ${imported.rejected} 个无效配置${removedText}`,
+              `${imported.detected} configurations found; ${imported.imported} added or updated and ${imported.rejected} invalid configurations filtered out${removedText}.`
             ))
       return imported
     } catch (error) {

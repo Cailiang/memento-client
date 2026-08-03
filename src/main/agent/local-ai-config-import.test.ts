@@ -1,8 +1,11 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
-import { discoverLocalAiProviders } from './local-ai-config-import'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  discoverLocalAiProviders,
+  validateLocalAiProviderDiscovery
+} from './local-ai-config-import'
 
 const temporaryDirectories: string[] = []
 
@@ -25,7 +28,7 @@ afterEach(() => {
 })
 
 describe('local AI provider discovery', () => {
-  it('imports valid Claude, Codex, Gemini, and Grok API configurations', () => {
+  it('discovers complete Claude, Codex, Gemini, and Grok API configurations', () => {
     const home = temporaryHome()
     writeFixture(home, '.claude/settings.json', JSON.stringify({
       env: {
@@ -135,5 +138,42 @@ describe('local AI provider discovery', () => {
       apiKey: 'private-secret',
       model: 'agent-model'
     })
+  })
+
+  it('keeps only candidates whose credentials, endpoint, and configured model validate', async () => {
+    const home = temporaryHome()
+    writeFixture(home, '.claude/settings.json', JSON.stringify({
+      env: {
+        ANTHROPIC_AUTH_TOKEN: 'invalid-claude-key',
+        ANTHROPIC_BASE_URL: 'https://claude.example.com',
+        ANTHROPIC_MODEL: 'claude-test-model'
+      }
+    }))
+    writeFixture(home, '.codex/auth.json', JSON.stringify({ OPENAI_API_KEY: 'codex-test-key' }))
+    writeFixture(home, '.codex/config.toml', [
+      'model = "gpt-test"',
+      '',
+      '[model_providers.openai]',
+      'base_url = "https://api.openai.com/v1"'
+    ].join('\n'))
+    writeFixture(home, '.gemini/.env', [
+      'GEMINI_API_KEY=gemini-test-key',
+      'GEMINI_MODEL=gemini-missing-model'
+    ].join('\n'))
+    const discoverModels = vi.fn(async (input: { type: string }) => {
+      if (input.type === 'anthropic') throw new Error('HTTP 401')
+      if (input.type === 'google') return { models: ['gemini-available-model'] }
+      return { models: ['gpt-test'] }
+    })
+
+    const result = await validateLocalAiProviderDiscovery(
+      discoverLocalAiProviders(home),
+      discoverModels
+    )
+
+    expect(result).toMatchObject({ sourcesFound: 3, detected: 3, rejected: 2 })
+    expect(result.candidates).toHaveLength(1)
+    expect(result.candidates[0]).toMatchObject({ type: 'openai', model: 'gpt-test' })
+    expect(discoverModels).toHaveBeenCalledTimes(3)
   })
 })

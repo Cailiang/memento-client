@@ -8,6 +8,22 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.58 - 2026-08-03
+
+### English
+
+- Changed local Claude, Codex, Gemini, and Grok configuration discovery from structural field checks to parallel, read-only provider validation. Credentials, endpoints, and exact configured models must now pass the provider's model catalog before import.
+- Rejected unauthorized, unreachable, unsupported-catalog, and unavailable-model configurations without sending credentials to the Renderer or making a model-generation request.
+- Added managed synchronization for deterministic `local-config-*` providers. A rescan removes earlier imports that still fail validation and safely promotes a remaining provider if the removed configuration was the default.
+- Added a `local_ai_config_import_v2` upgrade marker so existing installations revalidate the untested imports created by version 0.6.56 once, plus focused discovery and SQLite synchronization regression tests.
+
+### 简体中文
+
+- 本机 Claude、Codex、Gemini 和 Grok 配置发现不再只检查字段完整性，改为并行请求供应商只读模型列表；密钥、服务地址和指定模型全部通过后才会导入。
+- 认证失败、无法访问、不支持模型列表或指定模型不可用的配置会被过滤；密钥不会进入渲染层，也不会为校验发起模型生成请求。
+- 为确定性的 `local-config-*` 供应商新增托管同步；再次扫描会移除仍未通过校验的旧导入，如果移除的是默认供应商，会安全选择一个剩余配置作为默认。
+- 新增 `local_ai_config_import_v2` 升级标记，让现有安装对 0.6.56 导入但未测试的配置执行一次重新校验，并补充发现与 SQLite 同步回归测试。
+
 ## 0.6.57 - 2026-08-03
 
 ### English

@@ -159,6 +159,36 @@ describe('AgentStore', () => {
     store.close()
   })
 
+  it('removes rejected local imports and promotes a remaining provider when needed', () => {
+    const directory = temporaryDirectory()
+    const store = new AgentStore(directory)
+    const claude = {
+      id: 'local-config-claude-source',
+      name: 'Claude local',
+      type: 'anthropic' as const,
+      baseUrl: 'https://claude.example.com',
+      model: 'claude-test',
+      apiKey: 'claude-secret'
+    }
+    const gemini = {
+      id: 'local-config-gemini-source',
+      name: 'Gemini local',
+      type: 'google' as const,
+      baseUrl: 'https://gemini.example.com',
+      model: 'gemini-test',
+      apiKey: 'gemini-secret'
+    }
+
+    expect(store.syncLocalImportedProviders([claude, gemini])).toEqual({ imported: 2, removed: 0 })
+    expect(store.listProviders().find((provider) => provider.id === claude.id)?.isDefault).toBe(true)
+
+    expect(store.syncLocalImportedProviders([gemini])).toEqual({ imported: 0, removed: 1 })
+    expect(store.listProviders()).toEqual([
+      expect.objectContaining({ id: gemini.id, isDefault: true })
+    ])
+    store.close()
+  })
+
   it('persists completion of the one-time local AI configuration import', () => {
     const directory = temporaryDirectory()
     const store = new AgentStore(directory)

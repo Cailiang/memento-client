@@ -49,7 +49,7 @@ npm run dev
 
 Configure a model provider in **Settings** after the application starts. Choose OpenAI, Anthropic, Google Gemini, DeepSeek, Grok/xAI, Antigravity, or a custom OpenAI-compatible endpoint; Memento supplies the protocol, official endpoint, and a tested recommended model for named providers. Model and custom endpoint overrides remain available under Advanced settings, and saved models are not silently changed when a provider publishes a newer model.
 
-On its first local-configuration scan, Memento reads usable API configurations from `~/.claude`, `~/.codex`, `~/.gemini`, and `~/.grok`. Malformed, incomplete, OAuth-only, and unsupported session-token configurations are filtered out. CC Switch is never required or read automatically; **Import CC Switch** is a separate user-initiated optional action.
+On its first local-configuration scan, Memento reads API configurations from `~/.claude`, `~/.codex`, `~/.gemini`, and `~/.grok`. Before importing, it uses the provider's read-only model catalog to validate the credential, endpoint, and configured model. Malformed, incomplete, unauthorized, OAuth-only, unsupported session-token, and unavailable-model configurations are filtered out; a new scan also removes previously imported local configurations that no longer pass validation. CC Switch is never required or read automatically; **Import CC Switch** is a separate user-initiated optional action.
 
 ## Verification
 
