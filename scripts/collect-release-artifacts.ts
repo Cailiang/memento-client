@@ -22,6 +22,7 @@ interface UpdateManifest {
 interface ArtifactSource {
   runner: string
   name: string
+  outputName?: string
 }
 
 async function filesBelow(directory: string): Promise<string[]> {
@@ -94,6 +95,21 @@ function mergedManifest(
   }
 }
 
+function renamedManifestFiles(
+  manifest: UpdateManifest,
+  renames: Record<string, string>
+): UpdateManifest {
+  const renamed = {
+    ...manifest,
+    files: manifest.files.map((file) => ({
+      ...file,
+      url: renames[file.url] ?? file.url
+    }))
+  }
+  if (manifest.path) renamed.path = renames[manifest.path] ?? manifest.path
+  return renamed
+}
+
 async function sha256(file: string): Promise<string> {
   return createHash('sha256').update(await readFile(file)).digest('hex')
 }
@@ -113,9 +129,17 @@ export async function collectReleaseArtifacts(
     { runner: 'macos-arm64', name: `Memento-${version}-arm64.dmg` },
     { runner: 'windows-x64', name: `Memento-${version}-x64.exe` },
     { runner: 'windows-arm64', name: `Memento-${version}-arm64.exe` },
-    { runner: 'linux-x64', name: `Memento-${version}-x64.AppImage` },
+    {
+      runner: 'linux-x64',
+      name: `Memento-${version}-x86_64.AppImage`,
+      outputName: `Memento-${version}-x64.AppImage`
+    },
     { runner: 'linux-arm64', name: `Memento-${version}-arm64.AppImage` },
-    { runner: 'linux-x64', name: `Memento-${version}-x64.deb` },
+    {
+      runner: 'linux-x64',
+      name: `Memento-${version}-amd64.deb`,
+      outputName: `Memento-${version}-x64.deb`
+    },
     { runner: 'linux-arm64', name: `Memento-${version}-arm64.deb` }
   ]
   const updaterPayloads: ArtifactSource[] = [
@@ -130,7 +154,7 @@ export async function collectReleaseArtifacts(
   for (const source of [...installers, ...updaterPayloads]) {
     await copyFile(
       await findArtifact(artifactsDirectory, source),
-      path.join(outputDirectory, source.name)
+      path.join(outputDirectory, source.outputName ?? source.name)
     )
   }
 
@@ -167,22 +191,41 @@ export async function collectReleaseArtifacts(
   )
 
   for (const source of [
-    { runner: 'linux-x64', name: 'latest-linux.yml' },
-    { runner: 'linux-arm64', name: 'latest-linux-arm64.yml' }
+    {
+      runner: 'linux-x64',
+      name: 'latest-linux.yml',
+      inputAppImage: `Memento-${version}-x86_64.AppImage`,
+      outputAppImage: `Memento-${version}-x64.AppImage`,
+      renames: {
+        [`Memento-${version}-x86_64.AppImage`]: `Memento-${version}-x64.AppImage`,
+        [`Memento-${version}-amd64.deb`]: `Memento-${version}-x64.deb`
+      }
+    },
+    {
+      runner: 'linux-arm64',
+      name: 'latest-linux-arm64.yml',
+      inputAppImage: `Memento-${version}-arm64.AppImage`,
+      outputAppImage: `Memento-${version}-arm64.AppImage`,
+      renames: {}
+    }
   ]) {
     const manifest = await readManifest(artifactsDirectory, source, version)
-    const expectedAppImage = `Memento-${version}-${source.runner.endsWith('arm64') ? 'arm64' : 'x64'}.AppImage`
-    selectFiles(manifest, [expectedAppImage])
+    selectFiles(manifest, [source.inputAppImage])
+    const publishedManifest = renamedManifestFiles(manifest, source.renames)
+    selectFiles(publishedManifest, [source.outputAppImage])
     await writeFile(
       path.join(outputDirectory, source.name),
-      dump(manifest, { lineWidth: -1, noRefs: true })
+      dump(publishedManifest, { lineWidth: -1, noRefs: true })
     )
   }
 
   const checksumLines: string[] = []
-  for (const source of [...installers].sort((a, b) => a.name.localeCompare(b.name))) {
-    const outputFile = path.join(outputDirectory, source.name)
-    checksumLines.push(`${await sha256(outputFile)}  ${source.name}`)
+  for (const source of [...installers].sort((a, b) =>
+    (a.outputName ?? a.name).localeCompare(b.outputName ?? b.name)
+  )) {
+    const outputName = source.outputName ?? source.name
+    const outputFile = path.join(outputDirectory, outputName)
+    checksumLines.push(`${await sha256(outputFile)}  ${outputName}`)
   }
   await writeFile(path.join(outputDirectory, 'SHA256SUMS.txt'), `${checksumLines.join('\n')}\n`)
 

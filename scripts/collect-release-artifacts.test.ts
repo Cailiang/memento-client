@@ -40,9 +40,9 @@ async function createFixture(root: string): Promise<void> {
     ['macos-arm64', `Memento-${version}-arm64.dmg`],
     ['windows-x64', `Memento-${version}-x64.exe`],
     ['windows-arm64', `Memento-${version}-arm64.exe`],
-    ['linux-x64', `Memento-${version}-x64.AppImage`],
+    ['linux-x64', `Memento-${version}-x86_64.AppImage`],
     ['linux-arm64', `Memento-${version}-arm64.AppImage`],
-    ['linux-x64', `Memento-${version}-x64.deb`],
+    ['linux-x64', `Memento-${version}-amd64.deb`],
     ['linux-arm64', `Memento-${version}-arm64.deb`]
   ]
   for (const [runner, name] of installers) await addArtifact(root, runner, name)
@@ -65,8 +65,14 @@ async function createFixture(root: string): Promise<void> {
   ]))
   await addArtifact(root, 'windows-x64', 'latest.yml', manifest([`Memento-${version}-x64.exe`]))
   await addArtifact(root, 'windows-arm64', 'latest.yml', manifest([`Memento-${version}-arm64.exe`]))
-  await addArtifact(root, 'linux-x64', 'latest-linux.yml', manifest([`Memento-${version}-x64.AppImage`]))
-  await addArtifact(root, 'linux-arm64', 'latest-linux-arm64.yml', manifest([`Memento-${version}-arm64.AppImage`]))
+  await addArtifact(root, 'linux-x64', 'latest-linux.yml', manifest([
+    `Memento-${version}-x86_64.AppImage`,
+    `Memento-${version}-amd64.deb`
+  ]))
+  await addArtifact(root, 'linux-arm64', 'latest-linux-arm64.yml', manifest([
+    `Memento-${version}-arm64.AppImage`,
+    `Memento-${version}-arm64.deb`
+  ]))
 }
 
 describe('release artifact collector', () => {
@@ -86,9 +92,30 @@ describe('release artifact collector', () => {
       `Memento-${version}-x64.zip`,
       `Memento-${version}-arm64.zip`
     ])
+    const linuxManifest = load(await readFile(path.join(output, 'latest-linux.yml'), 'utf8')) as {
+      files: Array<{ url: string; sha512: string }>
+      path: string
+    }
+    expect(linuxManifest.files.map((file) => file.url)).toEqual([
+      `Memento-${version}-x64.AppImage`,
+      `Memento-${version}-x64.deb`
+    ])
+    expect(linuxManifest.path).toBe(`Memento-${version}-x64.AppImage`)
+    for (const file of linuxManifest.files) {
+      expect(file.sha512).toBe(
+        createHash('sha512').update(await readFile(path.join(output, file.url))).digest('base64')
+      )
+    }
+    const outputNames = await readdir(output)
+    expect(outputNames).toContain(`Memento-${version}-x64.AppImage`)
+    expect(outputNames).toContain(`Memento-${version}-x64.deb`)
+    expect(outputNames).not.toContain(`Memento-${version}-x86_64.AppImage`)
+    expect(outputNames).not.toContain(`Memento-${version}-amd64.deb`)
     const checksums = (await readFile(path.join(output, 'SHA256SUMS.txt'), 'utf8')).trim().split('\n')
     expect(checksums).toHaveLength(8)
     expect(checksums.every((line) => !line.includes('.zip') && !line.includes('.blockmap'))).toBe(true)
+    expect(checksums.some((line) => line.endsWith(`Memento-${version}-x64.AppImage`))).toBe(true)
+    expect(checksums.some((line) => line.endsWith(`Memento-${version}-x64.deb`))).toBe(true)
   })
 
   it('rejects a missing updater payload', async () => {

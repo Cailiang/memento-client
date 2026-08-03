@@ -8,6 +8,20 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.60 - 2026-08-03
+
+### English
+
+- Fixed public release collection for Linux x64 packages, whose native Electron Builder names use `x86_64` for AppImage and `amd64` for DEB instead of the repository's published `x64` convention.
+- Normalized Linux x64 installer names and both references in `latest-linux.yml` during collection while preserving the package hashes used by the updater.
+- Reworked release-collector fixtures to match real GitHub Actions output and assert the final canonical filenames, manifest URLs, 19-asset count, and eight installer checksums.
+
+### 简体中文
+
+- 修复 Linux x64 公开发布产物的收集问题：Electron Builder 生成的 AppImage 使用 `x86_64`、DEB 使用 `amd64`，与仓库对外发布约定的 `x64` 名称不同。
+- 收集阶段现在会统一 Linux x64 安装包名称，并同步重写 `latest-linux.yml` 中的两个引用，同时保留自动更新校验所需的包哈希。
+- 发布收集器测试改为使用 GitHub Actions 的真实产物名称，并校验最终规范名称、清单 URL、19 个发布资产及 8 条安装包校验和。
+
 ## 0.6.59 - 2026-08-03
 
 ### English

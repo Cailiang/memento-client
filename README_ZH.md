@@ -101,7 +101,7 @@ Memento 使用 Electron 应用数据目录中的本地 SQLite 数据库保存设
 
 Memento 每小时自动检查更新。发现新版本后会在后台下载，下载完成后在侧边栏版本号旁显示“更新”按钮；点击后直接安装并重启，不再弹出单独的更新提示。
 
-每个 GitHub Release 包含 8 个面向用户的平台安装包、自动更新载荷与元数据，以及 `SHA256SUMS.txt`（共 19 个资产）。校验清单只覆盖 8 个安装包。macOS 安装包会使用项目的 Developer ID Application 证书签名，经 Apple 公证并装订票据后再上传；发布流程会使用 `codesign`、Gatekeeper 和 `stapler` 验证最终应用与 DMG。
+每个 GitHub Release 包含 8 个面向用户的平台安装包、自动更新载荷与元数据，以及 `SHA256SUMS.txt`（共 19 个资产）。收集器会把 Electron Builder 原生的 Linux x64 `x86_64`/`amd64` 包名规范为对外发布的 `x64` 约定，并同步重写 Linux 更新清单。校验清单只覆盖 8 个安装包。macOS 安装包会使用项目的 Developer ID Application 证书签名，经 Apple 公证并装订票据后再上传；发布流程会使用 `codesign`、Gatekeeper 和 `stapler` 验证最终应用与 DMG。
 
 ## 许可证
 

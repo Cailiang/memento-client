@@ -15,7 +15,7 @@ GitHub Actions is the only supported path for publishing Memento packages. Devel
 
 Full scanning and cleanup remain macOS-specific. Public macOS packages are signed with the project Developer ID Application identity, notarized by Apple, and stapled before upload.
 
-In-app updates also publish two signed-app macOS ZIPs with blockmaps, two Windows blockmaps, and four update manifests (`latest-mac.yml`, `latest.yml`, `latest-linux.yml`, and `latest-linux-arm64.yml`). Together with the eight installers and `SHA256SUMS.txt`, a complete release has 19 assets. The checksum manifest intentionally covers only the eight user-facing installers.
+In-app updates also publish two signed-app macOS ZIPs with blockmaps, two Windows blockmaps, and four update manifests (`latest-mac.yml`, `latest.yml`, `latest-linux.yml`, and `latest-linux-arm64.yml`). Electron Builder's native Linux x64 outputs are named `x86_64.AppImage` and `amd64.deb`; the release collector renames them to the public `x64` convention and rewrites the corresponding manifest URLs. Together with the eight installers and `SHA256SUMS.txt`, a complete release has 19 assets. The checksum manifest intentionally covers only the eight user-facing installers.
 
 ## Change Checklist
 

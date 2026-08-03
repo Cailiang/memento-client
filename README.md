@@ -101,7 +101,7 @@ The `Release` GitHub Actions workflow builds the following packages from a match
 
 Memento checks for updates hourly. A new version downloads in the background, then an **Update** button appears beside the sidebar version; selecting it installs the downloaded package and restarts the app without a separate update popup.
 
-Each GitHub Release contains eight user-facing platform installers, updater payloads and metadata, and `SHA256SUMS.txt` (19 assets total). The checksum manifest covers only the eight installers. macOS packages are signed with the project's Developer ID Application certificate, notarized by Apple, and stapled before upload. The release workflow verifies the final app and DMG with `codesign`, Gatekeeper, and `stapler`.
+Each GitHub Release contains eight user-facing platform installers, updater payloads and metadata, and `SHA256SUMS.txt` (19 assets total). The collector normalizes Electron Builder's native Linux x64 `x86_64`/`amd64` package names to the published `x64` convention and rewrites the Linux update manifest accordingly. The checksum manifest covers only the eight installers. macOS packages are signed with the project's Developer ID Application certificate, notarized by Apple, and stapled before upload. The release workflow verifies the final app and DMG with `codesign`, Gatekeeper, and `stapler`.
 
 ## License
 
