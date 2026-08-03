@@ -376,7 +376,7 @@ export function SettingsPage({
           : updateState?.phase === 'installing'
             ? text('正在安装新版本，Memento 即将重启', 'Installing the update. Memento will restart shortly.')
             : updateState?.phase === 'error'
-              ? text('自动更新失败，可手动重试', 'Automatic update failed. Try again manually.')
+              ? updateState.error ?? text('检查更新失败，请稍后重试', 'Could not check for updates. Try again later.')
               : updateState?.phase === 'unsupported'
                 ? text('当前安装包不支持应用内自动更新', 'This package does not support in-app updates.')
                 : updateState?.checkedAt
@@ -471,7 +471,7 @@ export function SettingsPage({
 
         <section className="settings-section">
           <div className="settings-label"><h2>{text('软件更新', 'Software update')}</h2><p>{text('Memento 每小时自动检查新版本，并在后台完成下载。', 'Memento checks hourly and downloads new versions in the background.')}</p></div>
-          <div className="setting-row"><span><strong>{text(`当前版本 v${appVersion}`, `Current version v${appVersion}`)}</strong><small role="status" aria-live="polite">{updateDescription}{updateState?.phase === 'error' && updateState.error ? ` · ${updateState.error}` : ''}</small></span><button type="button" className="secondary-button" disabled={updateCheckDisabled} onClick={() => void checkUpdates()}>{updateBusy || updateState?.phase === 'checking' ? <LoaderCircle className="spinner" size={14} /> : <RefreshCw size={14} />}{updateBusy || updateState?.phase === 'checking' ? text('检查中', 'Checking') : text('立即检查', 'Check now')}</button></div>
+          <div className="setting-row software-update-row"><span className="update-status-copy"><strong>{text(`当前版本 v${appVersion}`, `Current version v${appVersion}`)}</strong><small role={updateState?.phase === 'error' ? 'alert' : 'status'} aria-live={updateState?.phase === 'error' ? 'assertive' : 'polite'}>{updateDescription}</small></span><button type="button" className="secondary-button update-check-button" disabled={updateCheckDisabled} onClick={() => void checkUpdates()}>{updateBusy || updateState?.phase === 'checking' ? <LoaderCircle className="spinner" size={14} /> : <RefreshCw size={14} />}{updateBusy || updateState?.phase === 'checking' ? text('检查中', 'Checking') : text('立即检查', 'Check now')}</button></div>
         </section>
 
         <section className="settings-section">

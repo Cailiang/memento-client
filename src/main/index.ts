@@ -75,7 +75,13 @@ import {
   validateDiskUsageTrashTarget,
   withoutDiskUsageTargets
 } from './disk-usage-scanner'
-import { createUpdateState, reduceUpdateState } from './update-checker'
+import {
+  createUpdateState,
+  fetchLatestReleaseVersion,
+  isMissingUpdateManifestError,
+  isNewerVersion,
+  reduceUpdateState
+} from './update-checker'
 import {
   applyTerminalFixGroup,
   restoreTerminalBackup,
@@ -245,9 +251,16 @@ function nextUpdateState(event: Parameters<typeof reduceUpdateState>[1]): AppUpd
 }
 
 function updaterErrorMessage(error: unknown): string {
-  const fallback = mainText('自动更新失败', 'Automatic update failed')
-  const detail = error instanceof Error ? error.message.trim() : ''
-  return detail ? `${fallback}: ${detail.slice(0, 280)}` : fallback
+  if (isMissingUpdateManifestError(error)) {
+    return mainText(
+      '新版本的更新文件暂未就绪，请稍后重试。',
+      'The update files for the new version are not ready yet. Try again later.'
+    )
+  }
+  return mainText(
+    '检查或下载更新时出现问题，请稍后重试。',
+    'There was a problem checking or downloading the update. Try again later.'
+  )
 }
 
 function configureAppUpdater(): void {
@@ -287,6 +300,11 @@ async function checkForAppUpdate(): Promise<AppUpdateState> {
   updateCheckPromise = (async () => {
     nextUpdateState({ type: 'checking' })
     try {
+      const currentVersion = app.getVersion()
+      const latestVersion = await fetchLatestReleaseVersion(currentVersion)
+      if (!isNewerVersion(latestVersion, currentVersion)) {
+        return nextUpdateState({ type: 'not-available', version: latestVersion })
+      }
       await autoUpdater.checkForUpdates()
     } catch (error) {
       if (updateState?.phase !== 'error') {

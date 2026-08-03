@@ -1,27 +1,25 @@
-# Memento Agent 0.6.56
+# Memento Agent 0.6.57
 
 ## 简体中文
 
-`0.6.56` 简化了模型供应商配置，并改为从已经配置好的本机 AI 工具中发现可用 API 配置。CC Switch 不再自动读取，只保留为可选导入。
+`0.6.57` 修复软件更新检查和“立即检查”按钮。当前安装版本高于不含自动更新清单的旧公开版本时，Memento 会正确显示已是最新版本，不再显示原始 HTTP 404 错误。
 
 ### 主要变化
 
-- 首次扫描 `~/.claude`、`~/.codex`、`~/.gemini` 和 `~/.grok`，只导入能够解析出有效密钥、服务地址和模型的配置。
-- 自动过滤损坏、不完整、只有 OAuth 或使用不受支持会话令牌的配置；密钥仍只在主进程中完成校验与加密。
-- CC Switch 改为用户主动点击的可选入口，没有安装 CC Switch 不影响本机配置发现。
-- 普通设置只需选择供应商并填写密钥；协议与官方服务地址由 Memento 确定，推荐模型随应用版本维护。
-- 模型选择、手动模型 ID 和自定义服务地址移入高级设置；已经保存的模型不会被模型发现或新推荐静默替换。
-- 默认和删除操作显示完整文字及具体影响；删除前会确认，并明确不会修改第三方工具中的原始配置。
+- 更新检查会先比较 GitHub 最新稳定版本，只有存在更高版本时才请求自动更新清单并开始后台下载。
+- 修复当前版本为 `v0.6.56`、最新公开版本为 `v0.6.54` 且缺少 `latest-mac.yml` 时的错误状态。
+- 更新服务异常时显示简短的本地化恢复提示，不再把底层 HTTP 异常和请求地址直接展示在设置页。
+- “立即检查”使用固定紧凑尺寸；长状态文字独立换行，不再挤压或放大按钮。
+- 错误状态通过无障碍实时区域播报，并新增版本预检查、缺失清单识别和按钮尺寸回归覆盖。
 
 ## English
 
-`0.6.56` simplifies model-provider setup and discovers usable API configurations from AI tools already configured on the Mac. CC Switch is no longer read automatically and remains an optional import.
+`0.6.57` fixes software update checks and the Check now button. When the installed build is newer than a legacy public release without updater metadata, Memento now reports that it is up to date instead of exposing a raw HTTP 404 error.
 
 ### Highlights
 
-- Scans `~/.claude`, `~/.codex`, `~/.gemini`, and `~/.grok` on the first attempt, importing only configurations with a valid credential, endpoint, and model.
-- Filters malformed, incomplete, OAuth-only, and unsupported session-token configurations. Credentials remain in the main process for validation and encryption.
-- Makes CC Switch a user-initiated optional source; local discovery does not depend on CC Switch being installed.
-- Keeps ordinary setup to a provider choice and API key. Memento determines official protocols and endpoints and maintains tested recommended models with app releases.
-- Moves model selection, manual model IDs, and custom endpoints into Advanced settings. Saved models are never silently replaced by discovery or newer recommendations.
-- Gives default and deletion actions explicit labels and consequences. Deletion requires confirmation and does not modify original third-party configurations.
+- Compares the latest stable GitHub version before requesting updater manifests or starting a background download.
+- Handles the `v0.6.56` installation with legacy public release `v0.6.54` and its missing `latest-mac.yml` as up to date.
+- Replaces raw updater HTTP exceptions and request URLs with concise localized recovery guidance.
+- Gives Check now a stable compact size and lets long status text wrap without stretching or compressing the action.
+- Adds accessible error announcements and regression coverage for release preflight, missing manifests, and button dimensions.

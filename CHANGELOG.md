@@ -8,6 +8,22 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.57 - 2026-08-03
+
+### English
+
+- Fixed manual and hourly update checks when the latest public release predates the installed app and does not contain updater metadata. Memento now compares the stable GitHub release version first and reports the installation as up to date without requesting a missing manifest.
+- Replaced raw updater HTTP exceptions with concise localized recovery messages while preserving automatic background download when a genuinely newer release is available.
+- Restored the Settings update action to a stable compact size, kept long status text inside its own wrapping region, and added accessible error announcements plus visual size regression coverage.
+- Made the repository's UI development contract self-contained after removal of the external prototype directory.
+
+### 简体中文
+
+- 修复最新公开版本早于当前安装版本且不包含更新元数据时，手动和每小时更新检查报错的问题。Memento 现在会先比较 GitHub 稳定版本；无需更新时直接显示已是最新版本，不再请求缺失的清单。
+- 不再向界面暴露原始更新器 HTTP 异常，改为简短的本地化恢复提示；确有新版本时仍会自动在后台下载。
+- “设置”中的更新操作恢复为尺寸稳定的紧凑按钮，长状态文字会在独立区域换行，并新增无障碍错误播报与按钮尺寸视觉回归检查。
+- 删除外部原型目录后，将仓库 UI 开发契约调整为自包含。
+
 ## 0.6.56 - 2026-07-31
 
 ### English

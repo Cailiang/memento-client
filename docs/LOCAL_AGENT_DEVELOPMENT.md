@@ -4,7 +4,7 @@ This document describes the implementation that ships in Memento Agent. It is an
 
 ## 1. Product Baseline
 
-The approved prototype is stored at `../prototypes/memento-agent/index.html` in the local workspace, next to this repository. It is the source of truth for layout, copy, density, responsive behavior, and interaction. Production changes begin in the prototype when they alter that contract. The prototype is not part of the public client repository, so project documentation must remain understandable without that file.
+The repository is self-contained. The production Renderer under `src/renderer/src/agent-ui/`, current project documentation, component tests, and the four-viewport UI smoke test together define the UI contract. Changes to layout, copy, density, responsive behavior, or interaction must update the affected implementation, documentation, and automated coverage in the same change; no sibling prototype repository is required.
 
 The old Renderer, hosted AI analysis, Memento Server, OAuth flow, AI Gateway protocol, and Gateway examples are not compatibility surfaces. The rebuild reuses only deterministic local capabilities that remain useful: scanning, storage cleanup, Homebrew cleanup, background-service handling, app inventory, terminal fixes, path validation, and operation registries.
 
@@ -86,7 +86,7 @@ The connection test creates a two-step `ToolLoopAgent` run with a strict `connec
 
 ## 4.1 Update Checks
 
-`electron-updater` checks the stable GitHub release channel after startup and every hour. It downloads a newer native package in the background, while `update-checker.ts` keeps the typed `idle`, `checking`, `available`, `downloading`, `downloaded`, `installing`, `up-to-date`, `error`, and `unsupported` Renderer states deterministic. The sidebar exposes progress beside the version number and enables its compact Update button only after the package is ready. Clicking it invokes a dedicated IPC handler that calls `quitAndInstall`; there is no native notification, floating notice, or external Release-page handoff. Settings retains a manual retry and an accessible live status. Development builds and unsupported Linux package formats do not attempt an update.
+Memento checks the stable GitHub release tag after startup and every hour. If that version is newer than the installed app, `electron-updater` downloads the native package in the background; an equal or older legacy release is reported as up to date without requesting updater metadata that it may not contain. `update-checker.ts` keeps the typed `idle`, `checking`, `available`, `downloading`, `downloaded`, `installing`, `up-to-date`, `error`, and `unsupported` Renderer states deterministic. The sidebar exposes progress beside the version number and enables its compact Update button only after the package is ready. Clicking it invokes a dedicated IPC handler that calls `quitAndInstall`; there is no native notification, floating notice, or external Release-page handoff. Settings retains a compact manual retry and an accessible live status. Development builds and unsupported Linux package formats do not attempt an update.
 
 ## 4.2 Release Automation
 
@@ -173,7 +173,7 @@ The Renderer also removes a newly ignored row immediately. Restoring detection u
 
 ## 8. Renderer Contract
 
-The production Renderer consists of one shell and five prototype-aligned pages under `src/renderer/src/agent-ui/`.
+The production Renderer consists of one shell and five work-area pages under `src/renderer/src/agent-ui/`.
 
 Concurrent Agent starts are kept in a Renderer workspace list even when they use isolated conversation IDs. The compact task switcher displays each run's persisted state and changes the active conversation without cancelling or replacing other runs. Completion events update background tasks in place; recently completed workspace tasks remain available within the eight-item local workspace window unless their history record is deleted.
 
@@ -207,7 +207,7 @@ A new Agent capability must follow this order:
 5. Map the registered operation to an `AgentPlanItem`.
 6. Keep execution behind the shared confirmation and plan-validation path.
 7. Re-scan and report the actual result.
-8. Update the prototype before changing a visible interaction.
+8. Update the relevant UI coverage and documentation with every visible interaction change.
 
 Do not add `run_shell`, model-generated filesystem paths, model-generated service names, or a path that executes from free-form model text.
 

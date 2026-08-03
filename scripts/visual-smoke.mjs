@@ -110,8 +110,18 @@ try {
   if (!await settingsPage.getByText('Memento 推荐模型', { exact: true }).isVisible()) {
     failures.push('settings: built-in recommended model is missing')
   }
-  if (!await settingsPage.getByRole('button', { name: '立即检查' }).isVisible()) {
+  const updateCheckButton = settingsPage.getByRole('button', { name: '立即检查' })
+  if (!await updateCheckButton.isVisible()) {
     failures.push('settings: manual update check is missing')
+  } else {
+    const bounds = await updateCheckButton.boundingBox()
+    if (!bounds || bounds.width > 100 || bounds.height > 36) {
+      failures.push(`settings: manual update check has oversized bounds ${JSON.stringify(bounds)}`)
+    }
+    await updateCheckButton.click()
+    if (!await settingsPage.getByText('已是最新版本', { exact: true }).isVisible()) {
+      failures.push('settings: manual update check did not reach the up-to-date state')
+    }
   }
   if (!await settingsPage.getByText('Memento 每小时自动检查新版本，并在后台完成下载。').isVisible()) {
     failures.push('settings: background update behavior is not explained')

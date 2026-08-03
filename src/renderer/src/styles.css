@@ -620,6 +620,9 @@ select { -webkit-app-region: no-drag; }
 .setting-row strong { font-size: 12px; }
 .setting-row small { margin-top: 3px; color: var(--text-tertiary); font-size: 11px; }
 .setting-row select { width: 146px; padding: 0 10px; }
+.update-status-copy { min-width: 0; flex: 1 1 auto; }
+.update-status-copy small { line-height: 1.45; overflow-wrap: anywhere; }
+.update-check-button { width: 92px; height: 32px; min-height: 32px; flex: 0 0 92px; padding: 0 9px; font-size: 11px; white-space: nowrap; }
 .ignored-setting-summary { display: flex; min-height: 52px; align-items: center; justify-content: space-between; gap: 18px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .ignored-setting-summary strong,
 .ignored-setting-summary small { display: block; }
