@@ -1,18 +1,13 @@
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { parse as parseToml } from 'smol-toml'
-import type {
-  AgentProviderModelsResult,
-  AgentProviderType
-} from '../../shared/agent-types'
+import type { AgentProviderType } from '../../shared/agent-types'
 import {
   deterministicImportedProviderId,
+  validateImportedProviderCandidates,
+  type ImportedProviderModelDiscovery,
   type ImportedProviderCandidate
 } from './provider-import'
-import {
-  discoverProviderModels,
-  type PrivateModelDiscoveryInput
-} from './provider-config'
 
 type JsonRecord = Record<string, unknown>
 
@@ -22,12 +17,6 @@ export interface LocalAiProviderDiscovery {
   rejected: number
   candidates: ImportedProviderCandidate[]
 }
-
-type LocalAiModelDiscovery = (
-  input: PrivateModelDiscoveryInput
-) => Promise<Pick<AgentProviderModelsResult, 'models'>>
-
-const LOCAL_AI_VALIDATION_TIMEOUT_MS = 8_000
 
 function record(value: unknown): JsonRecord {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -228,28 +217,16 @@ export function discoverLocalAiProviders(
 
 export async function validateLocalAiProviderDiscovery(
   discovery: LocalAiProviderDiscovery,
-  discoverModels: LocalAiModelDiscovery = (input) =>
-    discoverProviderModels(input, fetch, LOCAL_AI_VALIDATION_TIMEOUT_MS)
+  discoverModels?: ImportedProviderModelDiscovery
 ): Promise<LocalAiProviderDiscovery> {
-  const validated = await Promise.all(discovery.candidates.map(async (provider) => {
-    try {
-      const result = await discoverModels({
-        type: provider.type,
-        baseUrl: provider.baseUrl,
-        apiKey: provider.apiKey
-      })
-      return result.models.includes(provider.model) ? provider : null
-    } catch {
-      return null
-    }
-  }))
-  const candidates = validated.filter(
-    (provider): provider is ImportedProviderCandidate => provider !== null
+  const validated = await validateImportedProviderCandidates(
+    discovery.candidates,
+    discoverModels
   )
   return {
     ...discovery,
-    rejected: discovery.detected - candidates.length,
-    candidates
+    rejected: discovery.detected - validated.candidates.length,
+    candidates: validated.candidates
   }
 }
 

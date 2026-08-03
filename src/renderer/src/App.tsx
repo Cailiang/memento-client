@@ -1318,16 +1318,30 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     try {
       const imported = window.memento
         ? await window.memento.importCcSwitchProviders()
-        : { databaseFound: true, detected: 1, imported: 1 }
+        : { databaseFound: true, detected: 2, imported: 1, rejected: 1, removed: 0 }
       await refreshProviders()
+      const removedText = imported.removed > 0
+        ? appText(
+            `；同时移除 ${imported.removed} 个已失效或已删除的旧配置`,
+            `; ${imported.removed} previously imported invalid or deleted configurations removed`
+          )
+        : ''
       setToast(!imported.databaseFound
         ? appText('没有找到本地 CC Switch 配置', 'No local CC Switch configuration was found.')
         : imported.detected === 0
-          ? appText('CC Switch 中没有可导入的有效配置', 'CC Switch has no usable configuration to import.')
-          : appText(
-              `已读取 ${imported.detected} 个配置，新增或更新 ${imported.imported} 个`,
-              `${imported.detected} configurations read; ${imported.imported} added or updated.`
-            ))
+          ? appText(
+              `CC Switch 中没有可校验的完整配置${removedText}`,
+              `CC Switch has no complete configuration to validate${removedText}.`
+            )
+          : imported.detected === imported.rejected
+            ? appText(
+                `CC Switch 配置均未通过密钥、服务地址和模型校验，已全部过滤${removedText}`,
+                `All CC Switch configurations failed credential, endpoint, or model validation and were filtered out${removedText}.`
+              )
+            : appText(
+                `已读取 ${imported.detected} 个配置，新增或更新 ${imported.imported} 个，过滤 ${imported.rejected} 个无效配置${removedText}`,
+                `${imported.detected} configurations read; ${imported.imported} added or updated and ${imported.rejected} invalid configurations filtered out${removedText}.`
+              ))
       return imported
     } catch (error) {
       setToast(error instanceof Error ? error.message : appText('无法导入 CC Switch', 'Could not import CC Switch.'))

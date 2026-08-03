@@ -189,6 +189,45 @@ describe('AgentStore', () => {
     store.close()
   })
 
+  it('removes invalid or deleted CC Switch imports and keeps a remaining default', () => {
+    const directory = temporaryDirectory()
+    const store = new AgentStore(directory)
+    const claude = {
+      id: 'cc-switch-claude-source',
+      name: 'Claude relay',
+      type: 'anthropic' as const,
+      baseUrl: 'https://claude.example.com',
+      model: 'claude-test',
+      apiKey: 'claude-secret'
+    }
+    const gemini = {
+      id: 'cc-switch-gemini-source',
+      name: 'Gemini relay',
+      type: 'google' as const,
+      baseUrl: 'https://gemini.example.com',
+      model: 'gemini-test',
+      apiKey: 'gemini-secret'
+    }
+
+    expect(store.syncCcSwitchImportedProviders([claude, gemini])).toEqual({
+      imported: 2,
+      removed: 0
+    })
+    expect(store.listProviders().find((provider) => provider.id === claude.id)?.isDefault).toBe(true)
+
+    expect(store.syncCcSwitchImportedProviders([gemini])).toEqual({ imported: 0, removed: 1 })
+    expect(store.listProviders()).toEqual([
+      expect.objectContaining({ id: gemini.id, isDefault: true })
+    ])
+
+    store.saveProvider(providerInput('Manual provider', 'manual-secret'))
+    expect(store.syncCcSwitchImportedProviders([])).toEqual({ imported: 0, removed: 1 })
+    expect(store.listProviders()).toEqual([
+      expect.objectContaining({ name: 'Manual provider', isDefault: true })
+    ])
+    store.close()
+  })
+
   it('persists completion of the one-time local AI configuration import', () => {
     const directory = temporaryDirectory()
     const store = new AgentStore(directory)

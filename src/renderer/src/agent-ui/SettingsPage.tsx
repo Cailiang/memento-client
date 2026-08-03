@@ -409,7 +409,7 @@ export function SettingsPage({
         <section className="settings-section provider-settings-section">
           <div className="settings-label">
             <h2>{text('模型供应商', 'Model providers')}</h2>
-            <p>{text('自动读取本机已经配置好的 Claude、Codex、Gemini 和 Grok；只有密钥、服务地址和模型通过连接校验的配置才会加入列表。CC Switch 仅在你选择导入时读取。', 'Read configured Claude, Codex, Gemini, and Grok credentials from this Mac. Only configurations whose credentials, endpoint, and model pass connection validation are added. CC Switch is read only when you choose to import it.')}</p>
+            <p>{text('自动读取本机已经配置好的 Claude、Codex、Gemini 和 Grok；只有密钥、服务地址和模型通过连接校验的配置才会加入列表。CC Switch 仅在你选择导入时读取，并执行相同校验。', 'Read configured Claude, Codex, Gemini, and Grok credentials from this Mac. Only configurations whose credentials, endpoint, and model pass connection validation are added. CC Switch is read only when you choose to import it and uses the same validation.')}</p>
             <div className="provider-import-actions">
               <button type="button" className="secondary-button" disabled={localImportBusy || ccSwitchBusy} onClick={() => void importLocalAi()}>{localImportBusy ? <LoaderCircle className="spinner" size={14} /> : <ScanSearch size={14} />}{localImportBusy ? text('正在扫描', 'Scanning') : text('扫描本机 AI 配置', 'Scan local AI configurations')}</button>
               <button type="button" className="quiet-button" disabled={localImportBusy || ccSwitchBusy} onClick={() => void importCcSwitch()}>{ccSwitchBusy ? <LoaderCircle className="spinner" size={14} /> : <Download size={14} />}{ccSwitchBusy ? text('正在导入', 'Importing') : text('导入 CC Switch', 'Import CC Switch')}</button>

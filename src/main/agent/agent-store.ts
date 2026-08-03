@@ -365,16 +365,28 @@ export class AgentStore {
   }
 
   syncLocalImportedProviders(inputs: ImportedProviderCandidate[]): { imported: number; removed: number } {
+    return this.syncManagedImportedProviders(inputs, 'local-config-')
+  }
+
+  syncCcSwitchImportedProviders(inputs: ImportedProviderCandidate[]): { imported: number; removed: number } {
+    return this.syncManagedImportedProviders(inputs, 'cc-switch-')
+  }
+
+  private syncManagedImportedProviders(
+    inputs: ImportedProviderCandidate[],
+    idPrefix: 'local-config-' | 'cc-switch-'
+  ): { imported: number; removed: number } {
     this.database.exec('BEGIN IMMEDIATE')
     try {
-      const imported = this.syncImportedProviders(inputs)
+      const managedInputs = inputs.filter((provider) => provider.id.startsWith(idPrefix))
+      const imported = this.syncImportedProviders(managedInputs)
       const retainedIds = new Set(
-        inputs.map((provider) => provider.id).filter((id) => id.startsWith('local-config-'))
+        managedInputs.map((provider) => provider.id)
       )
       const existing = this.database.prepare(`
         SELECT id, is_default FROM ai_providers
-        WHERE id GLOB 'local-config-*'
-      `).all() as unknown as Array<{ id: string; is_default: number }>
+        WHERE id GLOB ?
+      `).all(`${idPrefix}*`) as unknown as Array<{ id: string; is_default: number }>
       const removed = existing.filter((provider) => !retainedIds.has(provider.id))
       for (const provider of removed) {
         this.database.prepare('DELETE FROM ai_providers WHERE id = ?').run(provider.id)

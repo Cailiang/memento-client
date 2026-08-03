@@ -57,6 +57,8 @@ export interface CcSwitchImportResult {
   databaseFound: boolean
   detected: number
   imported: number
+  rejected: number
+  removed: number
 }
 
 export interface LocalAiImportResult {

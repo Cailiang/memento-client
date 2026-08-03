@@ -8,6 +8,20 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.6.59 - 2026-08-03
+
+### English
+
+- Applied the same parallel, read-only credential, endpoint, and exact-model validation used by local AI discovery to the explicit CC Switch import action; unusable Claude, Codex, and Gemini suppliers are now filtered before persistence.
+- Added managed synchronization for deterministic `cc-switch-*` providers. Re-importing removes entries that fail validation or were deleted from CC Switch and safely promotes a remaining provider when the removed entry was the default.
+- Extended CC Switch import results and Settings feedback with rejected and removed counts while keeping credentials in the main process, and added focused validation, SQLite pruning, default-promotion, and UI-copy regression coverage.
+
+### 简体中文
+
+- 用户主动触发“导入 CC Switch”后，现在也会并行执行与本机 AI 配置相同的只读校验；密钥、服务地址和指定模型全部通过后才会保存，无法使用的 Claude、Codex 和 Gemini 供应商会被过滤。
+- 为确定性的 `cc-switch-*` 供应商新增托管同步；再次导入会移除校验失败或已从 CC Switch 删除的条目，如果移除的是默认供应商，会安全选择一个剩余配置作为默认。
+- CC Switch 导入结果与设置页提示新增过滤和移除数量，密钥仍只保留在主进程；同时补充共享校验、SQLite 清理、默认项迁移和界面文案回归覆盖。
+
 ## 0.6.58 - 2026-08-03
 
 ### English

@@ -101,8 +101,8 @@ try {
   if (!await settingsPage.getByRole('button', { name: '导入 CC Switch' }).isVisible()) {
     failures.push('settings: optional CC Switch import is missing')
   }
-  if (!await settingsPage.getByText(/CC Switch 仅在你选择导入时读取/).isVisible()) {
-    failures.push('settings: CC Switch import is not explained as optional')
+  if (!await settingsPage.getByText(/CC Switch 仅在你选择导入时读取，并执行相同校验/).isVisible()) {
+    failures.push('settings: CC Switch import is not explained as optional and validated')
   }
   if (await settingsPage.getByLabel('接口类型').count()) {
     failures.push('settings: API type is still exposed as a user choice')

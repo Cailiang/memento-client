@@ -44,6 +44,7 @@ import {
 import { AgentStore } from './agent/agent-store'
 import { findCcSwitchDatabase, readCcSwitchProviders } from './agent/cc-switch-import'
 import { discoverUsableLocalAiProviders } from './agent/local-ai-config-import'
+import { validateImportedProviderCandidates } from './agent/provider-import'
 import { LocalAgentRuntime } from './agent/local-agent-runtime'
 import { selectExecutablePlanItems } from './agent/plan-validation'
 import { providerErrorMessage, testProviderConnection } from './agent/provider-factory'
@@ -207,14 +208,19 @@ async function prepareDiskUsageAgentFocus(nodeId: string): Promise<string> {
   return candidateId
 }
 
-function importCcSwitchProviders(): CcSwitchImportResult {
+async function importCcSwitchProviders(): Promise<CcSwitchImportResult> {
   const databasePath = findCcSwitchDatabase(app.getPath('home'), app.getPath('appData'))
-  if (!databasePath) return { databaseFound: false, detected: 0, imported: 0 }
+  if (!databasePath) {
+    return { databaseFound: false, detected: 0, imported: 0, rejected: 0, removed: 0 }
+  }
   const candidates = readCcSwitchProviders(databasePath)
+  const validated = await validateImportedProviderCandidates(candidates)
+  const synchronized = agentStore!.syncCcSwitchImportedProviders(validated.candidates)
   return {
     databaseFound: true,
     detected: candidates.length,
-    imported: agentStore!.syncImportedProviders(candidates)
+    rejected: validated.rejected,
+    ...synchronized
   }
 }
 
