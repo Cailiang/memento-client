@@ -22,6 +22,7 @@ Electron Main Process
           |                         `---- user-configured model endpoint
           |
           +---- AgentStore ---- node:sqlite + AES-256-GCM
+          |        `---- unified maintenance ledger
           |
           `---- current scan snapshot
                  +---- registered cleanup actions
@@ -37,7 +38,7 @@ The Electron version pinned in `package.json` supplies Node 24 and the built-in 
 
 `AgentStore` opens `<userData>/memento.sqlite`, enables WAL and foreign keys, and applies migrations through `PRAGMA user_version`.
 
-The current database schema version is 3. Its core tables are:
+The current database schema version is 4. Its core tables are:
 
 | Table | Purpose |
 | --- | --- |
@@ -45,8 +46,10 @@ The current database schema version is 3. Its core tables are:
 | `app_settings` | Language, theme, login behavior, menu-bar behavior, and ignored items |
 | `agent_runs` | Conversation ID, language, prompt, provider snapshot, status, response, focused entities, structured presentation, plan, results, and error |
 | `tool_calls` | Structured input and output for each Agent tool call |
+| `maintenance_runs` | Source, scan/Agent correlation, aggregate status, and timestamps for every maintenance session |
+| `maintenance_operations` | Per-operation kind, estimate/actual bytes, recovery mode, result, stable error code, and private local recovery reference |
 
-A legacy `app-settings.json` file is read once when the SQLite settings row does not exist. Values pass through `normalizeAppSettings` before insertion. Schema migration 3 separates Antigravity from the generic Google provider type and migrates matching saved endpoints.
+A legacy `app-settings.json` file is read once when the SQLite settings row does not exist. Values pass through `normalizeAppSettings` before insertion. Schema migration 3 separates Antigravity from the generic Google provider type; migration 4 creates the Agent-independent maintenance ledger. History-list IPC exposes whether recovery is available but never returns the private Trash or backup path.
 
 API keys use this format:
 
@@ -90,7 +93,7 @@ Memento checks the stable GitHub release tag after startup and every hour. If th
 
 ## 4.2 Release Automation
 
-`.github/workflows/release.yml` is the only supported path for publishing GitHub Release binaries. It uses the latest Node.js 22.x release, verifies that built-in SQLite is available, validates that a pushed tag exactly matches package metadata, runs unit tests and type checking, then builds six native runner targets: macOS x64 and arm64, Windows x64 and arm64, and Linux x64 and arm64. The resulting two DMGs, two NSIS executables, two AppImages, and two DEBs remain the eight user-facing installers. Electron Builder emits Linux x64 packages as `x86_64.AppImage` and `amd64.deb`; `collect-release-artifacts.ts` accepts those native inputs, publishes canonical `x64` names, and rewrites both URLs in `latest-linux.yml` without changing their content hashes. The workflow also publishes macOS ZIPs and blockmaps, Windows blockmaps, and four architecture-aware update manifests. The collector parses and merges the two macOS and Windows manifests, validates all 19 assets, and keeps `SHA256SUMS.txt` restricted to exactly the eight installers.
+`.github/workflows/release.yml` is the only supported path for publishing GitHub Release binaries. It validates the tag and package metadata, runs tests and type checking, and builds macOS x64/arm64 plus Windows/Linux portability targets. Only `macos-*` Actions artifacts enter public collection. `collect-release-artifacts.ts` publishes two DMGs, two signed-app ZIPs, two blockmaps, one merged `latest-mac.yml`, and `SHA256SUMS.txt`: eight public assets with exactly two DMG checksums. Windows and Linux outputs remain temporary internal CI artifacts until those platforms have real maintenance capabilities.
 
 Tag-triggered runs create or safely update the bilingual GitHub Release from `RELEASE_NOTES.md`. Manual dispatches run the same validation and build matrix but intentionally stop at temporary Actions artifacts. macOS builds import the project Developer ID certificate into an isolated temporary keychain, sign and notarize the app, produce both DMG and ZIP targets, then separately sign, notarize, staple, and verify the final DMG. The signed app inside the ZIP is the payload used by Squirrel.Mac. The end-to-end operator checklist is in [Release process](RELEASING.md).
 
@@ -129,6 +132,8 @@ The application language is authoritative rather than the language of the latest
 
 ## 6. Plan and Execution Security
 
+Every `ScanCandidate` carries `confidence`, stable `reasonCodes`, and `estimateQuality`. `finding-trust.ts` is the shared policy used by the scan result, Renderer summary, and sidebar count. Verified rebuildable targets with exact measurements become safe cleanup; strong local evidence becomes actionable; unmatched hidden Home and Application Support identities remain weak review clues. Weak clues never affect health score or safely reclaimable bytes. Scan results also include per-section and total timings plus localized diagnostics with stable codes such as `scan.storage.failed`.
+
 `availablePlanItems` derives the only IDs a model may propose from the current scan's registered candidate operations, manageable app uninstall operations, and deterministic terminal fixes. Unknown operation IDs are rejected when a plan is prepared.
 
 The Renderer may also add an operation from a structured result directly to the current plan. The `memento:agent:plans:add` handler resolves that ID through `availablePlanItems` for the current in-memory scan before persisting it. This is a UI shortcut into the same confirmation path, not a new execution path.
@@ -156,7 +161,7 @@ Storage scanning has three cleanup boundaries:
 
 Automatic Storage findings are directory-only. Personal files under Downloads, Desktop, and Movies and individual files such as Docker virtual disks are available through the separately initiated Disk browser. A disk-browser directory can be sent to Agent through an opaque registered node ID. The main process resolves that ID, creates a focused review candidate, and exposes a `trash-disk-usage` action only when the existing disk safety validator accepts the directory. Execution validates the same node and real path again, uses native Trash, invalidates only the removed subtree, and notifies the Renderer without starting another full disk scan.
 
-Task History bulk deletion selects only currently filtered, non-running records. The main IPC resolves every run before mutation, rejects the whole request if any selected task is active or stale, and deletes runs plus cascading tool calls inside one SQLite transaction.
+History defaults to the unified maintenance ledger and keeps Agent conversations on a separate tab. Direct cleanup, application Trash, disk-browser Trash, terminal fixes, terminal restore, and Agent execution all append maintenance runs and per-operation results. Partial failures remain partial, recovery references stay local, and history deletion removes audit rows only: it never touches Trash items, backup files, or the original filesystem target. Agent-history bulk deletion remains a separate transactional path that cascades tool calls.
 
 ## 7. Ignored Items
 
@@ -172,6 +177,8 @@ Application ignore also removes the inventory row and any application finding th
 The Renderer also removes a newly ignored row immediately. Restoring detection updates SQLite and triggers a fresh scan.
 
 ## 8. Renderer Contract
+
+The application opens on Health and starts a deterministic scan before any model is required. Health separates System status, Safely reclaimable space, Actionable findings, and Review clues. Storage provides Trusted findings, Review clues, and Disk browser modes. AI buttons remain optional explanation/plan entry points and route to provider setup only when invoked without a configured provider.
 
 The production Renderer consists of one shell and five work-area pages under `src/renderer/src/agent-ui/`.
 
@@ -227,7 +234,7 @@ npm run audit:runtime
 git diff --check
 ```
 
-With the web development server on port `4174`, run `npm run ui:smoke -- http://127.0.0.1:4174`. It captures all pages at four viewports and exercises structured Agent results, correlated terminal operations, disk-directory Ask AI, filtered history bulk deletion, application-result grids, English-only Agent output, plan confirmation, health tabs, application filtering, and provider editing. The Electron smoke test launches the production output and requires the preload API, real application inventory, and at least one real application icon; this prevents browser demo data from masking a main/preload regression.
+With the web development server on port `4174`, run `npm run ui:smoke -- http://127.0.0.1:4174`. It captures all pages at four viewports and exercises first-run Health routing, trust-separated storage views, structured Agent results, disk-directory Ask AI, both history tabs, application-result grids, plan confirmation, application filtering, and provider editing. The Electron smoke test launches the production output and requires the preload API, real application inventory, and at least one real application icon; this prevents browser demo data from masking a main/preload regression.
 
 Use `npm run audit:runtime` as the release boundary because it audits dependencies shipped inside the application. Use `npm run audit` to inspect the complete development tree. Record actionable findings in the release work instead of preserving a version-specific audit snapshot in this architecture document.
 

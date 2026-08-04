@@ -21,6 +21,7 @@ import type {
   TerminalFinding
 } from '../shared/types'
 import type { AppLanguage } from '../shared/app-settings'
+import { inferFindingTrust } from '../shared/finding-trust'
 import {
   parseDiskFree,
   parseDuKilobytes,
@@ -248,7 +249,8 @@ async function mapLimit<T, R>(
 
 function registerCandidate(
   actions: Map<string, RegisteredAction>,
-  candidate: Omit<ScanCandidate, 'id'>,
+  candidate: Omit<ScanCandidate, 'id' | 'confidence' | 'reasonCodes' | 'estimateQuality'> &
+    Partial<Pick<ScanCandidate, 'confidence' | 'reasonCodes' | 'estimateQuality'>>,
   registeredAction?: RegisteredAction,
   registeredOperations: RegisteredOperation[] = [],
   revealTargets?: Map<string, string>,
@@ -262,8 +264,12 @@ function registerCandidate(
     actions.set(operationId, operation)
     return { ...action, id: operationId }
   })
+  const trust = inferFindingTrust({ ...candidate, operations })
   return {
     ...candidate,
+    confidence: candidate.confidence ?? trust.confidence,
+    reasonCodes: candidate.reasonCodes ?? trust.reasonCodes,
+    estimateQuality: candidate.estimateQuality ?? trust.estimateQuality,
     id,
     operations: operations.length ? operations : candidate.operations
   }
@@ -1688,6 +1694,9 @@ async function scanApplications(
             sizeBytes: application.sizeBytes,
             ageDays: application.lastUsedAt ? ageInDays(application.lastUsedAt) : undefined,
             risk: 'review',
+            confidence: 'strong',
+            reasonCodes: ['duplicate-bundle-id', 'registered-local-operation'],
+            estimateQuality: 'approximate',
             status: t(language, '重复版本', 'Duplicate version'),
             evidence: [
               t(language, `旧副本：${displayPath(application.target)}`, `Older copy: ${displayPath(application.target)}`),
@@ -1729,6 +1738,9 @@ async function scanApplications(
           sizeBytes: application.sizeBytes,
           ageDays,
           risk: 'review',
+          confidence: 'strong',
+          reasonCodes: ['stale-last-used-date', 'registered-local-operation'],
+          estimateQuality: 'approximate',
           status: t(language, '3 个月未使用', 'Not used for 3+ months'),
           evidence: [
             t(language, `${ageDays} 天未使用`, `Not used for ${ageDays} days`),
@@ -2186,13 +2198,27 @@ export async function runFullScan(
   language: AppLanguage = 'zh-CN'
 ): Promise<ScanBundle> {
   const startedAt = new Date().toISOString()
+  const scanStarted = performance.now()
   const actions = new Map<string, RegisteredAction>()
   const revealTargets = new Map<string, string>()
   const terminalFixes = new Map<string, RegisteredTerminalFix>()
   const warnings: string[] = []
+  const diagnostics: ScanResult['diagnostics'] = []
+  const timings: ScanResult['timings'] = []
+
+  const addFailure = (
+    section: ScanSection | 'system',
+    code: ScanResult['diagnostics'][number]['code'],
+    message: string
+  ): void => {
+    warnings.push(message)
+    diagnostics.push({ section, code, severity: 'warning', message })
+  }
 
   onProgress({ section: 'system', progress: 4, message: t(language, '读取系统状态', 'Reading system status') })
+  const systemStarted = performance.now()
   const system = await scanSystem()
+  timings.push({ section: 'system', durationMs: Math.round(performance.now() - systemStarted) })
 
   if (process.platform !== 'darwin') {
     const warning = t(
@@ -2200,6 +2226,13 @@ export async function runFullScan(
       '当前维护扫描仅支持 macOS；此版本只提供界面和 AI 设置预览。',
       'Maintenance scanning currently supports macOS only. This build provides a preview of the desktop UI and AI settings.'
     )
+    diagnostics.push({
+      section: 'system',
+      code: 'scan.platform.unsupported',
+      severity: 'warning',
+      message: warning
+    })
+    timings.push({ section: 'total', durationMs: Math.round(performance.now() - scanStarted) })
     onProgress({ section: 'system', progress: 100, message: warning })
     return {
       actions,
@@ -2221,6 +2254,8 @@ export async function runFullScan(
           findings: [],
           configFiles: []
         },
+        timings,
+        diagnostics,
         warnings: [warning]
       }
     }
@@ -2256,25 +2291,34 @@ export async function runFullScan(
     })
   }
 
+  const servicesStarted = performance.now()
   const servicesPromise = scanServices(actions, revealTargets, language)
     .catch((error: Error) => {
-      warnings.push(t(language, `服务扫描未完成：${error.message}`, `Service scan did not complete: ${error.message}`))
+      addFailure('services', 'scan.services.failed', t(language, `服务扫描未完成：${error.message}`, `Service scan did not complete: ${error.message}`))
       return []
     })
-    .finally(() => reportSectionComplete('services'))
+    .finally(() => {
+      timings.push({ section: 'services', durationMs: Math.round(performance.now() - servicesStarted) })
+      reportSectionComplete('services')
+    })
 
+  const storageStarted = performance.now()
   const storageBasePromise = scanStorage(actions, revealTargets, language)
     .catch((error: Error) => {
-      warnings.push(t(language, `存储扫描未完成：${error.message}`, `Storage scan did not complete: ${error.message}`))
+      addFailure('storage', 'scan.storage.failed', t(language, `存储扫描未完成：${error.message}`, `Storage scan did not complete: ${error.message}`))
       return []
     })
 
+  const applicationsStarted = performance.now()
   const applicationsPromise = scanApplications(actions, revealTargets, language)
     .catch((error: Error) => {
-      warnings.push(t(language, `应用扫描未完成：${error.message}`, `Application scan did not complete: ${error.message}`))
+      addFailure('applications', 'scan.applications.failed', t(language, `应用扫描未完成：${error.message}`, `Application scan did not complete: ${error.message}`))
       return { candidates: [], applications: [] }
     })
-    .finally(() => reportSectionComplete('applications'))
+    .finally(() => {
+      timings.push({ section: 'applications', durationMs: Math.round(performance.now() - applicationsStarted) })
+      reportSectionComplete('applications')
+    })
 
   const storagePromise = Promise.all([storageBasePromise, applicationsPromise])
     .then(async ([storage, applicationScan]) => {
@@ -2289,7 +2333,7 @@ export async function runFullScan(
           (left, right) => (right.sizeBytes ?? 0) - (left.sizeBytes ?? 0)
         )
       } catch (error) {
-        warnings.push(t(
+        addFailure('storage', 'scan.hidden-home.failed', t(
           language,
           `Home 隐藏项目扫描未完成：${(error as Error).message}`,
           `Hidden Home item scan did not complete: ${(error as Error).message}`
@@ -2297,11 +2341,15 @@ export async function runFullScan(
         return storage
       }
     })
-    .finally(() => reportSectionComplete('storage'))
+    .finally(() => {
+      timings.push({ section: 'storage', durationMs: Math.round(performance.now() - storageStarted) })
+      reportSectionComplete('storage')
+    })
 
+  const terminalStarted = performance.now()
   const terminalPromise = scanTerminal(language, terminalFixes)
     .catch((error: Error) => {
-      warnings.push(t(language, `终端诊断未完成：${error.message}`, `Terminal diagnostics did not complete: ${error.message}`))
+      addFailure('terminal', 'scan.terminal.failed', t(language, `终端诊断未完成：${error.message}`, `Terminal diagnostics did not complete: ${error.message}`))
       return {
         shell: process.env.SHELL || '/bin/zsh',
         baselineMs: null,
@@ -2311,7 +2359,10 @@ export async function runFullScan(
         configFiles: []
       }
     })
-    .finally(() => reportSectionComplete('terminal'))
+    .finally(() => {
+      timings.push({ section: 'terminal', durationMs: Math.round(performance.now() - terminalStarted) })
+      reportSectionComplete('terminal')
+    })
 
   const [services, storage, applicationScan, terminal] = await Promise.all([
     servicesPromise,
@@ -2336,6 +2387,14 @@ export async function runFullScan(
     applications: applicationScan.applications,
     ignoredApplications: [],
     terminal,
+    timings: [
+      ...timings.sort((left, right) => {
+        const order = ['system', 'services', 'storage', 'applications', 'terminal']
+        return order.indexOf(left.section) - order.indexOf(right.section)
+      }),
+      { section: 'total', durationMs: Math.round(performance.now() - scanStarted) }
+    ],
+    diagnostics,
     warnings
   }
   onProgress({

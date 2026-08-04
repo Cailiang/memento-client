@@ -1,0 +1,46 @@
+name: Bug report
+description: Report a reproducible Memento application problem.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: Do not post credentials, private paths, prompts, or file contents. Use the private security advisory form for vulnerabilities and the false-positive template for incorrect maintenance findings.
+  - type: input
+    id: version
+    attributes:
+      label: Memento version
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: macOS version and architecture
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and stable error code
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: I removed secrets, usernames, complete private paths, prompts, file contents, and unrelated application names.
+          required: true

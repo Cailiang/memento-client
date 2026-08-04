@@ -3,6 +3,9 @@ import type { ScanCandidate } from '../../shared/types'
 import { applyCompletedCandidateActions, selectedCandidateOperations } from './candidate-actions'
 
 const service: ScanCandidate = {
+  confidence: 'verified',
+  reasonCodes: ['managed-service'],
+  estimateQuality: 'unknown',
   id: 'service',
   section: 'services',
   name: 'Example',
@@ -51,6 +54,7 @@ describe('applyCompletedCandidateActions', () => {
 
   it('removes a storage candidate after permanent cleanup completes', () => {
     const storage: ScanCandidate = {
+      confidence: 'verified', reasonCodes: ['allowlisted-rebuildable-path'], estimateQuality: 'exact',
       id: 'cache',
       section: 'storage',
       name: 'Cache',
@@ -71,6 +75,7 @@ describe('applyCompletedCandidateActions', () => {
 
   it('removes a hidden Home finding after moving it to Trash', () => {
     const hidden: ScanCandidate = {
+      confidence: 'weak', reasonCodes: ['unmatched-local-identity'], estimateQuality: 'exact',
       id: 'hidden-home',
       section: 'storage',
       name: '.retired-app',

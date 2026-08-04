@@ -1,27 +1,29 @@
-# Memento Agent 0.6.60
+# Memento Agent 0.7.0 - 信任重置 / Trust Reset
 
 ## 简体中文
 
-`0.6.60` 修复软件更新检查，并为本机 AI 配置和 CC Switch 导入增加真实连接校验；公开安装包由 GitHub Actions 完成签名、公证和完整资产校验。
+`0.7.0` 重新定义 Memento 第一次打开时如何表达本机状态：确定性体检是基础能力，AI 是按需使用的解释与计划层，弱证据不会被包装成系统问题。
 
 ### 主要变化
 
-- 修复已安装版本高于最新公开版本时，“立即检查”请求缺失更新清单并报错的问题，同时恢复紧凑的按钮尺寸和本地化错误提示。
-- 扫描 Claude、Codex、Gemini 和 Grok 本机配置时，会通过只读模型列表校验密钥、服务地址和精确模型；失败项会被过滤，再次扫描会清理旧的无效导入。
-- “导入 CC Switch”保持手动触发，并执行相同校验；再次导入会移除校验失败或已从 CC Switch 删除的 `cc-switch-*` 配置。
-- 如果清理的是默认供应商，会安全选择一个剩余配置继续作为默认；API 密钥不会进入渲染层或日志。
-- 已在报告问题的本机 CC Switch 数据库做只读验证：7 个完整候选中 2 个通过，5 个无效配置被过滤。
-- Linux x64 的原生 `x86_64.AppImage` 与 `amd64.deb` 会在发布时规范为 `x64` 名称并同步更新自动更新清单，确保全部 19 个 Release 资产可以完成校验和发布。
+- **健康、空间、线索分开：** 首页独立展示系统状态、安全可释放空间、可行动问题和审查线索。仅凭年龄和身份未匹配得到的隐藏目录不会扣健康分，也不会计入安全可释放空间。
+- **Finding 信任合同：** 每个候选显式包含 `confidence`、稳定 `reasonCodes` 和 `estimateQuality`。存储页拆为“可信建议”“审查线索”和“磁盘浏览”。
+- **无模型首次体验：** 应用启动后直接完成本机体检；不配置 Provider 也能查看可信结果、确认直接操作，并在历史中审计。
+- **统一维护账本：** SQLite schema v4 记录直接操作、应用卸载、磁盘删除、终端优化与恢复、Agent 计划的逐项结果、恢复入口和稳定错误码。删除历史只删除审计记录。
+- **可诊断扫描：** 扫描结果提供系统、服务、存储、应用、终端和总耗时；模块失败使用稳定诊断码，避免只能解析本地化文案。
+- **反馈与安全：** 新增私密漏洞报告、安全政策、贡献指南、Bug 表单和保护隐私的误报模板。
+- **macOS 正式发布：** GitHub Release 只发布 Intel/Apple Silicon 的签名、公证 macOS 包和更新载荷，共 8 个资产；校验清单只包含 2 个 DMG。Windows/Linux 仅作为内部 CI 可移植性产物。
 
 ## English
 
-`0.6.60` repairs software update checks and adds real connection validation to local AI and CC Switch imports. Public packages are signed, notarized, and fully validated by GitHub Actions.
+`0.7.0` resets how Memento communicates trust on first launch: deterministic health inspection is the product baseline, AI is an optional explanation and planning layer, and weak evidence is no longer presented as a system problem.
 
 ### Highlights
 
-- Fixes **Check now** requesting a missing update manifest when the installed version is newer than the latest public release, and restores its compact size and localized errors.
-- Validates local Claude, Codex, Gemini, and Grok credentials, endpoints, and exact models through read-only model catalogs; failed entries are filtered and stale invalid imports are removed on rescan.
-- Keeps **Import CC Switch** explicitly user-triggered while applying the same validation and removing invalid or deleted managed `cc-switch-*` entries on re-import.
-- Safely promotes a remaining provider if a removed import was the default, while keeping API keys out of the Renderer and logs.
-- Verified read-only against the reported local CC Switch database: 2 of 7 complete candidates passed and 5 invalid configurations were filtered out.
-- Normalizes native Linux x64 `x86_64.AppImage` and `amd64.deb` names to the published `x64` convention and rewrites updater metadata so all 19 Release assets can be validated and published.
+- **Health, space, and clues are separate:** System status, safely reclaimable space, actionable findings, and review clues are independent. Age-only unmatched directories do not reduce health or increase safe reclaimable space.
+- **Explicit finding trust:** Every candidate carries `confidence`, stable `reasonCodes`, and `estimateQuality`. Storage now has Trusted findings, Review clues, and Disk browser modes.
+- **Provider-free first run:** Memento opens on Health. Trusted review, confirmed direct execution, and audit history work without configuring a model.
+- **Unified maintenance ledger:** SQLite schema v4 records per-operation results, stable errors, and recovery availability for direct actions, app removal, disk Trash, terminal fixes/restores, and Agent plans. Deleting history removes records only.
+- **Diagnosable scans:** Results include system, service, storage, application, terminal, and total timings plus stable module diagnostic codes.
+- **Security and feedback:** Adds private vulnerability reporting, a security policy, contribution guidance, bug reporting, and a privacy-conscious false-positive form.
+- **macOS public distribution:** GitHub Releases now contain only signed and notarized Intel/Apple Silicon macOS packages and updater payloads: eight assets with two DMG checksums. Windows/Linux builds remain internal CI portability artifacts.

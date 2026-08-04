@@ -1,4 +1,10 @@
-import type { ActionResult, ScanResult } from './types'
+import type {
+  ActionResult,
+  EstimateQuality,
+  FindingConfidence,
+  FindingReasonCode,
+  ScanResult
+} from './types'
 import type { AppLanguage } from './app-settings'
 
 export type AgentProviderType =
@@ -111,6 +117,9 @@ export interface AgentCandidateResultItem {
   description: string
   status: string
   risk: 'safe' | 'review' | 'protected'
+  confidence: FindingConfidence
+  reasonCodes: readonly FindingReasonCode[]
+  estimateQuality: EstimateQuality
   sizeBytes: number
   location: string | null
   evidence: string[]

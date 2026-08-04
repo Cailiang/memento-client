@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentProvider, AgentRunRecord } from '../../../shared/agent-types'
+import type { MaintenanceRunRecord } from '../../../shared/maintenance-types'
 import {
   applicationWhitelistValue,
   candidateWhitelistValue
@@ -334,6 +335,26 @@ export function DeleteHistoryDialog({
   return (
     <DialogFrame title={text(multiple ? `删除 ${runs.length} 条任务记录？` : '删除任务记录？', multiple ? `Delete ${runs.length} task records?` : 'Delete task history?')} description={text('这会删除本机保存的对话、分析结果和工具调用记录，无法恢复。', 'This permanently deletes the locally stored conversation, analysis results, and tool-call records.')} busy={busy} onClose={onClose} actions={<><button type="button" className="secondary-button" onClick={onClose} disabled={busy}>{text('取消', 'Cancel')}</button><button type="button" className="danger-button" onClick={onConfirm} disabled={busy}>{busy ? <LoaderCircle className="spinner" size={15} /> : <Trash2 size={15} />}{busy ? text('正在删除', 'Deleting') : text(multiple ? '全部删除' : '删除记录', multiple ? 'Delete all' : 'Delete history')}</button></>}>
       <div className="dialog-body"><div className="confirm-row"><span><Archive size={13} /></span><div><strong>{multiple ? text(`${runs.length} 条所选记录`, `${runs.length} selected records`) : runs[0]?.prompt}</strong><small>{text('只删除历史数据，不会撤销已经完成的操作', 'Completed system changes are not undone')}</small></div><span className="risk-label review">{text('不可恢复', 'Permanent')}</span></div></div>
+    </DialogFrame>
+  )
+}
+
+export function DeleteMaintenanceHistoryDialog({
+  runs,
+  busy,
+  onClose,
+  onConfirm
+}: {
+  runs: MaintenanceRunRecord[]
+  busy: boolean
+  onClose: () => void
+  onConfirm: () => void
+}): React.JSX.Element {
+  const { text } = useI18n()
+  const multiple = runs.length > 1
+  return (
+    <DialogFrame title={text(multiple ? `删除 ${runs.length} 条维护记录？` : '删除维护记录？', multiple ? `Delete ${runs.length} maintenance records?` : 'Delete maintenance history?')} description={text('只会删除本机审计记录，不会删除废纸篓项目、终端备份，也不会撤销已完成的系统操作。', 'Only local audit records are deleted. Trash items, terminal backups, and completed system changes are not affected.')} busy={busy} onClose={onClose} actions={<><button type="button" className="secondary-button" onClick={onClose} disabled={busy}>{text('取消', 'Cancel')}</button><button type="button" className="danger-button" onClick={onConfirm} disabled={busy}>{busy ? <LoaderCircle className="spinner" size={15} /> : <Trash2 size={15} />}{busy ? text('正在删除', 'Deleting') : text('删除记录', 'Delete history')}</button></>}>
+      <div className="dialog-body"><div className="confirm-row"><span><Archive size={13} /></span><div><strong>{multiple ? text(`${runs.length} 条所选记录`, `${runs.length} selected records`) : runs[0]?.title}</strong><small>{text('文件系统目标和恢复材料都会保留', 'File-system targets and recovery materials remain')}</small></div><span className="risk-label review">{text('仅删记录', 'Records only')}</span></div></div>
     </DialogFrame>
   )
 }

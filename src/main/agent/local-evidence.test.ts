@@ -10,6 +10,12 @@ import {
   relatedScanEvidence
 } from './local-evidence'
 
+const TRUST = {
+  confidence: 'strong' as const,
+  reasonCodes: ['registered-local-operation'] as ScanResult['candidates'][number]['reasonCodes'],
+  estimateQuality: 'unknown' as const
+}
+
 function scan(): ScanResult {
   return {
     scanId: 'scan', startedAt: '', completedAt: '',
@@ -18,13 +24,16 @@ function scan(): ScanResult {
       memoryTotalBytes: 1, memoryUsedBytes: 0, uptimeSeconds: 1
     },
     candidates: [{
+      ...TRUST,
       id: 'hidden-cisco', section: 'storage', name: '.cisco', subtitle: 'Hidden Home item',
       description: 'Unmatched item', location: '~/.cisco', risk: 'review', status: 'Review', evidence: []
     }, {
+      ...TRUST,
       id: 'service-cisco', section: 'services', name: 'com.cisco.anyconnect.vpnagentd',
       subtitle: 'Launch daemon', description: 'Loaded service', location: '/opt/cisco/anyconnect',
       risk: 'review', status: 'Loaded', evidence: []
     }, {
+      ...TRUST,
       id: 'other-cache', section: 'storage', name: 'Unrelated cache', subtitle: 'Cache',
       description: 'Cache', location: '~/Library/Caches/example', risk: 'safe', status: 'Safe', evidence: []
     }],
@@ -43,7 +52,7 @@ function scan(): ScanResult {
         severity: 'notice', attributes: { variable: 'POSTGRESQL_HOME', product: 'postgresql' }
       }]
     },
-    warnings: []
+    timings: [], diagnostics: [], warnings: []
   }
 }
 
@@ -62,6 +71,7 @@ describe('local artifact evidence', () => {
   it('correlates a stale environment variable with a focused service', () => {
     const value = scan()
     value.candidates[0] = {
+      ...TRUST,
       id: 'service-postgresql', section: 'services', name: 'homebrew.mxcl.postgresql@14',
       subtitle: 'Launch agent', description: 'PostgreSQL 14', location: '/opt/homebrew/opt/postgresql@14',
       risk: 'review', status: 'Loaded', evidence: []

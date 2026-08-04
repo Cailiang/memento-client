@@ -268,7 +268,7 @@ describe('AgentStore', () => {
     expect(store.listRuns()).toEqual([])
 
     const database = new DatabaseSync(path.join(directory, 'memento.sqlite'))
-    expect(database.prepare('PRAGMA user_version').get()).toEqual({ user_version: 3 })
+    expect(database.prepare('PRAGMA user_version').get()).toEqual({ user_version: 4 })
     expect(database.prepare('SELECT COUNT(*) AS count FROM tool_calls').get()).toEqual({ count: 0 })
     database.close()
     store.close()
@@ -288,6 +288,89 @@ describe('AgentStore', () => {
     expect(store.getRun(second.id)).toBeNull()
     expect(store.getRun(retained.id)).not.toBeNull()
     expect(() => store.deleteRuns([])).toThrow()
+    store.close()
+  })
+
+  it('records maintenance operations independently from Agent conversations', () => {
+    const store = new AgentStore(temporaryDirectory())
+    const run = store.createMaintenanceRun({
+      source: 'direct',
+      scanId: 'scan-1',
+      title: 'Clean rebuildable cache',
+      operations: [{
+        operationId: 'operation-1',
+        kind: 'delete-storage',
+        title: 'Xcode DerivedData · Clean permanently',
+        reversible: false,
+        estimatedBytes: 4096,
+        recoveryMode: 'none'
+      }, {
+        operationId: 'operation-2',
+        kind: 'trash-home-artifact',
+        title: '.legacy · Move to Trash',
+        reversible: true,
+        estimatedBytes: 1024,
+        recoveryMode: 'trash'
+      }]
+    })
+    store.completeMaintenanceOperation(run.operations[0].id, {
+      status: 'completed',
+      actualBytes: 4000,
+      message: 'Completed'
+    })
+    store.completeMaintenanceOperation(run.operations[1].id, {
+      status: 'failed',
+      errorCode: 'operation.execution_failed',
+      message: 'Target changed'
+    })
+
+    expect(store.completeMaintenanceRun(run.id)).toMatchObject({
+      source: 'direct',
+      scanId: 'scan-1',
+      status: 'partial',
+      operations: [{
+        operationId: 'operation-1',
+        status: 'completed',
+        actualBytes: 4000,
+        recoveryAvailable: false
+      }, {
+        operationId: 'operation-2',
+        status: 'failed',
+        errorCode: 'operation.execution_failed'
+      }]
+    })
+    store.deleteMaintenanceRuns([run.id])
+    expect(store.listMaintenanceRuns()).toEqual([])
+    store.close()
+  })
+
+  it('keeps local recovery references private while exposing availability', () => {
+    const store = new AgentStore(temporaryDirectory())
+    const run = store.createMaintenanceRun({
+      source: 'terminal',
+      title: 'Terminal optimization',
+      operations: [{
+        operationId: 'terminal-1',
+        kind: 'dedupe-path',
+        title: 'Deduplicate PATH',
+        reversible: true,
+        recoveryMode: 'backup'
+      }]
+    })
+    store.completeMaintenanceOperation(run.operations[0].id, {
+      status: 'completed',
+      recoveryRef: '/private/local/.zshrc.memento-backup',
+      message: 'Completed'
+    })
+    store.completeMaintenanceRun(run.id)
+
+    const listed = store.listMaintenanceRuns()[0]
+    expect(listed.operations[0].recoveryAvailable).toBe(true)
+    expect(JSON.stringify(listed)).not.toContain('/private/local')
+    expect(store.getMaintenanceRecovery(listed.operations[0].id)).toEqual({
+      mode: 'backup',
+      reference: '/private/local/.zshrc.memento-backup'
+    })
     store.close()
   })
 })

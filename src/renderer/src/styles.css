@@ -360,12 +360,18 @@ select { -webkit-app-region: no-drag; }
 .health-band > div:last-child { border-right: 0; }
 .health-band > button:last-child { border-right: 0; }
 .health-score strong { display: block; font-size: 34px; font-variant-numeric: tabular-nums; line-height: 1; }
+.health-score-label { display: block; margin-bottom: 6px; color: var(--text-tertiary); font-size: 11px; font-style: normal; }
 .health-score span,
 .health-metric span,
 .health-metric small { display: block; color: var(--text-tertiary); font-size: 11px; }
 .health-score span { display: flex; min-width: 0; align-items: center; gap: 2px; margin-top: 8px; line-height: 1.35; }
 .health-score span svg { flex: 0 0 auto; }
 .health-metric strong { display: block; margin: 8px 0 4px; font-size: 16px; }
+.finding-confidence { display: inline-flex; align-items: center; min-height: 18px; margin-left: 7px; padding: 0 5px; border: 1px solid var(--line); border-radius: 4px; color: var(--text-tertiary); background: var(--surface-strong); font-size: 9px; font-weight: 650; vertical-align: 1px; }
+.finding-confidence.verified { color: var(--success); border-color: color-mix(in srgb, var(--success) 28%, var(--line)); }
+.finding-confidence.weak { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 32%, var(--line)); }
+.scan-status.is-warning { color: var(--warning); }
+.scan-status.is-warning strong { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; }
 .health-tabs { display: flex; gap: 22px; margin-top: 18px; border-bottom: 1px solid var(--line); }
 .health-tab { min-height: 40px; padding: 0 1px; border: 0; border-bottom: 2px solid transparent; color: var(--text-tertiary); background: transparent; font-size: 13px; font-weight: 650; }
 .health-tab:hover { color: var(--text); }
@@ -523,6 +529,10 @@ select { -webkit-app-region: no-drag; }
 .empty-filter p { margin: 6px 0 0; font-size: 11px; }
 
 .history-table { border-top: 1px solid var(--line); }
+.history-mode-tabs { display: inline-flex; padding: 3px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface-strong); }
+.history-mode-tabs button { min-height: 30px; padding: 0 10px; border: 0; border-radius: 5px; color: var(--text-tertiary); background: transparent; font-size: 11px; font-weight: 650; }
+.history-mode-tabs button.is-active { color: var(--text); background: var(--surface); box-shadow: 0 1px 3px rgba(29, 42, 35, .08); }
+.history-mode-tabs span { margin-left: 4px; color: inherit; font-size: 10px; }
 .history-command-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; min-width: 0; }
 .history-bulk-delete { min-height: 36px; white-space: nowrap; }
 .history-search { width: min(360px, 100%); }
@@ -537,6 +547,8 @@ select { -webkit-app-region: no-drag; }
 .history-row-check { position: absolute; top: 15px; left: 0; z-index: 1; }
 .history-row { width: 100%; min-height: 62px; padding: 0 38px 0 0; border: 0; border-bottom: 1px solid var(--line); color: var(--text-secondary); background: transparent; text-align: left; }
 .history-row:hover { color: var(--text); background: var(--surface-subtle); }
+.maintenance-history-row { cursor: default; }
+.history-recovery { width: 28px; min-height: 28px; color: var(--accent); background: transparent; }
 .history-delete { position: absolute; top: 16px; right: 2px; width: 30px; min-height: 30px; color: var(--text-tertiary); background: transparent; }
 .history-delete:hover { color: var(--danger); background: var(--danger-soft); }
 .history-title { min-width: 0; }
@@ -790,6 +802,8 @@ select { -webkit-app-region: no-drag; }
   .quick-actions { margin-left: 41px; }
   .page-command-bar { flex-wrap: wrap; }
   .health-band { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .health-band > :nth-child(2n) { border-right: 0; }
+  .health-band > :nth-last-child(-n + 2) { border-bottom: 0; }
   .health-score,
   .health-metric { border-bottom: 1px solid var(--line); }
   .toolbar { grid-template-columns: 1fr 1fr; }
@@ -827,7 +841,6 @@ select { -webkit-app-region: no-drag; }
   .agent-app-result:last-child { border-bottom: 0; }
   .agent-result-row { grid-template-columns: 30px minmax(0, 1fr); }
   .agent-result-actions { grid-column: 2; justify-content: flex-start; flex-wrap: wrap; }
-  .health-band,
   .toolbar,
   .provider-form,
   .provider-advanced-grid { grid-template-columns: 1fr; }

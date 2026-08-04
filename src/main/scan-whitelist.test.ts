@@ -19,13 +19,14 @@ function resultWith(candidates: ScanCandidate[]): ScanResult {
       shell: '/bin/zsh', baselineMs: 1, startupMs: 1, sampleCount: 1,
       findings: [], configFiles: []
     },
-    warnings: []
+    timings: [], diagnostics: [], warnings: []
   }
 }
 
 describe('applyScanWhitelist', () => {
   it('hides matching services and storage items and expires their local capabilities', () => {
     const service: ScanCandidate = {
+      confidence: 'verified', reasonCodes: ['managed-service'], estimateQuality: 'unknown',
       id: 'service-id', section: 'services', name: 'com.example.worker', subtitle: 'service',
       description: 'service', risk: 'review', status: 'Loaded', evidence: [],
       operations: [{
@@ -34,6 +35,7 @@ describe('applyScanWhitelist', () => {
       }]
     }
     const storage: ScanCandidate = {
+      confidence: 'verified', reasonCodes: ['allowlisted-rebuildable-path'], estimateQuality: 'exact',
       id: 'storage-id', section: 'storage', name: 'com.example.worker', subtitle: 'storage',
       description: 'storage', risk: 'safe', status: 'Reclaimable', evidence: [],
       location: '~/Library/Caches/com.example.worker',
@@ -42,6 +44,7 @@ describe('applyScanWhitelist', () => {
       }
     }
     const application: ScanCandidate = {
+      confidence: 'strong', reasonCodes: ['registered-local-operation'], estimateQuality: 'approximate',
       id: 'application-candidate-id', section: 'applications', name: 'Security Helper', subtitle: 'application',
       description: 'application', risk: 'review', status: 'Unused', evidence: [],
       operations: [{

@@ -34,6 +34,10 @@ import type {
   SaveAgentProviderInput,
   StartAgentRunInput
 } from '../shared/agent-types'
+import type {
+  CreateMaintenanceOperationInput,
+  MaintenanceOperationSource
+} from '../shared/maintenance-types'
 import {
   DEFAULT_APP_SETTINGS,
   type AppLanguage,
@@ -56,6 +60,7 @@ import {
   trashDestination
 } from './application-trash'
 import { runFullScan, type RegisteredAction } from './scanner'
+import { inferFindingTrust } from '../shared/finding-trust'
 import { applyScanWhitelist } from './scan-whitelist'
 import { buildPrivilegedMoves, privilegedMoveArguments } from './privileged-cleanup'
 import {
@@ -115,6 +120,73 @@ let updateCheckPromise: Promise<AppUpdateState> | null = null
 
 function mainText(chinese: string, english: string): string {
   return appSettings.language === 'en-US' ? english : chinese
+}
+
+interface MaintenanceExecutionOptions {
+  source: MaintenanceOperationSource
+  title: string
+  agentRunId?: string
+}
+
+function defaultMaintenanceOptions(source: MaintenanceOperationSource): MaintenanceExecutionOptions {
+  return {
+    source,
+    title: source === 'terminal'
+      ? mainText('终端优化', 'Terminal optimization')
+      : source === 'undo'
+        ? mainText('恢复终端配置', 'Restore terminal configuration')
+        : mainText('直接维护', 'Direct maintenance')
+  }
+}
+
+function registeredActionRecoveryMode(action: RegisteredAction | undefined): 'none' | 'trash' {
+  return action && (
+    action.kind === 'trash' ||
+    action.kind === 'trash-home-artifact' ||
+    action.kind === 'trash-disk-usage' ||
+    action.kind === 'trash-launch-agent-config' ||
+    action.kind === 'trash-service-software' ||
+    action.kind === 'trash-service-directory'
+  ) ? 'trash' : 'none'
+}
+
+function describeRegisteredOperation(
+  id: string,
+  action: RegisteredAction | undefined
+): CreateMaintenanceOperationInput {
+  for (const candidate of currentScanResult?.candidates ?? []) {
+    const operation = candidate.operations?.find((item) => item.id === id) ??
+      (candidate.action && candidate.id === id ? { id, ...candidate.action } : null)
+    if (operation) {
+      return {
+        operationId: id,
+        kind: operation.kind,
+        title: `${candidate.name} · ${operation.label}`,
+        reversible: operation.reversible,
+        estimatedBytes: operation.estimatedBytes ?? candidate.sizeBytes ?? null,
+        recoveryMode: registeredActionRecoveryMode(action)
+      }
+    }
+  }
+  for (const application of currentScanResult?.applications ?? []) {
+    if (application.action?.id !== id) continue
+    return {
+      operationId: id,
+      kind: application.action.kind,
+      title: `${application.name} · ${application.action.label}`,
+      reversible: application.action.reversible,
+      estimatedBytes: application.action.estimatedBytes ?? application.sizeBytes,
+      recoveryMode: registeredActionRecoveryMode(action)
+    }
+  }
+  return {
+    operationId: id,
+    kind: action?.kind ?? 'expired-operation',
+    title: mainText('已过期的维护操作', 'Expired maintenance operation'),
+    reversible: registeredActionRecoveryMode(action) === 'trash',
+    estimatedBytes: null,
+    recoveryMode: registeredActionRecoveryMode(action)
+  }
 }
 
 function mainDisplayPath(target: string): string {
@@ -198,6 +270,12 @@ async function prepareDiskUsageAgentFocus(nodeId: string): Promise<string> {
       mainText(`扫描大小：${node.sizeBytes.toLocaleString()} 字节`, `Scanned size: ${node.sizeBytes.toLocaleString()} bytes`),
       mainText('仅检查一级目录内容，不读取文件正文', 'Only shallow directory entries are inspected; file contents are not read')
     ],
+    ...inferFindingTrust({
+      section: 'storage',
+      risk: action ? 'review' : 'protected',
+      sizeBytes: node.sizeBytes,
+      action
+    }),
     action
   }
   registeredRevealTargets.set(candidateId, target)
@@ -969,18 +1047,48 @@ function updateRegisteredActionsAfterExecution(action: RegisteredAction): void {
   }
 }
 
-async function executeTerminalFixBatch(ids: string[]): Promise<TerminalFixRunResult> {
+async function executeTerminalFixBatch(
+  ids: string[],
+  options: MaintenanceExecutionOptions = defaultMaintenanceOptions('terminal')
+): Promise<TerminalFixRunResult> {
   const uniqueIds = [...new Set(ids)].slice(0, 100)
   const results: ActionResult[] = []
   const groups = new Map<string, Array<{ id: string; fix: RegisteredTerminalFix }>>()
+  const maintenanceRun = uniqueIds.length ? agentStore!.createMaintenanceRun({
+    source: options.source,
+    scanId: currentScanResult?.scanId ?? null,
+    agentRunId: options.agentRunId ?? null,
+    title: options.title,
+    operations: uniqueIds.map((id) => {
+      const finding = currentScanResult?.terminal.findings.find((item) => item.fix?.id === id)
+      return {
+        operationId: id,
+        kind: registeredTerminalFixes.get(id)?.kind ?? 'expired-terminal-fix',
+        title: finding ? `${finding.title} · ${finding.fix!.label}` : mainText('已过期的终端优化', 'Expired terminal optimization'),
+        reversible: true,
+        estimatedBytes: null,
+        recoveryMode: 'backup' as const
+      }
+    })
+  }) : null
+  const ledgerOperations = new Map(
+    maintenanceRun?.operations.map((operation) => [operation.operationId, operation]) ?? []
+  )
 
   for (const id of uniqueIds) {
     const fix = registeredTerminalFixes.get(id)
     if (!fix) {
-      results.push({
+      const result = {
         id,
         ok: false,
         message: mainText('优化操作已过期，请重新扫描', 'This optimization has expired. Scan again.')
+      }
+      results.push(result)
+      const record = ledgerOperations.get(id)
+      if (record) agentStore!.completeMaintenanceOperation(record.id, {
+        status: 'failed',
+        errorCode: 'operation.expired',
+        message: result.message
       })
       continue
     }
@@ -995,13 +1103,20 @@ async function executeTerminalFixBatch(ids: string[]): Promise<TerminalFixRunRes
       const backup = await applyTerminalFixGroup(group.map((item) => item.fix))
       completedBackups.set(target, backup)
       for (const item of group) {
-        results.push({
+        const result = {
           id: item.id,
           ok: true,
           message: mainText(
             `已自动优化，原配置备份在 ${mainDisplayPath(backup.backup)}`,
             `Optimized automatically. The original configuration is backed up at ${mainDisplayPath(backup.backup)}.`
           )
+        }
+        results.push(result)
+        const record = ledgerOperations.get(item.id)
+        if (record) agentStore!.completeMaintenanceOperation(record.id, {
+          status: 'completed',
+          recoveryRef: backup.backup,
+          message: result.message
         })
       }
       for (const [id, registered] of registeredTerminalFixes) {
@@ -1011,17 +1126,42 @@ async function executeTerminalFixBatch(ids: string[]): Promise<TerminalFixRunRes
       const message = error instanceof Error
         ? error.message
         : mainText('自动优化失败', 'Automatic optimization failed.')
-      for (const item of group) results.push({ id: item.id, ok: false, message })
+      for (const item of group) {
+        results.push({ id: item.id, ok: false, message })
+        const record = ledgerOperations.get(item.id)
+        if (record) agentStore!.completeMaintenanceOperation(record.id, {
+          status: 'failed',
+          errorCode: 'operation.execution_failed',
+          message
+        })
+      }
     }
   }
 
   if (completedBackups.size) lastTerminalFixBackups = completedBackups
+  if (maintenanceRun) agentStore!.completeMaintenanceRun(maintenanceRun.id)
   return { results, canUndo: lastTerminalFixBackups.size > 0 }
 }
 
 async function undoLastTerminalFixes(): Promise<ActionResult[]> {
   const results: ActionResult[] = []
-  for (const [target, backup] of [...lastTerminalFixBackups]) {
+  const backups = [...lastTerminalFixBackups]
+  const maintenanceRun = backups.length ? agentStore!.createMaintenanceRun({
+    source: 'undo',
+    scanId: currentScanResult?.scanId ?? null,
+    title: mainText('恢复终端配置', 'Restore terminal configuration'),
+    operations: backups.map(([target]) => ({
+      operationId: target,
+      kind: 'restore-terminal-backup',
+      title: mainText(`恢复 ${mainDisplayPath(target)}`, `Restore ${mainDisplayPath(target)}`),
+      reversible: false,
+      recoveryMode: 'none'
+    }))
+  }) : null
+  const ledgerOperations = new Map(
+    maintenanceRun?.operations.map((operation) => [operation.operationId, operation]) ?? []
+  )
+  for (const [target, backup] of backups) {
     try {
       await restoreTerminalBackup(backup)
       lastTerminalFixBackups.delete(target)
@@ -1033,32 +1173,65 @@ async function undoLastTerminalFixes(): Promise<ActionResult[]> {
           `Restored ${mainDisplayPath(target)}.`
         )
       })
+      const record = ledgerOperations.get(target)
+      if (record) agentStore!.completeMaintenanceOperation(record.id, {
+        status: 'completed',
+        message: results.at(-1)?.message ?? null
+      })
     } catch (error) {
-      results.push({
+      const result = {
         id: target,
         ok: false,
         message: error instanceof Error
           ? error.message
           : mainText('无法恢复终端配置', 'The terminal configuration could not be restored.')
+      }
+      results.push(result)
+      const record = ledgerOperations.get(target)
+      if (record) agentStore!.completeMaintenanceOperation(record.id, {
+        status: 'failed',
+        errorCode: 'operation.restore_failed',
+        message: result.message
       })
     }
   }
+  if (maintenanceRun) agentStore!.completeMaintenanceRun(maintenanceRun.id)
   return results
 }
 
-async function executeActionBatch(ids: string[]): Promise<ActionResult[]> {
+async function executeActionBatch(
+  ids: string[],
+  options: MaintenanceExecutionOptions = defaultMaintenanceOptions('direct')
+): Promise<ActionResult[]> {
   if (!Array.isArray(ids) || ids.some((id) => typeof id !== 'string' || id.length > 100)) {
     throw new Error(mainText('操作请求无效', 'The action request is invalid.'))
   }
   const uniqueIds = [...new Set(ids)].slice(0, 100)
   const results: ActionResult[] = []
+  const maintenanceRun = uniqueIds.length ? agentStore!.createMaintenanceRun({
+    source: options.source,
+    scanId: currentScanResult?.scanId ?? null,
+    agentRunId: options.agentRunId ?? null,
+    title: options.title,
+    operations: uniqueIds.map((id) => describeRegisteredOperation(id, registeredActions.get(id)))
+  }) : null
+  const ledgerOperations = new Map(
+    maintenanceRun?.operations.map((operation) => [operation.operationId, operation]) ?? []
+  )
   for (const id of uniqueIds) {
     const action = registeredActions.get(id)
     if (!action) {
-      results.push({
+      const result = {
         id,
         ok: false,
         message: mainText('操作已过期，请重新扫描', 'This action has expired. Scan again.')
+      }
+      results.push(result)
+      const record = ledgerOperations.get(id)
+      if (record) agentStore!.completeMaintenanceOperation(record.id, {
+        status: 'failed',
+        errorCode: 'operation.expired',
+        message: result.message
       })
       continue
     }
@@ -1066,15 +1239,32 @@ async function executeActionBatch(ids: string[]): Promise<ActionResult[]> {
       await executeRegisteredAction(action)
       updateRegisteredActionsAfterExecution(action)
       registeredActions.delete(id)
-      results.push({ id, ok: true, message: mainText('操作完成', 'Action completed') })
+      const result = { id, ok: true, message: mainText('操作完成', 'Action completed') }
+      results.push(result)
+      const record = ledgerOperations.get(id)
+      if (record) agentStore!.completeMaintenanceOperation(record.id, {
+        status: 'completed',
+        recoveryRef: registeredActionRecoveryMode(action) === 'trash'
+          ? path.join(os.homedir(), '.Trash')
+          : null,
+        message: result.message
+      })
     } catch (error) {
-      results.push({
+      const result = {
         id,
         ok: false,
         message: error instanceof Error ? error.message : mainText('操作失败', 'Action failed')
+      }
+      results.push(result)
+      const record = ledgerOperations.get(id)
+      if (record) agentStore!.completeMaintenanceOperation(record.id, {
+        status: 'failed',
+        errorCode: 'operation.execution_failed',
+        message: result.message
       })
     }
   }
+  if (maintenanceRun) agentStore!.completeMaintenanceRun(maintenanceRun.id)
   return results
 }
 
@@ -1252,15 +1442,24 @@ app.whenReady().then(async () => {
     if (!target || !existsSync(target)) {
       throw new Error(mainText('磁盘项目已经不存在，请重新扫描', 'The disk item no longer exists. Scan again.'))
     }
-    let validatedTarget: string
     try {
-      validatedTarget = await validateDiskUsageTrashTarget(target, diskUsageScanRoot())
+      await validateDiskUsageTrashTarget(target, diskUsageScanRoot())
     } catch {
       throw new Error(mainText('这个磁盘项目不能从浏览器中移除', 'This disk item cannot be removed from the browser.'))
     }
-    await trashDiskUsageTarget(validatedTarget)
-    discardDiskUsageTarget(target)
-    mainWindow?.webContents.send('memento:disk-usage-node-removed', id)
+    const operationId = randomUUID()
+    registeredActions.set(operationId, {
+      kind: 'trash-disk-usage',
+      target,
+      root: diskUsageScanRoot(),
+      nodeId: id
+    })
+    const results = await executeActionBatch([operationId], {
+      source: 'disk-browser',
+      title: mainText(`磁盘浏览 · ${path.basename(target)}`, `Disk browser · ${path.basename(target)}`)
+    })
+    const failure = results.find((result) => !result.ok)
+    if (failure) throw new Error(failure.message)
   })
 
   ipcMain.handle('memento:agent:providers:list', () => agentStore!.listProviders())
@@ -1316,6 +1515,28 @@ app.whenReady().then(async () => {
       throw new Error(mainText('所选记录中有任务仍在运行，完成后才能删除', 'A selected task is still running. Delete it after it finishes.'))
     }
     agentStore!.deleteRuns(uniqueIds)
+  })
+  ipcMain.handle('memento:maintenance:runs:list', () => agentStore!.listMaintenanceRuns())
+  ipcMain.handle('memento:maintenance:runs:delete-many', (_event, runIds: string[]) => {
+    if (!Array.isArray(runIds)) {
+      throw new Error(mainText('请选择有效的维护记录', 'Select valid maintenance records.'))
+    }
+    agentStore!.deleteMaintenanceRuns(runIds)
+  })
+  ipcMain.handle('memento:maintenance:recovery:reveal', async (_event, operationRecordId: string) => {
+    if (typeof operationRecordId !== 'string' || operationRecordId.length > 100) {
+      throw new Error(mainText('恢复入口无效', 'The recovery location is invalid.'))
+    }
+    const recovery = agentStore!.getMaintenanceRecovery(operationRecordId)
+    if (!recovery || !existsSync(recovery.reference)) {
+      throw new Error(mainText('恢复位置已经不存在', 'The recovery location no longer exists.'))
+    }
+    if (recovery.mode === 'trash') {
+      const error = await shell.openPath(recovery.reference)
+      if (error) throw new Error(error)
+      return
+    }
+    shell.showItemInFolder(recovery.reference)
   })
   ipcMain.handle('memento:agent:runs:start', async (event, input: StartAgentRunInput) => {
     if (!currentScanResult) {
@@ -1392,10 +1613,12 @@ app.whenReady().then(async () => {
     try {
       sendStatus('executing', mainText('正在执行已确认的操作', 'Executing confirmed operations'))
       const actionResults = await executeActionBatch(
-        selected.filter((item) => item.kind === 'action').map((item) => item.id)
+        selected.filter((item) => item.kind === 'action').map((item) => item.id),
+        { source: 'agent', title: run.prompt, agentRunId: run.id }
       )
       const terminalResult = await executeTerminalFixBatch(
-        selected.filter((item) => item.kind === 'terminal-fix').map((item) => item.id)
+        selected.filter((item) => item.kind === 'terminal-fix').map((item) => item.id),
+        { source: 'agent', title: run.prompt, agentRunId: run.id }
       )
       results = [...actionResults, ...terminalResult.results]
       sendStatus('verifying', mainText('正在重新体检并验证结果', 'Scanning again to verify results'))

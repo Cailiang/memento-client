@@ -20,6 +20,12 @@ import {
   type UpdateAppSettingsInput
 } from '../../shared/app-settings'
 import type { ActionResult } from '../../shared/types'
+import type {
+  CreateMaintenanceRunInput,
+  MaintenanceOperationRecord,
+  MaintenanceOperationStatus,
+  MaintenanceRunRecord
+} from '../../shared/maintenance-types'
 import {
   normalizeProviderBaseUrl,
   type PrivateModelDiscoveryInput
@@ -65,6 +71,35 @@ interface RunRow {
   error: string | null
   created_at: string
   updated_at: string
+}
+
+interface MaintenanceRunRow {
+  id: string
+  source: MaintenanceRunRecord['source']
+  scan_id: string | null
+  agent_run_id: string | null
+  title: string
+  status: MaintenanceRunRecord['status']
+  created_at: string
+  completed_at: string | null
+}
+
+interface MaintenanceOperationRow {
+  id: string
+  run_id: string
+  operation_id: string
+  kind: string
+  title: string
+  status: MaintenanceOperationStatus
+  reversible: number
+  estimated_bytes: number | null
+  actual_bytes: number | null
+  recovery_mode: MaintenanceOperationRecord['recoveryMode']
+  recovery_ref: string | null
+  error_code: string | null
+  message: string | null
+  created_at: string
+  completed_at: string | null
 }
 
 const PROVIDER_TYPES = new Set<AgentProvider['type']>([
@@ -167,6 +202,7 @@ export class AgentStore {
     this.database.exec('PRAGMA journal_mode = WAL')
     this.database.exec('PRAGMA foreign_keys = ON')
     this.migrate()
+    this.recoverInterruptedMaintenanceRuns()
     this.initializeAppSettings(path.join(userDataDirectory, 'app-settings.json'))
   }
 
@@ -564,6 +600,156 @@ export class AgentStore {
     )
   }
 
+  createMaintenanceRun(input: CreateMaintenanceRunInput): MaintenanceRunRecord {
+    if (!input.operations.length || input.operations.length > 100) {
+      throw new Error(storeText(
+        this.getAppSettings().language,
+        '维护操作列表无效',
+        'The maintenance operation list is invalid.'
+      ))
+    }
+    const timestamp = now()
+    const runId = randomUUID()
+    this.database.exec('BEGIN IMMEDIATE')
+    try {
+      this.database.prepare(`
+        INSERT INTO maintenance_runs (
+          id, source, scan_id, agent_run_id, title, status, created_at, completed_at
+        ) VALUES (?, ?, ?, ?, ?, 'running', ?, NULL)
+      `).run(
+        runId,
+        input.source,
+        input.scanId ?? null,
+        input.agentRunId ?? null,
+        input.title.slice(0, 240),
+        timestamp
+      )
+      const insertOperation = this.database.prepare(`
+        INSERT INTO maintenance_operations (
+          id, run_id, operation_id, kind, title, status, reversible,
+          estimated_bytes, actual_bytes, recovery_mode, recovery_ref,
+          error_code, message, created_at, completed_at
+        ) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, NULL, ?, NULL, NULL, NULL, ?, NULL)
+      `)
+      for (const operation of input.operations) {
+        insertOperation.run(
+          randomUUID(),
+          runId,
+          operation.operationId.slice(0, 100),
+          operation.kind.slice(0, 120),
+          operation.title.slice(0, 240),
+          operation.reversible ? 1 : 0,
+          operation.estimatedBytes ?? null,
+          operation.recoveryMode ?? 'none',
+          timestamp
+        )
+      }
+      this.database.exec('COMMIT')
+    } catch (error) {
+      if (this.database.isTransaction) this.database.exec('ROLLBACK')
+      throw error
+    }
+    return this.getMaintenanceRun(runId)!
+  }
+
+  completeMaintenanceOperation(
+    operationRecordId: string,
+    input: {
+      status: Exclude<MaintenanceOperationStatus, 'pending'>
+      actualBytes?: number | null
+      recoveryRef?: string | null
+      errorCode?: string | null
+      message?: string | null
+    }
+  ): void {
+    this.database.prepare(`
+      UPDATE maintenance_operations
+      SET status = ?, actual_bytes = ?, recovery_ref = ?, error_code = ?, message = ?, completed_at = ?
+      WHERE id = ? AND status = 'pending'
+    `).run(
+      input.status,
+      input.actualBytes ?? null,
+      input.recoveryRef ?? null,
+      input.errorCode ?? null,
+      input.message?.slice(0, 1000) ?? null,
+      now(),
+      operationRecordId
+    )
+  }
+
+  completeMaintenanceRun(runId: string): MaintenanceRunRecord {
+    const counts = this.database.prepare(`
+      SELECT
+        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed,
+        SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed,
+        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending
+      FROM maintenance_operations WHERE run_id = ?
+    `).get(runId) as { completed: number; failed: number; pending: number }
+    const status: MaintenanceRunRecord['status'] = counts.pending > 0
+      ? 'running'
+      : counts.completed > 0 && counts.failed > 0
+        ? 'partial'
+        : counts.completed > 0
+          ? 'completed'
+          : 'failed'
+    this.database.prepare(`
+      UPDATE maintenance_runs SET status = ?, completed_at = ? WHERE id = ?
+    `).run(status, status === 'running' ? null : now(), runId)
+    const run = this.getMaintenanceRun(runId)
+    if (!run) throw new Error('Maintenance run does not exist')
+    return run
+  }
+
+  getMaintenanceRun(id: string): MaintenanceRunRecord | null {
+    const row = this.database.prepare(`SELECT * FROM maintenance_runs WHERE id = ?`).get(id) as unknown as MaintenanceRunRow | undefined
+    return row ? this.maintenanceRunFromRow(row) : null
+  }
+
+  listMaintenanceRuns(limit = 200): MaintenanceRunRecord[] {
+    const rows = this.database.prepare(`
+      SELECT * FROM maintenance_runs ORDER BY created_at DESC LIMIT ?
+    `).all(Math.max(1, Math.min(limit, 500))) as unknown as MaintenanceRunRow[]
+    return rows.map((row) => this.maintenanceRunFromRow(row))
+  }
+
+  deleteMaintenanceRuns(ids: readonly string[]): void {
+    const uniqueIds = [...new Set(ids)]
+    if (
+      uniqueIds.length === 0 ||
+      uniqueIds.length > 500 ||
+      uniqueIds.some((id) => typeof id !== 'string' || !/^[a-zA-Z0-9-]{1,100}$/.test(id))
+    ) {
+      throw new Error(storeText(
+        this.getAppSettings().language,
+        '维护记录 ID 无效',
+        'The maintenance history ID is invalid.'
+      ))
+    }
+    const remove = this.database.prepare(`
+      DELETE FROM maintenance_runs WHERE id = ? AND status != 'running'
+    `)
+    this.database.exec('BEGIN IMMEDIATE')
+    try {
+      for (const id of uniqueIds) remove.run(id)
+      this.database.exec('COMMIT')
+    } catch (error) {
+      if (this.database.isTransaction) this.database.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  getMaintenanceRecovery(operationRecordId: string): {
+    mode: MaintenanceOperationRecord['recoveryMode']
+    reference: string
+  } | null {
+    const row = this.database.prepare(`
+      SELECT recovery_mode, recovery_ref
+      FROM maintenance_operations
+      WHERE id = ? AND status = 'completed'
+    `).get(operationRecordId) as { recovery_mode: MaintenanceOperationRecord['recoveryMode']; recovery_ref: string | null } | undefined
+    return row?.recovery_ref ? { mode: row.recovery_mode, reference: row.recovery_ref } : null
+  }
+
   private loadMasterKey(keyPath: string): Buffer {
     if (!existsSync(keyPath)) {
       writeFileSync(keyPath, randomBytes(32), { flag: 'wx', mode: 0o600 })
@@ -653,10 +839,77 @@ export class AgentStore {
         COMMIT;
       `)
     }
+    if (versionRow.user_version < 4) {
+      this.database.exec(`
+        BEGIN IMMEDIATE;
+        CREATE TABLE IF NOT EXISTS maintenance_runs (
+          id TEXT PRIMARY KEY,
+          source TEXT NOT NULL,
+          scan_id TEXT,
+          agent_run_id TEXT,
+          title TEXT NOT NULL,
+          status TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          completed_at TEXT
+        );
+        CREATE TABLE IF NOT EXISTS maintenance_operations (
+          id TEXT PRIMARY KEY,
+          run_id TEXT NOT NULL REFERENCES maintenance_runs(id) ON DELETE CASCADE,
+          operation_id TEXT NOT NULL,
+          kind TEXT NOT NULL,
+          title TEXT NOT NULL,
+          status TEXT NOT NULL,
+          reversible INTEGER NOT NULL DEFAULT 0,
+          estimated_bytes INTEGER,
+          actual_bytes INTEGER,
+          recovery_mode TEXT NOT NULL DEFAULT 'none',
+          recovery_ref TEXT,
+          error_code TEXT,
+          message TEXT,
+          created_at TEXT NOT NULL,
+          completed_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS maintenance_runs_created
+          ON maintenance_runs(created_at DESC);
+        CREATE INDEX IF NOT EXISTS maintenance_operations_run
+          ON maintenance_operations(run_id, created_at);
+        PRAGMA user_version = 4;
+        COMMIT;
+      `)
+    }
   }
 
   private providerRow(id: string): ProviderRow | undefined {
     return this.database.prepare('SELECT * FROM ai_providers WHERE id = ?').get(id) as unknown as ProviderRow | undefined
+  }
+
+  private recoverInterruptedMaintenanceRuns(): void {
+    const timestamp = now()
+    this.database.exec('BEGIN IMMEDIATE')
+    try {
+      this.database.prepare(`
+        UPDATE maintenance_operations
+        SET status = 'failed', error_code = 'operation.interrupted',
+            message = 'Memento closed before the operation result was recorded', completed_at = ?
+        WHERE status = 'pending'
+      `).run(timestamp)
+      this.database.prepare(`
+        UPDATE maintenance_runs
+        SET status = CASE
+          WHEN EXISTS (
+            SELECT 1 FROM maintenance_operations operation
+            WHERE operation.run_id = maintenance_runs.id AND operation.status = 'completed'
+          ) THEN 'partial'
+          ELSE 'failed'
+        END,
+        completed_at = ?
+        WHERE status = 'running'
+      `).run(timestamp)
+      this.database.exec('COMMIT')
+    } catch (error) {
+      if (this.database.isTransaction) this.database.exec('ROLLBACK')
+      throw error
+    }
   }
 
   private initializeAppSettings(legacyPath: string): void {
@@ -741,6 +994,39 @@ export class AgentStore {
       error: row.error,
       createdAt: row.created_at,
       updatedAt: row.updated_at
+    }
+  }
+
+  private maintenanceRunFromRow(row: MaintenanceRunRow): MaintenanceRunRecord {
+    const operations = this.database.prepare(`
+      SELECT * FROM maintenance_operations WHERE run_id = ? ORDER BY rowid
+    `).all(row.id) as unknown as MaintenanceOperationRow[]
+    return {
+      id: row.id,
+      source: row.source,
+      scanId: row.scan_id,
+      agentRunId: row.agent_run_id,
+      title: row.title,
+      status: row.status,
+      operations: operations.map((operation) => ({
+        id: operation.id,
+        runId: operation.run_id,
+        operationId: operation.operation_id,
+        kind: operation.kind,
+        title: operation.title,
+        status: operation.status,
+        reversible: operation.reversible === 1,
+        estimatedBytes: operation.estimated_bytes,
+        actualBytes: operation.actual_bytes,
+        recoveryMode: operation.recovery_mode,
+        recoveryAvailable: Boolean(operation.recovery_ref),
+        errorCode: operation.error_code,
+        message: operation.message,
+        createdAt: operation.created_at,
+        completedAt: operation.completed_at
+      })),
+      createdAt: row.created_at,
+      completedAt: row.completed_at
     }
   }
 

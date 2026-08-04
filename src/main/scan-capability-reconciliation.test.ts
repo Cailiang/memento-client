@@ -13,6 +13,7 @@ function result(actionId: string, terminalFixId: string): ScanResult {
       memoryTotalBytes: 100, memoryUsedBytes: 50, uptimeSeconds: 1
     },
     candidates: [{
+      confidence: 'verified', reasonCodes: ['allowlisted-rebuildable-path'], estimateQuality: 'exact',
       id: 'candidate', section: 'storage', name: 'Cache', subtitle: '', description: '',
       risk: 'safe', status: 'Reclaimable', evidence: [],
       operations: [{
@@ -30,7 +31,7 @@ function result(actionId: string, terminalFixId: string): ScanResult {
         severity: 'notice', fix: { id: terminalFixId, label: 'Fix', consequence: 'Back up first' }
       }]
     },
-    warnings: []
+    timings: [], diagnostics: [], warnings: []
   }
 }
 

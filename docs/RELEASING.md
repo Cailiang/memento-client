@@ -8,14 +8,10 @@ GitHub Actions is the only supported path for publishing Memento packages. Devel
 | --- | --- | --- |
 | macOS | Intel x64 | DMG |
 | macOS | Apple Silicon arm64 | DMG |
-| Windows | x64 | NSIS EXE |
-| Windows | arm64 | NSIS EXE |
-| Linux | x64 | AppImage and DEB |
-| Linux | arm64 | AppImage and DEB |
 
-Full scanning and cleanup remain macOS-specific. Public macOS packages are signed with the project Developer ID Application identity, notarized by Apple, and stapled before upload.
+Full scanning and cleanup are macOS-specific. Windows and Linux packages are built only as temporary Actions artifacts for Renderer and shell portability checks; they are not copied into public Releases. Public macOS packages are signed with the project Developer ID Application identity, notarized by Apple, and stapled before upload.
 
-In-app updates also publish two signed-app macOS ZIPs with blockmaps, two Windows blockmaps, and four update manifests (`latest-mac.yml`, `latest.yml`, `latest-linux.yml`, and `latest-linux-arm64.yml`). Electron Builder's native Linux x64 outputs are named `x86_64.AppImage` and `amd64.deb`; the release collector renames them to the public `x64` convention and rewrites the corresponding manifest URLs. Together with the eight installers and `SHA256SUMS.txt`, a complete release has 19 assets. The checksum manifest intentionally covers only the eight user-facing installers.
+In-app updates publish two signed-app macOS ZIPs with blockmaps and one merged `latest-mac.yml`. Together with the two DMGs and `SHA256SUMS.txt`, a complete public release has eight assets. The checksum manifest intentionally covers only the two user-facing DMGs.
 
 ## Change Checklist
 
@@ -76,10 +72,10 @@ Before committing, verify all of the following:
 1. Merge the verified source into `main` and push `main`.
 2. Read the version from `package.json` and create the matching annotated tag.
 3. Push the tag and monitor the `Release` workflow through publication.
-4. Confirm that the GitHub Release contains all 19 expected installers, updater payloads, metadata files, and `SHA256SUMS.txt`.
-5. Confirm that `SHA256SUMS.txt` has exactly eight package entries and does not include itself.
+4. Confirm that the GitHub Release contains exactly eight expected macOS installers, updater payloads, metadata files, and `SHA256SUMS.txt`.
+5. Confirm that `SHA256SUMS.txt` has exactly two DMG entries and does not include itself.
 6. Confirm that both macOS DMGs pass Gatekeeper and contain valid stapled notarization tickets.
-7. Confirm that `latest-mac.yml` contains both architecture-specific ZIPs, `latest.yml` contains both NSIS installers, and each Linux architecture has its own manifest.
+7. Confirm that `latest-mac.yml` contains both architecture-specific ZIPs and that no Windows or Linux package or manifest is present.
 
 ```bash
 git switch main

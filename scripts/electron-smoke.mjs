@@ -19,12 +19,18 @@ try {
     window.memento.scanDiskUsage &&
     window.memento.cancelDiskUsageScan &&
     window.memento.revealDiskUsageNode &&
-    window.memento.onDiskUsageProgress
+    window.memento.onDiskUsageProgress &&
+    window.memento.listMaintenanceRuns &&
+    window.memento.deleteMaintenanceRuns &&
+    window.memento.revealMaintenanceRecovery
   ))
   if (!preloadReady) throw new Error('preload API is unavailable')
   const providers = await page.evaluate(() => window.memento?.listAgentProviders() ?? [])
   if (providers.some((provider) => 'apiKey' in provider)) {
     throw new Error('provider credentials unexpectedly crossed the preload boundary')
+  }
+  if (await page.locator('.nav-button[title="电脑体检"]').getAttribute('aria-current') !== 'page') {
+    throw new Error('first window did not open on deterministic Health')
   }
 
   await page.locator('.nav-button[title="应用管理"]').click()

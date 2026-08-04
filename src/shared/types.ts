@@ -2,8 +2,25 @@ export type ScanSection = 'services' | 'storage' | 'applications' | 'terminal'
 
 import type { MementoAgentApi } from './agent-types'
 import type { MementoSettingsApi } from './app-settings'
+import type { MaintenanceRunRecord } from './maintenance-types'
 
 export type RiskLevel = 'safe' | 'review' | 'protected'
+
+export type FindingConfidence = 'verified' | 'strong' | 'weak'
+export type EstimateQuality = 'exact' | 'approximate' | 'unknown'
+export type FindingReasonCode =
+  | 'allowlisted-rebuildable-path'
+  | 'homebrew-cleanup-preview'
+  | 'measured-local-target'
+  | 'managed-service'
+  | 'service-runtime-anomaly'
+  | 'service-orphaned'
+  | 'duplicate-bundle-id'
+  | 'stale-last-used-date'
+  | 'unmatched-local-identity'
+  | 'age-only-signal'
+  | 'reviewable-application-log'
+  | 'registered-local-operation'
 
 export type ActionKind =
   | 'trash'
@@ -43,6 +60,9 @@ export interface ScanCandidate {
   status: string
   location?: string
   evidence: string[]
+  confidence: FindingConfidence
+  reasonCodes: readonly FindingReasonCode[]
+  estimateQuality: EstimateQuality
   action?: CandidateAction
   operations?: CandidateOperation[]
   serviceAnomalies?: ServiceAnomalyKind[]
@@ -152,7 +172,27 @@ export interface ScanResult {
     findings: TerminalFinding[]
     configFiles: TerminalConfigFile[]
   }
+  timings: ScanTiming[]
+  diagnostics: ScanDiagnostic[]
   warnings: string[]
+}
+
+export interface ScanTiming {
+  section: ScanSection | 'system' | 'total'
+  durationMs: number
+}
+
+export interface ScanDiagnostic {
+  section: ScanSection | 'system'
+  code:
+    | 'scan.platform.unsupported'
+    | 'scan.services.failed'
+    | 'scan.storage.failed'
+    | 'scan.applications.failed'
+    | 'scan.hidden-home.failed'
+    | 'scan.terminal.failed'
+  severity: 'warning' | 'error'
+  message: string
 }
 
 export interface ScanProgress {
@@ -246,6 +286,9 @@ export interface MementoApi extends MementoAgentApi, MementoSettingsApi {
   runActions: (ids: string[]) => Promise<ActionResult[]>
   runTerminalFixes: (ids: string[]) => Promise<TerminalFixRunResult>
   undoTerminalFixes: () => Promise<ActionResult[]>
+  listMaintenanceRuns: () => Promise<MaintenanceRunRecord[]>
+  deleteMaintenanceRuns: (runIds: string[]) => Promise<void>
+  revealMaintenanceRecovery: (operationRecordId: string) => Promise<void>
   revealCandidateLocation: (id: string) => Promise<void>
   onScanProgress: (callback: (progress: ScanProgress) => void) => () => void
   onDiskUsageProgress: (callback: (progress: DiskUsageProgress) => void) => () => void

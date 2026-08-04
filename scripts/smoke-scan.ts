@@ -1,6 +1,7 @@
 import os from 'node:os'
 import { existsSync } from 'node:fs'
 import { runFullScan } from '../src/main/scanner'
+import { isReviewClue, summarizeFindingTrust } from '../src/shared/finding-trust'
 
 const started = Date.now()
 const bundle = await runFullScan((progress) => {
@@ -72,6 +73,14 @@ if (storageWithoutLocation) {
 const hiddenHomeItems = bundle.result.candidates.filter(
   (candidate) => candidate.section === 'storage' && candidate.action?.kind === 'trash-home-artifact'
 )
+const invalidHiddenHomeTrust = hiddenHomeItems.find((candidate) =>
+  !isReviewClue(candidate) ||
+  !candidate.reasonCodes.includes('unmatched-local-identity') ||
+  candidate.estimateQuality === 'unknown'
+)
+if (invalidHiddenHomeTrust) {
+  throw new Error(`hidden Home item has invalid trust metadata: ${invalidHiddenHomeTrust.name}`)
+}
 const unsafeHiddenHomeItem = hiddenHomeItems.find((candidate) =>
   candidate.risk !== 'review' || !candidate.action?.reversible || !candidate.location?.startsWith('~/')
 )
@@ -90,6 +99,10 @@ const personalFileFinding = bundle.result.candidates.find((candidate) =>
 )
 if (personalFileFinding) {
   throw new Error(`personal file was reported as a Storage cleanup finding: ${personalFileFinding.location}`)
+}
+const trust = summarizeFindingTrust(bundle.result.candidates)
+if (trust.safeCleanup.some((candidate) => candidate.action?.kind === 'trash-home-artifact')) {
+  throw new Error('weak hidden Home item contributed to safe cleanup')
 }
 
 const expectedLocations = new Map([
@@ -112,7 +125,16 @@ process.stdout.write(
   `${JSON.stringify(
     {
       elapsedMs: Date.now() - started,
+      timings: bundle.result.timings,
+      diagnostics: bundle.result.diagnostics,
       candidates: bySection,
+      trust: {
+        safeCleanup: trust.safeCleanup.length,
+        actionable: trust.actionable.length,
+        clues: trust.clues.length,
+        trustedReclaimableBytes: trust.trustedReclaimableBytes,
+        healthSignals: trust.healthSignalCount
+      },
       actionable: bundle.actions.size,
       applications: {
         installed: bundle.result.applications.length,

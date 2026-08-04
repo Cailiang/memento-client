@@ -8,6 +8,28 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.7.0 - 2026-08-04
+
+### English
+
+- Rebuilt Health around explicit system status, safely reclaimable bytes, actionable findings, and weak review clues. Unmatched hidden Home/Application Support directories no longer reduce health, inflate reclaimable space, or affect the sidebar count.
+- Added required finding confidence, stable reason codes, and estimate quality, backed by a shared pure trust policy and regression tests. Scans now report section/total timings and stable diagnostic codes.
+- Changed startup to open the deterministic Health workflow. Scanning, trusted finding review, direct execution, and history work without a model provider; AI remains an optional explanation and planning layer.
+- Added SQLite schema v4 with an Agent-independent maintenance ledger. Direct actions, disk-browser Trash, terminal fixes/restores, application removal, and Agent execution now record per-operation status, estimates, recovery availability, messages, and stable errors.
+- Reworked History into Maintenance and Agent tabs, with local recovery-location actions and record-only deletion that never modifies filesystem targets or backup material.
+- Added a security policy, contribution contract, private vulnerability route, bug form, privacy-conscious false-positive form, and pull-request safety checklist.
+- Restricted public Releases to eight macOS assets and two DMG checksums. Windows and Linux remain temporary internal CI portability artifacts and are no longer published as supported products.
+
+### 简体中文
+
+- 电脑体检改为明确区分系统状态、安全可释放空间、可行动问题和弱审查线索；未匹配到身份的 Home/Application Support 隐藏目录不再扣健康分、虚增可释放空间或影响侧栏数量。
+- Finding 新增必填置信度、稳定 reason code 和估算质量，并由共享纯策略与回归测试约束；扫描结果同时提供分模块/总耗时和稳定诊断码。
+- 启动后直接进入确定性体检；扫描、可信发现审查、直接执行和历史查看均不依赖模型，AI 只作为可选的解释与计划层。
+- SQLite 升级到 schema v4，新增独立于 Agent 对话的统一维护账本；直接操作、磁盘废纸篓、终端优化/恢复、应用移除和 Agent 执行都会逐项记录状态、估算、恢复可用性、消息与稳定错误码。
+- 历史页拆为“维护账本”和“Agent 对话”，支持打开本机恢复位置；删除维护历史只删除审计记录，不会处理文件系统目标或备份材料。
+- 新增安全策略、贡献合同、私密漏洞入口、Bug 表单、保护隐私的误报表单和 PR 安全检查清单。
+- 公开 Release 收敛为 8 个 macOS 资产与 2 条 DMG 校验和；Windows/Linux 只保留临时内部 CI 可移植性产物，不再作为正式产品发布。
+
 ## 0.6.60 - 2026-08-03
 
 ### English

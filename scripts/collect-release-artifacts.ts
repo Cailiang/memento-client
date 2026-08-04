@@ -95,21 +95,6 @@ function mergedManifest(
   }
 }
 
-function renamedManifestFiles(
-  manifest: UpdateManifest,
-  renames: Record<string, string>
-): UpdateManifest {
-  const renamed = {
-    ...manifest,
-    files: manifest.files.map((file) => ({
-      ...file,
-      url: renames[file.url] ?? file.url
-    }))
-  }
-  if (manifest.path) renamed.path = renames[manifest.path] ?? manifest.path
-  return renamed
-}
-
 async function sha256(file: string): Promise<string> {
   return createHash('sha256').update(await readFile(file)).digest('hex')
 }
@@ -126,29 +111,13 @@ export async function collectReleaseArtifacts(
 
   const installers: ArtifactSource[] = [
     { runner: 'macos-x64', name: `Memento-${version}-x64.dmg` },
-    { runner: 'macos-arm64', name: `Memento-${version}-arm64.dmg` },
-    { runner: 'windows-x64', name: `Memento-${version}-x64.exe` },
-    { runner: 'windows-arm64', name: `Memento-${version}-arm64.exe` },
-    {
-      runner: 'linux-x64',
-      name: `Memento-${version}-x86_64.AppImage`,
-      outputName: `Memento-${version}-x64.AppImage`
-    },
-    { runner: 'linux-arm64', name: `Memento-${version}-arm64.AppImage` },
-    {
-      runner: 'linux-x64',
-      name: `Memento-${version}-amd64.deb`,
-      outputName: `Memento-${version}-x64.deb`
-    },
-    { runner: 'linux-arm64', name: `Memento-${version}-arm64.deb` }
+    { runner: 'macos-arm64', name: `Memento-${version}-arm64.dmg` }
   ]
   const updaterPayloads: ArtifactSource[] = [
     { runner: 'macos-x64', name: `Memento-${version}-x64.zip` },
     { runner: 'macos-x64', name: `Memento-${version}-x64.zip.blockmap` },
     { runner: 'macos-arm64', name: `Memento-${version}-arm64.zip` },
-    { runner: 'macos-arm64', name: `Memento-${version}-arm64.zip.blockmap` },
-    { runner: 'windows-x64', name: `Memento-${version}-x64.exe.blockmap` },
-    { runner: 'windows-arm64', name: `Memento-${version}-arm64.exe.blockmap` }
+    { runner: 'macos-arm64', name: `Memento-${version}-arm64.zip.blockmap` }
   ]
 
   for (const source of [...installers, ...updaterPayloads]) {
@@ -168,57 +137,12 @@ export async function collectReleaseArtifacts(
     { runner: 'macos-arm64', name: 'latest-mac.yml' },
     version
   )
-  const windowsX64 = await readManifest(
-    artifactsDirectory,
-    { runner: 'windows-x64', name: 'latest.yml' },
-    version
-  )
-  const windowsArm64 = await readManifest(
-    artifactsDirectory,
-    { runner: 'windows-arm64', name: 'latest.yml' },
-    version
-  )
   const macNames = [`Memento-${version}-x64.zip`, `Memento-${version}-arm64.zip`]
-  const windowsNames = [`Memento-${version}-x64.exe`, `Memento-${version}-arm64.exe`]
 
   await writeFile(
     path.join(outputDirectory, 'latest-mac.yml'),
     dump(mergedManifest(macX64, macArm64, macNames), { lineWidth: -1, noRefs: true })
   )
-  await writeFile(
-    path.join(outputDirectory, 'latest.yml'),
-    dump(mergedManifest(windowsX64, windowsArm64, windowsNames), { lineWidth: -1, noRefs: true })
-  )
-
-  for (const source of [
-    {
-      runner: 'linux-x64',
-      name: 'latest-linux.yml',
-      inputAppImage: `Memento-${version}-x86_64.AppImage`,
-      outputAppImage: `Memento-${version}-x64.AppImage`,
-      renames: {
-        [`Memento-${version}-x86_64.AppImage`]: `Memento-${version}-x64.AppImage`,
-        [`Memento-${version}-amd64.deb`]: `Memento-${version}-x64.deb`
-      }
-    },
-    {
-      runner: 'linux-arm64',
-      name: 'latest-linux-arm64.yml',
-      inputAppImage: `Memento-${version}-arm64.AppImage`,
-      outputAppImage: `Memento-${version}-arm64.AppImage`,
-      renames: {}
-    }
-  ]) {
-    const manifest = await readManifest(artifactsDirectory, source, version)
-    selectFiles(manifest, [source.inputAppImage])
-    const publishedManifest = renamedManifestFiles(manifest, source.renames)
-    selectFiles(publishedManifest, [source.outputAppImage])
-    await writeFile(
-      path.join(outputDirectory, source.name),
-      dump(publishedManifest, { lineWidth: -1, noRefs: true })
-    )
-  }
-
   const checksumLines: string[] = []
   for (const source of [...installers].sort((a, b) =>
     (a.outputName ?? a.name).localeCompare(b.outputName ?? b.name)
@@ -230,8 +154,8 @@ export async function collectReleaseArtifacts(
   await writeFile(path.join(outputDirectory, 'SHA256SUMS.txt'), `${checksumLines.join('\n')}\n`)
 
   const outputNames = await readdir(outputDirectory)
-  if (outputNames.length !== 19 || checksumLines.length !== 8) {
-    throw new Error(`Expected 19 release assets and 8 installer checksums, found ${outputNames.length} and ${checksumLines.length}`)
+  if (outputNames.length !== 8 || checksumLines.length !== 2) {
+    throw new Error(`Expected 8 macOS release assets and 2 installer checksums, found ${outputNames.length} and ${checksumLines.length}`)
   }
 }
 

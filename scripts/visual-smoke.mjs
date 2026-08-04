@@ -6,8 +6,8 @@ import path from 'node:path'
 const baseUrl = process.argv[2] ?? 'http://127.0.0.1:4174'
 const expectedVersion = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version
 const pages = [
-  ['agent', null],
-  ['health', '电脑体检'],
+  ['agent', 'Agent'],
+  ['health', null],
   ['apps', '应用管理'],
   ['history', '任务记录'],
   ['settings', '设置']
@@ -88,6 +88,30 @@ try {
       if (pageName !== 'agent' && await page.locator('.page-heading').count()) {
         failures.push(`${viewportName}/${pageName}: redundant page heading is still rendered`)
       }
+      if (viewport.width <= 520 && pageName === 'health') {
+        const mobileHealthLayout = await page.evaluate(() => {
+          const band = document.querySelector('.health-band')
+          const firstFinding = document.querySelector('.health-panel.is-active .data-row')
+          const navigation = document.querySelector('.sidebar')
+          if (!band || !firstFinding || !navigation) return null
+          const findingRect = firstFinding.getBoundingClientRect()
+          const navigationRect = navigation.getBoundingClientRect()
+          return {
+            columns: getComputedStyle(band).gridTemplateColumns.split(' ').length,
+            findingTop: findingRect.top,
+            findingBottom: findingRect.bottom,
+            navigationTop: navigationRect.top
+          }
+        })
+        if (!mobileHealthLayout || mobileHealthLayout.columns !== 2) {
+          failures.push(`${viewportName}/health: health metrics do not retain the compact two-column layout`)
+        } else if (
+          mobileHealthLayout.findingTop < mobileHealthLayout.navigationTop &&
+          mobileHealthLayout.findingBottom > mobileHealthLayout.navigationTop
+        ) {
+          failures.push(`${viewportName}/health: first trusted finding is obscured by mobile navigation ${JSON.stringify(mobileHealthLayout)}`)
+        }
+      }
       await page.close()
     }
   }
@@ -128,6 +152,31 @@ try {
   }
   await settingsPage.close()
 
+  const firstRunPage = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+  const firstRunUrl = new URL(baseUrl)
+  firstRunUrl.searchParams.set('noProvider', '1')
+  await firstRunPage.goto(firstRunUrl.href, { waitUntil: 'networkidle' })
+  if (await firstRunPage.locator('.nav-button[title="电脑体检"]').getAttribute('aria-current') !== 'page') {
+    failures.push('first-run: app did not open on deterministic Health')
+  }
+  if (!await firstRunPage.getByText('尚未配置模型', { exact: true }).isVisible()) {
+    failures.push('first-run: no-provider state is missing')
+  }
+  for (const label of ['系统状态', '安全可释放空间', '可行动问题', '审查线索']) {
+    if (!await firstRunPage.getByText(label, { exact: true }).isVisible()) {
+      failures.push(`first-run: ${label} metric is missing`)
+    }
+  }
+  if (!await firstRunPage.getByRole('tab', { name: /可信建议/ }).isVisible() ||
+      !await firstRunPage.getByRole('tab', { name: /审查线索/ }).isVisible()) {
+    failures.push('first-run: trusted findings and clues are not separated')
+  }
+  if (!await firstRunPage.locator('.health-panel.is-active .direct-action-button').first().isEnabled()) {
+    failures.push('first-run: deterministic direct action is disabled without a provider')
+  }
+  await firstRunPage.screenshot({ path: '/tmp/memento-first-run-no-provider.png' })
+  await firstRunPage.close()
+
   const updatePage = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   const updateUrl = new URL(baseUrl)
   updateUrl.searchParams.set('demoUpdate', 'downloaded')
@@ -149,6 +198,7 @@ try {
 
   const concurrentPage = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   await concurrentPage.goto(baseUrl, { waitUntil: 'networkidle' })
+  await concurrentPage.locator('.nav-button[title="Agent"]').click()
   await concurrentPage.locator('textarea[aria-label="输入任务"]').fill('分析 Xcode 派生数据')
   await concurrentPage.locator('button[aria-label="发送"]').click()
   await concurrentPage.locator('.nav-button[title="电脑体检"]').click()
@@ -179,6 +229,7 @@ try {
   await conversationPage.goto(baseUrl, { waitUntil: 'networkidle' })
   await conversationPage.locator('.nav-button[title="电脑体检"]').click()
   await conversationPage.getByRole('tab', { name: /存储空间/ }).click()
+  await conversationPage.getByRole('tab', { name: /审查线索/ }).click()
   const lingmaRow = conversationPage.locator('.health-panel.is-active .data-row').filter({ hasText: '.lingma' })
   if (!await lingmaRow.count()) {
     failures.push('agent-evidence: .lingma storage finding is missing')
@@ -199,11 +250,13 @@ try {
   await healthReviewPage.goto(baseUrl, { waitUntil: 'networkidle' })
   await healthReviewPage.locator('.nav-button[title="电脑体检"]').click()
   const reviewButton = healthReviewPage.locator('.health-score')
-  if (!await reviewButton.getByText(/先查看存储空间 \d+ 项/).count()) {
+  const reviewText = await reviewButton.textContent()
+  const reviewMatch = reviewText?.match(/先查看(存储空间|后台服务|终端诊断) (\d+) 项/)
+  if (!reviewMatch) {
     failures.push('health-summary: score does not expose the largest destination module')
   } else {
     await reviewButton.click()
-    if (await healthReviewPage.getByRole('tab', { name: /存储空间/ }).getAttribute('aria-selected') !== 'true') {
+    if (await healthReviewPage.getByRole('tab', { name: new RegExp(reviewMatch[1]) }).getAttribute('aria-selected') !== 'true') {
       failures.push('health-summary: review action did not open the module with the most findings')
     }
     await healthReviewPage.getByRole('tab', { name: /后台服务/ }).click()
@@ -272,6 +325,7 @@ try {
 
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   await page.goto(baseUrl, { waitUntil: 'networkidle' })
+  await page.locator('.nav-button[title="Agent"]').click()
   await page.locator('textarea[aria-label="输入任务"]').fill('检查可以安全清理的空间')
   await page.locator('button[aria-label="发送"]').click()
   const agentProgress = page.locator('.agent-progress')
@@ -298,17 +352,38 @@ try {
   await executionDialog.getByRole('button', { name: '完成' }).click()
 
   await page.locator('.nav-button[title="任务记录"]').click()
+  const maintenanceTab = page.getByRole('tab', { name: /维护账本/ })
+  if (await maintenanceTab.getAttribute('aria-selected') !== 'true') {
+    failures.push('maintenance-history: maintenance ledger is not the default history view')
+  }
+  const maintenanceEntry = page.locator('.maintenance-history-row').first()
+  if (!await maintenanceEntry.isVisible()) {
+    failures.push('maintenance-history: completed operation is not visible')
+  } else {
+    if (!await maintenanceEntry.getByText('已完成', { exact: true }).isVisible()) {
+      failures.push('maintenance-history: completion status is missing')
+    }
+    const recoveryButton = maintenanceEntry.getByRole('button', { name: '显示配置备份' })
+    if (!await recoveryButton.isVisible()) {
+      failures.push('maintenance-history: recovery action is missing')
+    } else {
+      await recoveryButton.click()
+      await page.getByText('已打开恢复位置', { exact: true }).waitFor()
+    }
+  }
+  await page.screenshot({ path: '/tmp/memento-interaction-maintenance-history.png' })
+  await page.getByRole('tab', { name: /Agent 对话/ }).click()
   const historyEntries = page.locator('.history-entry')
   const historyCount = await historyEntries.count()
   if (await page.getByRole('button', { name: '导出', exact: true }).count()) {
     failures.push('history-search: obsolete export action is still rendered')
   }
-  const historySearch = page.getByRole('searchbox', { name: '搜索任务记录' })
+  const historySearch = page.getByRole('searchbox', { name: '搜索历史记录' })
   const firstHistoryTitle = await historyEntries.first().locator('.history-title strong').textContent()
   await historySearch.fill(firstHistoryTitle ?? '')
   if (await historyEntries.count() !== 1) failures.push('history-search: task filtering did not narrow the list')
   await historySearch.fill('')
-  await page.getByRole('checkbox', { name: '全选当前任务记录' }).check()
+  await page.getByRole('checkbox', { name: '全选当前记录' }).check()
   const bulkDelete = page.getByRole('button', { name: new RegExp(`删除所选（${historyCount}）`) })
   if (!await bulkDelete.isVisible()) failures.push('history-delete: bulk deletion action is missing')
   else await bulkDelete.click()
@@ -469,6 +544,7 @@ try {
   ]) {
     const resultPage = await browser.newPage({ viewport })
     await resultPage.goto(baseUrl, { waitUntil: 'networkidle' })
+    await resultPage.locator('.nav-button[title="Agent"]').click()
     await resultPage.locator('textarea[aria-label="输入任务"]').fill('帮我检查长期没用的应用和可以安全清理的应用残留')
     await resultPage.locator('button[aria-label="发送"]').click()
     await resultPage.locator('.agent-app-result').first().waitFor({ timeout: 5_000 })

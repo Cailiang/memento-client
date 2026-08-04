@@ -1,4 +1,5 @@
 import type { AppLanguage } from '../../shared/app-settings'
+import type { MaintenanceRunRecord } from '../../shared/maintenance-types'
 import type {
   DiskUsageNode,
   DiskUsageScanResult,
@@ -11,6 +12,60 @@ import type {
 
 const GB = 1024 ** 3
 const MB = 1024 ** 2
+const SAFE_TRUST = {
+  confidence: 'verified' as const,
+  reasonCodes: ['allowlisted-rebuildable-path', 'measured-local-target'] as const,
+  estimateQuality: 'exact' as const
+}
+const CLUE_TRUST = {
+  confidence: 'weak' as const,
+  reasonCodes: ['unmatched-local-identity', 'age-only-signal', 'measured-local-target'] as const,
+  estimateQuality: 'exact' as const
+}
+const SERVICE_TRUST = {
+  confidence: 'strong' as const,
+  reasonCodes: ['managed-service', 'registered-local-operation'] as const,
+  estimateQuality: 'unknown' as const
+}
+const APPLICATION_TRUST = {
+  confidence: 'strong' as const,
+  reasonCodes: ['registered-local-operation'] as const,
+  estimateQuality: 'approximate' as const
+}
+
+export function localizedDemoMaintenanceRuns(language: AppLanguage): MaintenanceRunRecord[] {
+  const english = language === 'en-US'
+  const createdAt = new Date(Date.now() - 18 * 60_000).toISOString()
+  const completedAt = new Date(Date.now() - 17 * 60_000).toISOString()
+
+  return [{
+    id: 'demo-maintenance-terminal',
+    source: 'terminal',
+    scanId: `demo-scan-${language}`,
+    agentRunId: null,
+    title: english ? 'Optimize terminal startup' : '优化终端启动速度',
+    status: 'completed',
+    createdAt,
+    completedAt,
+    operations: [{
+      id: 'demo-maintenance-operation-terminal',
+      runId: 'demo-maintenance-terminal',
+      operationId: 'demo-terminal-nvm',
+      kind: 'terminal-fix',
+      title: english ? 'Disable automatic NVM initialization' : '关闭 NVM 自动初始化',
+      status: 'completed',
+      reversible: true,
+      estimatedBytes: null,
+      actualBytes: null,
+      recoveryMode: 'backup',
+      recoveryAvailable: true,
+      errorCode: null,
+      message: english ? 'Configuration backup is available.' : '配置备份可用。',
+      createdAt,
+      completedAt
+    }]
+  }]
+}
 
 function demoDiskNode(
   id: string,
@@ -92,6 +147,7 @@ export const demoResult: ScanResult = {
   },
   candidates: [
     {
+      ...SAFE_TRUST,
       id: 'demo-derived-data',
       section: 'storage',
       name: 'Xcode DerivedData',
@@ -111,6 +167,7 @@ export const demoResult: ScanResult = {
       }
     },
     {
+      ...SAFE_TRUST,
       id: 'demo-npm',
       section: 'storage',
       name: 'npm 内容缓存',
@@ -130,6 +187,7 @@ export const demoResult: ScanResult = {
       }
     },
     {
+      ...CLUE_TRUST,
       id: 'demo-lingma',
       section: 'storage',
       name: '.lingma',
@@ -149,6 +207,7 @@ export const demoResult: ScanResult = {
       }
     },
     {
+      ...SERVICE_TRUST,
       id: 'demo-postgres',
       section: 'services',
       name: 'postgresql@14',
@@ -173,6 +232,7 @@ export const demoResult: ScanResult = {
       }
     },
     {
+      ...SERVICE_TRUST,
       id: 'demo-sunlogin',
       section: 'services',
       name: 'com.oray.sunlogin.desktopagent',
@@ -208,6 +268,7 @@ export const demoResult: ScanResult = {
       ]
     },
     {
+      ...SERVICE_TRUST,
       id: 'demo-lianghua-webui',
       section: 'services',
       name: 'com.lianghua.webui.fangcl',
@@ -239,6 +300,7 @@ export const demoResult: ScanResult = {
       ]
     },
     {
+      ...APPLICATION_TRUST,
       id: 'demo-app-android-studio',
       section: 'applications',
       name: 'Android Studio Preview',
@@ -257,6 +319,7 @@ export const demoResult: ScanResult = {
       }
     },
     {
+      ...APPLICATION_TRUST,
       id: 'demo-app-postman',
       section: 'applications',
       name: 'Postman',
@@ -484,6 +547,15 @@ export const demoResult: ScanResult = {
       }
     ]
   },
+  timings: [
+    { section: 'system', durationMs: 120 },
+    { section: 'services', durationMs: 680 },
+    { section: 'storage', durationMs: 4210 },
+    { section: 'applications', durationMs: 1820 },
+    { section: 'terminal', durationMs: 3110 },
+    { section: 'total', durationMs: 4330 }
+  ],
+  diagnostics: [],
   warnings: []
 }
 

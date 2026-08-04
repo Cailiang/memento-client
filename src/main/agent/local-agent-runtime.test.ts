@@ -15,6 +15,11 @@ import {
 } from './local-agent-runtime'
 
 const temporaryDirectories: string[] = []
+const TRUST = {
+  confidence: 'verified' as const,
+  reasonCodes: ['registered-local-operation'] as ScanResult['candidates'][number]['reasonCodes'],
+  estimateQuality: 'exact' as const
+}
 
 function temporaryDirectory(): string {
   const directory = mkdtempSync(path.join(tmpdir(), 'memento-agent-runtime-'))
@@ -60,6 +65,7 @@ describe('LocalAgentRuntime boundaries', () => {
         memoryTotalBytes: 100, memoryUsedBytes: 50, uptimeSeconds: 100
       },
       candidates: [{
+        ...TRUST,
         id: 'candidate-1', section: 'storage', name: 'Cache', subtitle: '', description: '',
         risk: 'safe', status: 'safe', evidence: [], sizeBytes: 2048,
         action: { kind: 'trash', label: 'Clean', consequence: 'Move to Trash', reversible: true }
@@ -79,7 +85,7 @@ describe('LocalAgentRuntime boundaries', () => {
           severity: 'notice', fix: { id: 'terminal-fix', label: 'Fix PATH', consequence: 'Back up and fix' }
         }]
       },
-      warnings: []
+      timings: [], diagnostics: [], warnings: []
     }
     expect(availablePlanItems(scan).map((item) => item.id)).toEqual([
       'candidate-1', 'app-action', 'terminal-fix'
@@ -97,6 +103,7 @@ describe('LocalAgentRuntime boundaries', () => {
         memoryTotalBytes: 100, memoryUsedBytes: 50, uptimeSeconds: 100
       },
       candidates: [{
+        ...TRUST,
         id: 'service-cisco', section: 'services',
         name: 'com.cisco.anyconnect.aciseposture', subtitle: 'Launch agent',
         description: 'Cisco posture assessment', risk: 'review', status: 'Loaded', evidence: [],
@@ -111,7 +118,7 @@ describe('LocalAgentRuntime boundaries', () => {
       applications: [],
       ignoredApplications: [],
       terminal: { shell: '/bin/zsh', baselineMs: 20, startupMs: 30, sampleCount: 3, configFiles: [], findings: [] },
-      warnings: []
+      timings: [], diagnostics: [], warnings: []
     }
     const focus = inferPromptFocus(
       '检查 com.cisco.anyconnect.aciseposture，说明影响，并把仅停止服务加入计划',
@@ -181,6 +188,7 @@ describe('LocalAgentRuntime boundaries', () => {
         memoryTotalBytes: 100, memoryUsedBytes: 50, uptimeSeconds: 100
       },
       candidates: [{
+        ...TRUST,
         id: 'cache', section: 'storage', name: 'Caches', subtitle: '', description: '',
         risk: 'safe', status: 'Reclaimable', evidence: [],
         operations: [
@@ -190,7 +198,7 @@ describe('LocalAgentRuntime boundaries', () => {
       }],
       applications: [], ignoredApplications: [],
       terminal: { shell: '/bin/zsh', baselineMs: 20, startupMs: 30, sampleCount: 3, configFiles: [], findings: [] },
-      warnings: []
+      timings: [], diagnostics: [], warnings: []
     }
     const run = store.createRun('Clean caches', provider)
     store.updateRun(run.id, {

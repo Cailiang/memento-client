@@ -26,13 +26,20 @@ import type {
   ScanProgress,
   ScanResult
 } from '../../../shared/types'
+import {
+  isActionableFinding,
+  isHealthSignal,
+  isReviewClue,
+  isSafeCleanup,
+  summarizeFindingTrust
+} from '../../../shared/finding-trust'
 import { selectHealthReviewTarget } from '../health-review'
 import { useI18n } from '../i18n'
 import { DiskUsageBrowser } from './DiskUsageBrowser'
 import { formatBytes, formatDateTime } from './utils'
 
 export type HealthTab = 'storage' | 'services' | 'terminal'
-export type StorageMode = 'recommendations' | 'browser'
+export type StorageMode = 'safe' | 'clues' | 'browser'
 
 export interface HealthAgentOrigin {
   tab: HealthTab
@@ -68,6 +75,16 @@ function CandidateRow({
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const operationCount = operations(candidate).length
+  const confidenceLabel = candidate.confidence === 'verified'
+    ? text('已验证', 'Verified')
+    : candidate.confidence === 'strong'
+      ? text('强证据', 'Strong evidence')
+      : text('弱线索', 'Weak clue')
+  const estimateLabel = candidate.estimateQuality === 'exact'
+    ? text('精确测量', 'Exact measurement')
+    : candidate.estimateQuality === 'approximate'
+      ? text('近似估算', 'Approximate estimate')
+      : text('未估算', 'No estimate')
   const Icon = candidate.section === 'services'
     ? RadioTower
     : candidate.name.toLowerCase().includes('xcode')
@@ -88,9 +105,9 @@ function CandidateRow({
   return (
     <div className="data-row" data-focus-id={candidate.id} tabIndex={-1}>
       <span className="row-icon"><Icon size={16} /></span>
-      <div className="row-main"><strong>{candidate.name}</strong><small>{candidate.description}</small>{candidate.location && <button type="button" className="candidate-location" title={candidate.location} onClick={() => onReveal(candidate)}><FolderOpen size={12} /><span>{candidate.location}</span></button>}</div>
+      <div className="row-main"><strong>{candidate.name}<span className={`finding-confidence ${candidate.confidence}`}>{confidenceLabel}</span></strong><small>{candidate.description}</small>{candidate.location && <button type="button" className="candidate-location" title={candidate.location} onClick={() => onReveal(candidate)}><FolderOpen size={12} /><span>{candidate.location}</span></button>}</div>
       <div className="row-meta"><strong>{candidate.sizeBytes ? formatBytes(candidate.sizeBytes) : candidate.status}</strong><small>{candidate.ageDays !== undefined ? text(`${candidate.ageDays} 天`, `${candidate.ageDays} days`) : candidate.subtitle}</small></div>
-      <div className="row-meta"><strong>{operationCount ? text(`${operationCount} 个可选操作`, `${operationCount} available ${operationCount === 1 ? 'action' : 'actions'}`) : text('仅提供分析', 'Analysis only')}</strong><small>{operationCount ? text('可直接执行或先分析', 'Run directly or analyze first') : text('不会修改系统', 'No system changes')}</small></div>
+      <div className="row-meta"><strong>{operationCount ? text(`${operationCount} 个可选操作`, `${operationCount} available ${operationCount === 1 ? 'action' : 'actions'}`) : text('仅提供分析', 'Analysis only')}</strong><small>{estimateLabel}</small></div>
       <div className="row-actions">
         <button type="button" className="secondary-button" onClick={() => onAgentPrompt(operationCount
           ? text(
@@ -184,6 +201,11 @@ export function HealthPage({
   const [serviceCategory, setServiceCategory] = useState<string>('all')
   const storage = result?.candidates.filter((item) => item.section === 'storage') ?? []
   const services = result?.candidates.filter((item) => item.section === 'services') ?? []
+  const trust = summarizeFindingTrust([...storage, ...services])
+  const safeStorage = storage.filter(isSafeCleanup)
+  const actionableStorage = storage.filter(isActionableFinding)
+  const trustedStorage = [...safeStorage, ...actionableStorage]
+  const storageClues = storage.filter(isReviewClue)
   const serviceCategories = ([
     ['orphaned', text('残留启动项', 'Orphaned startup items')],
     ['failed', text('启动异常', 'Startup failures')],
@@ -204,14 +226,20 @@ export function HealthPage({
     : services.filter((service) => serviceCategory === 'other'
       ? !(service.serviceAnomalies?.length)
       : service.serviceAnomalies?.includes(serviceCategory as NonNullable<ScanCandidate['serviceAnomalies']>[number]))
-  const reclaimable = storage.reduce((sum, item) => sum + (operations(item).length ? item.sizeBytes ?? 0 : 0), 0)
   const terminalFindings = result?.terminal.findings ?? []
   const terminalFixes = terminalFindings.filter((item) => item.fix)
-  const actionableServices = services.filter((item) => operations(item).length)
-  const score = Math.max(45, 100 - storage.length * 2 - actionableServices.length * 3 - terminalFixes.length * 2)
-  const findingCount = storage.length + actionableServices.length + terminalFixes.length
+  const actionableServices = services.filter(isActionableFinding)
+  const serviceHealthSignals = services.filter(isHealthSignal)
+  const slowTerminalFindings = terminalFindings.filter((item) => item.severity === 'slow')
+  const diskFreeRatio = result?.system.diskTotalBytes
+    ? result.system.diskFreeBytes / result.system.diskTotalBytes
+    : 1
+  const diskPenalty = diskFreeRatio < 0.1 ? 25 : diskFreeRatio < 0.2 ? 10 : 0
+  const score = Math.max(45, 100 - diskPenalty - serviceHealthSignals.length * 5 - slowTerminalFindings.length * 5)
+  const actionableCount = trust.actionable.length + terminalFixes.length
+  const findingCount = trustedStorage.length + actionableServices.length + terminalFixes.length
   const reviewTarget = selectHealthReviewTarget({
-    storage: storage.length,
+    storage: trustedStorage.length,
     services: actionableServices.length,
     terminal: terminalFixes.length
   })
@@ -248,7 +276,7 @@ export function HealthPage({
 
   const reviewFindings = (): void => {
     if (reviewTarget.tab === 'storage') {
-      onStorageModeChange('recommendations')
+      onStorageModeChange('safe')
     } else if (reviewTarget.tab === 'services') {
       setServiceCategory('all')
     }
@@ -259,7 +287,10 @@ export function HealthPage({
     <section ref={pageRef} className="page content-page is-active">
       <div className="page-command-bar">
         <span className="page-command-summary">{result
-          ? text(`最后检查于 ${formatDateTime(result.completedAt, language)}，${findingCount} 项内容值得关注。`, `Last checked ${formatDateTime(result.completedAt, language)}. ${findingCount} items need attention.`)
+          ? text(
+              `最后检查于 ${formatDateTime(result.completedAt, language)} · 用时 ${result.timings.find((item) => item.section === 'total')?.durationMs ?? 0} ms`,
+              `Last checked ${formatDateTime(result.completedAt, language)} · ${result.timings.find((item) => item.section === 'total')?.durationMs ?? 0} ms`
+            )
           : text('尚未完成体检', 'No health scan yet')}</span>
         <div className="page-command-actions">
           <button type="button" className="secondary-button" onClick={() => askAgent(text('全面检查电脑状态并准备处理计划', 'Inspect the computer and prepare a plan'))}>
@@ -280,6 +311,14 @@ export function HealthPage({
         </div>
       )}
 
+      {!scanBusy && result && result.diagnostics.length > 0 && (
+        <div className="scan-status is-warning" role="status">
+          <Activity size={15} />
+          <span>{text(`有 ${result.diagnostics.length} 个扫描模块未完整完成`, `${result.diagnostics.length} scan modules did not complete`)}</span>
+          <strong>{result.diagnostics[0].code}</strong>
+        </div>
+      )}
+
       <div className="health-band">
         <button
           type="button"
@@ -288,14 +327,15 @@ export function HealthPage({
           disabled={!result || findingCount === 0}
           title={text(`打开待确认项最多的模块：${reviewTargetLabel}`, `Open the module with the most findings: ${reviewTargetLabel}`)}
         >
+          <small className="health-score-label">{text('系统状态', 'System status')}</small>
           <strong>{score}</strong>
           <span>{findingCount > 0
             ? <>{text(`先查看${reviewTargetLabel} ${reviewTarget.count} 项`, `Review ${reviewTarget.count} in ${reviewTargetLabel}`)}<ChevronRight size={12} /></>
             : text('没有待处理项目', 'No pending findings')}</span>
         </button>
-        <div className="health-metric"><span>{text('可释放空间', 'Reclaimable')}</span><strong>{formatBytes(reclaimable)}</strong><small>{text(`${storage.length} 个建议项目`, `${storage.length} findings`)}</small></div>
-        <div className="health-metric"><span>{text('后台服务', 'Services')}</span><strong>{services.length}</strong><small>{text(`${services.filter((item) => operations(item).length).length} 个建议项`, `${services.filter((item) => operations(item).length).length} findings`)}</small></div>
-        <div className="health-metric"><span>{text('终端启动', 'Terminal startup')}</span><strong>{result?.terminal.startupMs === null || result?.terminal.startupMs === undefined ? '--' : `${result.terminal.startupMs} ms`}</strong><small>{text(`${terminalFixes.length} 项可以自动优化`, `${terminalFixes.length} automatic fixes`)}</small></div>
+        <div className="health-metric"><span>{text('安全可释放空间', 'Safely reclaimable')}</span><strong>{formatBytes(trust.trustedReclaimableBytes)}</strong><small>{text(`${safeStorage.length} 个已验证项目`, `${safeStorage.length} verified findings`)}</small></div>
+        <div className="health-metric"><span>{text('可行动问题', 'Actionable findings')}</span><strong>{actionableCount}</strong><small>{text(`${trust.healthSignalCount + slowTerminalFindings.length} 项影响系统状态`, `${trust.healthSignalCount + slowTerminalFindings.length} affect system status`)}</small></div>
+        <div className="health-metric"><span>{text('审查线索', 'Review clues')}</span><strong>{storageClues.length}</strong><small>{text('不影响健康分和空间估算', 'Excluded from health and reclaimable space')}</small></div>
       </div>
 
       <div className="health-tabs" role="tablist" aria-label={text('体检模块', 'Health modules')}>
@@ -312,19 +352,22 @@ export function HealthPage({
         <div className="health-panel is-active">
           <div className="storage-mode-toolbar">
             <div className="storage-mode-tabs" role="tablist" aria-label={text('存储空间视图', 'Storage view')}>
-              <button type="button" role="tab" aria-selected={storageMode === 'recommendations'} className={`storage-mode-tab ${storageMode === 'recommendations' ? 'is-active' : ''}`} onClick={() => onStorageModeChange('recommendations')}>{text('清理建议', 'Cleanup findings')} <span>{storage.length}</span></button>
+              <button type="button" role="tab" aria-selected={storageMode === 'safe'} className={`storage-mode-tab ${storageMode === 'safe' ? 'is-active' : ''}`} onClick={() => onStorageModeChange('safe')}>{text('可信建议', 'Trusted findings')} <span>{trustedStorage.length}</span></button>
+              <button type="button" role="tab" aria-selected={storageMode === 'clues'} className={`storage-mode-tab ${storageMode === 'clues' ? 'is-active' : ''}`} onClick={() => onStorageModeChange('clues')}>{text('审查线索', 'Review clues')} <span>{storageClues.length}</span></button>
               <button type="button" role="tab" aria-selected={storageMode === 'browser'} className={`storage-mode-tab ${storageMode === 'browser' ? 'is-active' : ''}`} onClick={() => onStorageModeChange('browser')}>{text('磁盘浏览', 'Disk browser')}</button>
             </div>
-            <span>{storageMode === 'recommendations'
-              ? text(`${storage.length} 条经过安全规则筛选的建议`, `${storage.length} findings selected by safety rules`)
+            <span>{storageMode === 'safe'
+              ? text(`${safeStorage.length} 项可安全清理，${actionableStorage.length} 项有明确证据`, `${safeStorage.length} safe cleanups and ${actionableStorage.length} evidence-backed findings`)
+              : storageMode === 'clues'
+                ? text('弱证据项目不会影响健康状态或可释放空间', 'Weak evidence does not affect health or reclaimable space')
               : diskUsage
                 ? text(`${diskUsage.retainedEntries.toLocaleString()} 个大目录和文件`, `${diskUsage.retainedEntries.toLocaleString()} large folders and files`)
                 : text('主数据卷', 'Main data volume')}</span>
           </div>
-          {storageMode === 'recommendations' ? (
+          {storageMode !== 'browser' ? (
             <>
-              <div className="section-toolbar"><strong>{text('空间建议', 'Storage findings')}</strong><button type="button" className="ignored-count-button" onClick={() => onManageIgnored('storage')}><EyeOff size={14} />{text(`已忽略 ${settings.storageWhitelist.length} 项`, `${settings.storageWhitelist.length} ignored`)}</button></div>
-              <div className="data-list">{storage.length ? storage.map((candidate) => <CandidateRow key={candidate.id} candidate={candidate} onAgentPrompt={askAgent} onDirectAction={onDirectAction} onIgnore={onIgnore} onReveal={onRevealCandidate} />) : <div className="module-empty">{text('没有发现存储建议', 'No storage findings')}</div>}</div>
+              <div className="section-toolbar"><strong>{storageMode === 'safe' ? text('可信空间建议', 'Trusted storage findings') : text('需要确认归属的线索', 'Ownership clues to review')}</strong><button type="button" className="ignored-count-button" onClick={() => onManageIgnored('storage')}><EyeOff size={14} />{text(`已忽略 ${settings.storageWhitelist.length} 项`, `${settings.storageWhitelist.length} ignored`)}</button></div>
+              <div className="data-list">{(storageMode === 'safe' ? trustedStorage : storageClues).length ? (storageMode === 'safe' ? trustedStorage : storageClues).map((candidate) => <CandidateRow key={candidate.id} candidate={candidate} onAgentPrompt={askAgent} onDirectAction={onDirectAction} onIgnore={onIgnore} onReveal={onRevealCandidate} />) : <div className="module-empty">{storageMode === 'safe' ? text('没有发现可信的存储建议', 'No trusted storage findings') : text('没有需要确认的弱线索', 'No weak clues to review')}</div>}</div>
             </>
           ) : (
             <DiskUsageBrowser result={diskUsage} progress={diskUsageProgress} busy={diskUsageBusy} error={diskUsageError} onScan={onDiskUsageScan} onCancel={onDiskUsageCancel} onReveal={onRevealDiskUsageNode} onAskAI={(node) => onAskDiskUsageNode(node, { tab: 'storage', itemId: node.id, scrollTop: pageRef.current?.scrollTop ?? 0 })} onRequestTrash={onTrashDiskUsageNode} />
