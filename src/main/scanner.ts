@@ -49,6 +49,12 @@ import {
   installedCommandIdentityTokens,
   type HiddenHomeArtifactSource
 } from './home-hidden-cleanup'
+import {
+  cleanupCategoryForTarget,
+  dynamicCleanupTargetKind,
+  resolveCleanupRules,
+  type ResolvedCleanupRule
+} from './cleanup-rules'
 
 const execFileAsync = promisify(execFile)
 const HOME = os.homedir()
@@ -842,154 +848,26 @@ async function scanServices(
   return [...brewServices, ...launchAgents]
 }
 
-interface StorageDefinition {
-  name: { zh: string; en: string }
+interface StorageDefinition extends ResolvedCleanupRule {
   target: string
-  description: { zh: string; en: string }
-  risk: 'safe' | 'review' | 'protected'
-  minimumBytes?: number
-  action?: boolean
+  action: boolean
 }
 
-interface StorageGroupDefinition {
-  name: { zh: string; en: string }
-  description: { zh: string; en: string }
-  targets: string[]
+interface StorageGroupDefinition extends ResolvedCleanupRule {
+  action: boolean
 }
 
-const storageGroupDefinitions: StorageGroupDefinition[] = [
-  {
-    name: { zh: 'Claude 可重建缓存', en: 'Claude rebuildable caches' },
-    description: { zh: 'Claude Desktop 与 Claude Code 的网页、GPU、MCP 日志和下载缓存；不会删除登录、配置、对话或项目文件。', en: 'Web, GPU, MCP log, and download caches from Claude Desktop and Claude Code. Login, settings, conversations, and projects are preserved.' },
-    targets: [
-      path.join(HOME, 'Library/Caches/com.anthropic.claudefordesktop'),
-      path.join(HOME, 'Library/Caches/claude-cli-nodejs'),
-      path.join(HOME, 'Library/Application Support/Claude/Cache'),
-      path.join(HOME, 'Library/Application Support/Claude/Code Cache'),
-      path.join(HOME, 'Library/Application Support/Claude/GPUCache'),
-      path.join(HOME, 'Library/Application Support/Claude/Service Worker/CacheStorage'),
-      path.join(HOME, 'Library/Application Support/Claude/Shared Dictionary/cache'),
-      path.join(HOME, '.claude/cache')
-    ]
-  },
-  {
-    name: { zh: 'Codex 可重建缓存', en: 'Codex rebuildable caches' },
-    description: { zh: 'Codex App 与 Codex CLI 的浏览器、GPU、日志和临时缓存；不会删除配置、凭据、会话或项目文件。', en: 'Browser, GPU, log, and temporary caches from Codex App and Codex CLI. Settings, credentials, sessions, and projects are preserved.' },
-    targets: [
-      path.join(HOME, 'Library/Caches/Codex'),
-      path.join(HOME, 'Library/Caches/com.openai.codex'),
-      path.join(HOME, 'Library/Application Support/Codex/Default/Cache'),
-      path.join(HOME, 'Library/Application Support/Codex/Default/Code Cache'),
-      path.join(HOME, 'Library/Application Support/Codex/Default/GPUCache'),
-      path.join(HOME, 'Library/Application Support/Codex/codex-browser-app/Cache'),
-      path.join(HOME, 'Library/Application Support/Codex/codex-browser-app/Code Cache'),
-      path.join(HOME, 'Library/Application Support/Codex/codex-browser-app/GPUCache'),
-      path.join(HOME, 'Library/Application Support/Codex/GPUPersistentCache/GPUCache'),
-      path.join(HOME, '.codex/log'),
-      path.join(HOME, '.codex/tmp')
-    ]
-  },
-  {
-    name: { zh: 'Antigravity 可重建缓存', en: 'Antigravity rebuildable caches' },
-    description: { zh: 'Antigravity 的编辑器、扩展、网页和 GPU 缓存；不会删除工作区、账号或供应商配置。', en: 'Editor, extension, web, and GPU caches from Antigravity. Workspaces, accounts, and provider settings are preserved.' },
-    targets: [
-      path.join(HOME, 'Library/Caches/com.google.antigravity'),
-      path.join(HOME, 'Library/Caches/com.google.antigravity-ide'),
-      ...['Antigravity', 'Antigravity IDE'].flatMap((directory) => [
-        path.join(HOME, 'Library/Application Support', directory, 'Cache'),
-        path.join(HOME, 'Library/Application Support', directory, 'CachedData'),
-        path.join(HOME, 'Library/Application Support', directory, 'Code Cache'),
-        path.join(HOME, 'Library/Application Support', directory, 'GPUCache'),
-        path.join(HOME, 'Library/Application Support', directory, 'Service Worker/CacheStorage'),
-        path.join(HOME, 'Library/Application Support', directory, 'Shared Dictionary/cache')
-      ])
-    ]
-  },
-  {
-    name: { zh: 'Grok 可重建缓存', en: 'Grok rebuildable caches' },
-    description: { zh: 'Grok 客户端的网页与 GPU 缓存；不会删除登录、对话或设置。', en: 'Web and GPU caches from Grok clients. Login, conversations, and settings are preserved.' },
-    targets: [
-      path.join(HOME, 'Library/Caches/ai.x.grok'),
-      path.join(HOME, 'Library/Caches/com.xai.grok'),
-      path.join(HOME, 'Library/Application Support/Grok/Cache'),
-      path.join(HOME, 'Library/Application Support/Grok/Code Cache'),
-      path.join(HOME, 'Library/Application Support/Grok/GPUCache'),
-      path.join(HOME, 'Library/Application Support/Grok/Service Worker/CacheStorage')
-    ]
-  }
-]
-
-const storageDefinitions: StorageDefinition[] = [
-  {
-    name: { zh: 'Xcode DerivedData', en: 'Xcode DerivedData' },
-    target: path.join(HOME, 'Library/Developer/Xcode/DerivedData'),
-    description: { zh: '编译中间产物。Xcode 会在下次构建时重新生成。', en: 'Intermediate build output that Xcode regenerates during the next build.' },
-    risk: 'safe',
-    action: true
-  },
-  {
-    name: { zh: 'Xcode Archives', en: 'Xcode Archives' },
-    target: path.join(HOME, 'Library/Developer/Xcode/Archives'),
-    description: { zh: '已归档的构建产物，可能仍用于崩溃符号化或重新分发。', en: 'Archived builds that may still be needed for crash symbolication or redistribution.' },
-    risk: 'protected'
-  },
-  {
-    name: { zh: 'iOS DeviceSupport', en: 'iOS DeviceSupport' },
-    target: path.join(HOME, 'Library/Developer/Xcode/iOS DeviceSupport'),
-    description: { zh: '连接过的 iOS 版本调试支持文件，可按需重新生成。', en: 'Debug support files for previously connected iOS versions. They can be regenerated when needed.' },
-    risk: 'safe',
-    action: true
-  },
-  {
-    name: { zh: 'iOS 模拟器缓存', en: 'iOS simulator caches' },
-    target: path.join(HOME, 'Library/Developer/CoreSimulator/Caches'),
-    description: { zh: '模拟器运行时生成的可重建缓存，不会删除模拟器设备或其中的应用数据。', en: 'Rebuildable simulator runtime caches. Simulator devices and their application data are preserved.' },
-    risk: 'safe',
-    action: true
-  },
-  {
-    name: { zh: 'Homebrew 下载缓存', en: 'Homebrew download cache' },
-    target: path.join(HOME, 'Library/Caches/Homebrew'),
-    description: { zh: '已下载的软件包和源码缓存，不影响已安装的软件。', en: 'Downloaded packages and source archives. Installed software is not affected.' },
-    risk: 'safe',
-    action: true
-  },
-  {
-    name: { zh: 'npm 内容缓存', en: 'npm content cache' },
-    target: path.join(HOME, '.npm/_cacache'),
-    description: { zh: 'npm 下载缓存，后续安装依赖时会重新下载。', en: 'npm download cache. Dependencies may be downloaded again during future installs.' },
-    risk: 'safe',
-    action: true
-  },
-  {
-    name: { zh: 'pnpm 包存储', en: 'pnpm package store' },
-    target: path.join(HOME, 'Library/pnpm/store'),
-    description: { zh: 'pnpm 的共享包存储。清理后项目依赖仍保留，但新安装可能需要重新下载。', en: 'Shared pnpm package store. Existing project dependencies remain, but future installs may download packages again.' },
-    risk: 'review',
-    action: true
-  },
-  {
-    name: { zh: 'Yarn 下载缓存', en: 'Yarn download cache' },
-    target: path.join(HOME, 'Library/Caches/Yarn'),
-    description: { zh: 'Yarn 下载缓存，不影响项目中已安装的依赖。', en: 'Yarn download cache. Dependencies already installed in projects are not affected.' },
-    risk: 'safe',
-    action: true
-  },
-  {
-    name: { zh: 'Gradle 构建缓存', en: 'Gradle build cache' },
-    target: path.join(HOME, '.gradle/caches'),
-    description: { zh: 'Gradle 依赖与构建缓存，后续构建会重新下载或生成。', en: 'Gradle dependencies and build cache. Future builds will download or regenerate them.' },
-    risk: 'safe',
-    action: true
-  },
-  {
-    name: { zh: 'CocoaPods 缓存', en: 'CocoaPods cache' },
-    target: path.join(HOME, 'Library/Caches/CocoaPods'),
-    description: { zh: 'CocoaPods 下载缓存，不会修改项目中的 Pods 目录。', en: 'CocoaPods download cache. Pods directories inside projects are not modified.' },
-    risk: 'safe',
-    action: true
-  }
-]
+const resolvedCleanupRules = resolveCleanupRules(HOME)
+const storageDefinitions: StorageDefinition[] = resolvedCleanupRules
+  .filter((rule) => !rule.grouped && rule.targets.length === 1)
+  .map((rule) => ({
+    ...rule,
+    target: rule.targets[0],
+    action: rule.actionable !== false
+  }))
+const storageGroupDefinitions: StorageGroupDefinition[] = resolvedCleanupRules
+  .filter((rule) => rule.grouped || rule.targets.length > 1)
+  .map((rule) => ({ ...rule, action: rule.actionable !== false }))
 
 async function scanDefinedStorage(
   actions: Map<string, RegisteredAction>,
@@ -1018,6 +896,7 @@ async function scanDefinedStorage(
       actions,
       {
         section: 'storage',
+        cleanupCategory: definition.category,
         name: language === 'en-US' ? definition.name.en : definition.name.zh,
         subtitle: displayPath(definition.target),
         description: language === 'en-US' ? definition.description.en : definition.description.zh,
@@ -1057,20 +936,34 @@ async function scanStorageGroups(
       }
     })).filter((item): item is { target: string; stats: Stats; sizeBytes: number } => item !== null)
     const sizeBytes = existing.reduce((sum, item) => sum + item.sizeBytes, 0)
-    if (!existing.length || sizeBytes < 5 * 1024 * 1024) return null
+    if (!existing.length || sizeBytes < (definition.minimumBytes ?? 5 * 1024 * 1024)) return null
     const targets = existing.map((item) => item.target)
     const latestModifiedAt = new Date(Math.max(...existing.map((item) => item.stats.mtimeMs)))
+    const action = definition.action
+      ? {
+          kind: 'delete-storage-group' as const,
+          label: t(language, '清理所列缓存', 'Clean listed caches'),
+          consequence: t(language, '只会永久删除上面列出的可重建缓存目录；相关应用下次启动时可能重新下载内容。', 'Only the listed rebuildable cache folders are permanently removed. Related apps may download content again on next launch.'),
+          reversible: false,
+          estimatedBytes: sizeBytes
+        }
+      : undefined
     return registerCandidate(
       actions,
       {
         section: 'storage',
+        cleanupCategory: definition.category,
         name: language === 'en-US' ? definition.name.en : definition.name.zh,
-        subtitle: t(language, `AI 客户端缓存 · ${targets.length} 个目录`, `AI client caches · ${targets.length} folders`),
+        subtitle: t(language, `${targets.length} 个确定性规则目录`, `${targets.length} deterministic rule targets`),
         description: language === 'en-US' ? definition.description.en : definition.description.zh,
         sizeBytes,
         ageDays: ageInDays(latestModifiedAt),
-        risk: 'safe',
-        status: t(language, '可安全重建', 'Safely rebuildable'),
+        risk: definition.risk,
+        status: definition.risk === 'protected'
+          ? t(language, '仅分析', 'Analysis only')
+          : definition.risk === 'safe'
+            ? t(language, '可安全重建', 'Safely rebuildable')
+            : t(language, '建议确认', 'Review first'),
         location: displayPath(path.dirname(targets[0])),
         evidence: [
           t(language, `合计占用 ${formatBytesForEvidence(sizeBytes)}`, `Total size: ${formatBytesForEvidence(sizeBytes)}`),
@@ -1078,15 +971,9 @@ async function scanStorageGroups(
             `${displayPath(item.target)} · ${formatBytesForEvidence(item.sizeBytes)}`
           ))
         ],
-        action: {
-          kind: 'delete-storage-group',
-          label: t(language, '清理 AI 缓存', 'Clean AI caches'),
-          consequence: t(language, '只会永久删除上面列出的可重建缓存目录，客户端下次启动时可能重新下载内容。', 'Only the listed rebuildable cache folders are permanently removed. The clients may download content again on next launch.'),
-          reversible: false,
-          estimatedBytes: sizeBytes
-        }
+        action
       },
-      { kind: 'delete-storage-group', target: targets[0], targets },
+      action ? { kind: 'delete-storage-group', target: targets[0], targets } : undefined,
       [],
       revealTargets,
       targets[0]
@@ -1119,7 +1006,7 @@ async function scanApplicationCaches(
     .map((name) => path.join(cacheRoot, name))
     .filter((target) => !excludedTargets.has(target))
 
-  const inspected = await mapLimit(targets.slice(0, 80), 6, async (target) => {
+  const inspected = await mapLimit(targets, 8, async (target) => {
     try {
       const [stats, sizeBytes] = await Promise.all([fs.lstat(target), getPathSize(target)])
       if (stats.isSymbolicLink() || !stats.isDirectory()) return null
@@ -1129,6 +1016,7 @@ async function scanApplicationCaches(
         actions,
         {
           section: 'storage',
+          cleanupCategory: cleanupCategoryForTarget(target, HOME),
           name,
           subtitle: t(language, '应用缓存', 'Application cache'),
           description: t(language, '应用生成的缓存目录。清理后应用会在需要时重建。', 'Cache generated by an application. The application will rebuild it when needed.'),
@@ -1161,7 +1049,7 @@ async function scanApplicationCaches(
   return inspected
     .filter((item): item is ScanCandidate => item !== null)
     .sort((a, b) => (b.sizeBytes ?? 0) - (a.sizeBytes ?? 0))
-    .slice(0, 16)
+    .slice(0, 36)
 }
 
 async function scanApplicationLogs(
@@ -1186,6 +1074,7 @@ async function scanApplicationLogs(
         actions,
         {
           section: 'storage',
+          cleanupCategory: 'logs',
           name: entry.name,
           subtitle: t(language, '应用日志', 'Application logs'),
           description: t(language, '应用生成的诊断和运行日志；清理不会删除文稿或设置，但会失去旧的故障排查记录。', 'Diagnostic and runtime logs generated by applications. Documents and settings are preserved, but old troubleshooting records are removed.'),
@@ -1219,6 +1108,108 @@ async function scanApplicationLogs(
     .filter((item): item is ScanCandidate => item !== null)
     .sort((left, right) => (right.sizeBytes ?? 0) - (left.sizeBytes ?? 0))
     .slice(0, 12)
+}
+
+interface ContainerCacheTarget {
+  target: string
+  identity: string
+  kind: 'sandbox-cache' | 'group-cache'
+}
+
+async function discoverContainerCacheTargets(excludedTargets: Set<string>): Promise<ContainerCacheTarget[]> {
+  const roots = [
+    {
+      root: path.join(HOME, 'Library', 'Containers'),
+      targets: (identity: string) => [
+        path.join(HOME, 'Library', 'Containers', identity, 'Data', 'Library', 'Caches'),
+        path.join(HOME, 'Library', 'Containers', identity, 'Data', 'tmp')
+      ]
+    },
+    {
+      root: path.join(HOME, 'Library', 'Group Containers'),
+      targets: (identity: string) => [
+        path.join(HOME, 'Library', 'Group Containers', identity, 'Library', 'Caches'),
+        path.join(HOME, 'Library', 'Group Containers', identity, 'tmp')
+      ]
+    }
+  ]
+
+  const discovered: ContainerCacheTarget[] = []
+  for (const definition of roots) {
+    let entries: Dirent[]
+    try {
+      entries = await fs.readdir(definition.root, { withFileTypes: true })
+    } catch {
+      continue
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.isSymbolicLink()) continue
+      for (const target of definition.targets(entry.name)) {
+        if (excludedTargets.has(target)) continue
+        const kind = dynamicCleanupTargetKind(target, HOME)
+        if (kind !== 'sandbox-cache' && kind !== 'group-cache') continue
+        discovered.push({ target, identity: entry.name, kind })
+      }
+    }
+  }
+  return discovered
+}
+
+async function scanContainerCaches(
+  actions: Map<string, RegisteredAction>,
+  revealTargets: Map<string, string>,
+  excludedTargets: Set<string>,
+  language: AppLanguage
+): Promise<ScanCandidate[]> {
+  const targets = await discoverContainerCacheTargets(excludedTargets)
+  const measured = await mapLimit(targets, 10, async (item) => {
+    try {
+      const [stats, sizeBytes] = await Promise.all([fs.lstat(item.target), getPathSize(item.target)])
+      if (stats.isSymbolicLink() || !stats.isDirectory() || sizeBytes < 20 * 1024 * 1024) return null
+      return { ...item, stats, sizeBytes }
+    } catch {
+      return null
+    }
+  })
+
+  return measured
+    .filter((item): item is NonNullable<typeof item> => item !== null)
+    .sort((left, right) => right.sizeBytes - left.sizeBytes)
+    .slice(0, 40)
+    .map((item) => registerCandidate(
+      actions,
+      {
+        section: 'storage',
+        cleanupCategory: 'applications',
+        name: item.identity,
+        subtitle: item.kind === 'sandbox-cache'
+          ? t(language, '沙盒应用缓存', 'Sandboxed application cache')
+          : t(language, '共享应用缓存', 'Shared application cache'),
+        description: item.kind === 'sandbox-cache'
+          ? t(language, 'macOS 沙盒应用的 Caches 或 tmp 目录；应用数据、设置和文稿不会处理。', 'The Caches or tmp folder of a sandboxed macOS app. App data, settings, and documents are preserved.')
+          : t(language, '第三方应用共享容器中的 Caches 或 tmp 目录；共享数据和设置不会处理。', 'The Caches or tmp folder in a third-party shared container. Shared data and settings are preserved.'),
+        sizeBytes: item.sizeBytes,
+        ageDays: ageInDays(item.stats.mtime),
+        risk: 'safe',
+        status: t(language, '结构已验证', 'Structure verified'),
+        location: displayPath(item.target),
+        evidence: [
+          t(language, `仅匹配 ${path.basename(item.target)} 缓存结构`, `Matched only the ${path.basename(item.target)} cache structure`),
+          t(language, `占用 ${formatBytesForEvidence(item.sizeBytes)}`, `Size: ${formatBytesForEvidence(item.sizeBytes)}`)
+        ],
+        action: {
+          kind: 'delete-storage',
+          label: t(language, '永久清理', 'Clean permanently'),
+          consequence: t(language, '只删除这个容器的缓存目录；账号、设置、文稿和其他容器数据都会保留。', 'Only this container cache folder is deleted. Accounts, settings, documents, and other container data are preserved.'),
+          reversible: false,
+          estimatedBytes: item.sizeBytes
+        }
+      },
+      { kind: 'delete-storage', target: item.target },
+      [],
+      revealTargets,
+      item.target
+    ))
 }
 
 function hiddenArtifactSourceLabel(
@@ -1262,6 +1253,7 @@ async function scanHiddenHomeArtifacts(
         actions,
         {
           section: 'storage',
+          cleanupCategory: 'applications',
           name: artifact.name,
           subtitle: hiddenArtifactSourceLabel(artifact.source, language),
           description: t(
@@ -1377,6 +1369,7 @@ async function scanBrewVersions(
         actions,
         {
           section: 'storage',
+          cleanupCategory: 'developer',
           name: formula,
           subtitle: t(language, `Homebrew 可清理 ${removableVersions.length} 个旧版本`, `Homebrew can clean ${removableVersions.length} old versions`),
           description: t(language, '仅展示 Homebrew 已确认可安全移除的旧 keg，正在使用的版本会保留。', 'Only old kegs that Homebrew confirms are safe to remove are shown. Versions in use are kept.'),
@@ -1417,14 +1410,15 @@ async function scanStorage(
     ...storageDefinitions.map((item) => item.target),
     ...storageGroupDefinitions.flatMap((item) => item.targets)
   ])
-  const [defined, groups, caches, logs, brewVersions] = await Promise.all([
+  const [defined, groups, caches, logs, containerCaches, brewVersions] = await Promise.all([
     scanDefinedStorage(actions, revealTargets, language),
     scanStorageGroups(actions, revealTargets, language),
     scanApplicationCaches(actions, revealTargets, definedTargets, language),
     scanApplicationLogs(actions, revealTargets, language),
+    scanContainerCaches(actions, revealTargets, definedTargets, language),
     scanBrewVersions(actions, revealTargets, language)
   ])
-  return [...defined, ...groups, ...caches, ...logs, ...brewVersions].sort(
+  return [...defined, ...groups, ...caches, ...logs, ...containerCaches, ...brewVersions].sort(
     (a, b) => (b.sizeBytes ?? 0) - (a.sizeBytes ?? 0)
   )
 }

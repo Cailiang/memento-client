@@ -6,10 +6,12 @@ import path from 'node:path'
 const baseUrl = process.argv[2] ?? 'http://127.0.0.1:4174'
 const expectedVersion = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version
 const pages = [
-  ['agent', 'Agent'],
-  ['health', null],
+  ['overview', null],
+  ['health', '清理'],
   ['apps', '应用管理'],
-  ['history', '任务记录'],
+  ['disk', '磁盘分析'],
+  ['agent', 'AI 助手'],
+  ['history', '操作记录'],
   ['settings', '设置']
 ]
 const viewports = [
@@ -47,6 +49,16 @@ const browser = await chromium.launch({
 })
 const failures = []
 
+async function navigate(page, title) {
+  await page.locator(`button[title="${title}"]:visible`).first().click()
+}
+
+async function fillAgentPrompt(page, label, prompt) {
+  const input = page.locator(`textarea[aria-label="${label}"]`)
+  await input.waitFor({ state: 'visible', timeout: 15_000 })
+  await input.fill(prompt, { timeout: 15_000 })
+}
+
 try {
   const indexHtml = await fetch(baseUrl).then((response) => response.text())
   if (!indexHtml.includes('class="boot-screen"') || !indexHtml.includes('正在准备本地工作区')) {
@@ -58,7 +70,7 @@ try {
       const page = await browser.newPage({ viewport })
       await page.goto(baseUrl, { waitUntil: 'networkidle' })
       if (navigationTitle) {
-        await page.locator(`.nav-button[title="${navigationTitle}"]`).click()
+        await navigate(page, navigationTitle)
         await page.waitForTimeout(220)
       }
       await page.screenshot({
@@ -88,10 +100,41 @@ try {
       if (pageName !== 'agent' && await page.locator('.page-heading').count()) {
         failures.push(`${viewportName}/${pageName}: redundant page heading is still rendered`)
       }
+      if (pageName === 'overview') {
+        if (await page.locator('.overview-card').count() !== 8) {
+          failures.push(`${viewportName}/overview: expected eight live metric cards`)
+        }
+        if (!await page.locator('.overview-process-row').first().isVisible()) {
+          failures.push(`${viewportName}/overview: process table is missing`)
+        }
+        if (await page.locator('.nav-list .nav-button').count() !== 4) {
+          failures.push(`${viewportName}/overview: primary navigation is not limited to four product modules`)
+        }
+        if (viewport.width <= 520) {
+          const mobileOverviewLayout = await page.evaluate(() => {
+            const stack = document.querySelector('.page-stack')
+            const navigation = document.querySelector('.sidebar')
+            const overview = document.querySelector('.overview-page')
+            if (!stack || !navigation || !overview) return null
+            const stackRect = stack.getBoundingClientRect()
+            const navigationRect = navigation.getBoundingClientRect()
+            return {
+              stackBottom: stackRect.bottom,
+              navigationTop: navigationRect.top,
+              scrollable: overview.scrollHeight > overview.clientHeight
+            }
+          })
+          if (!mobileOverviewLayout || mobileOverviewLayout.stackBottom > mobileOverviewLayout.navigationTop + 1) {
+            failures.push(`${viewportName}/overview: content viewport overlaps mobile navigation ${JSON.stringify(mobileOverviewLayout)}`)
+          } else if (!mobileOverviewLayout.scrollable) {
+            failures.push(`${viewportName}/overview: overview does not retain an independent mobile scroll area`)
+          }
+        }
+      }
       if (viewport.width <= 520 && pageName === 'health') {
         const mobileHealthLayout = await page.evaluate(() => {
-          const band = document.querySelector('.health-band')
-          const firstFinding = document.querySelector('.health-panel.is-active .data-row')
+          const band = document.querySelector('.cleanup-summary-band')
+          const firstFinding = document.querySelector('.cleanup-row')
           const navigation = document.querySelector('.sidebar')
           if (!band || !firstFinding || !navigation) return null
           const findingRect = firstFinding.getBoundingClientRect()
@@ -104,7 +147,7 @@ try {
           }
         })
         if (!mobileHealthLayout || mobileHealthLayout.columns !== 2) {
-          failures.push(`${viewportName}/health: health metrics do not retain the compact two-column layout`)
+          failures.push(`${viewportName}/health: cleanup summary does not retain the compact two-column layout`)
         } else if (
           mobileHealthLayout.findingTop < mobileHealthLayout.navigationTop &&
           mobileHealthLayout.findingBottom > mobileHealthLayout.navigationTop
@@ -118,7 +161,7 @@ try {
 
   const settingsPage = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   await settingsPage.goto(baseUrl, { waitUntil: 'networkidle' })
-  await settingsPage.locator('.nav-button[title="设置"]').click()
+  await navigate(settingsPage, '设置')
   if (!await settingsPage.getByRole('button', { name: '扫描本机 AI 配置' }).isVisible()) {
     failures.push('settings: local AI configuration scan is missing')
   }
@@ -156,22 +199,29 @@ try {
   const firstRunUrl = new URL(baseUrl)
   firstRunUrl.searchParams.set('noProvider', '1')
   await firstRunPage.goto(firstRunUrl.href, { waitUntil: 'networkidle' })
-  if (await firstRunPage.locator('.nav-button[title="电脑体检"]').getAttribute('aria-current') !== 'page') {
-    failures.push('first-run: app did not open on deterministic Health')
+  if (await firstRunPage.locator('.nav-button[title="概览"]').getAttribute('aria-current') !== 'page') {
+    failures.push('first-run: app did not open on Overview')
   }
   if (!await firstRunPage.getByText('尚未配置模型', { exact: true }).isVisible()) {
     failures.push('first-run: no-provider state is missing')
   }
-  for (const label of ['系统状态', '安全可释放空间', '可行动问题', '审查线索']) {
-    if (!await firstRunPage.getByText(label, { exact: true }).isVisible()) {
-      failures.push(`first-run: ${label} metric is missing`)
+  for (const label of ['健康度', 'CPU', 'GPU', '内存', '电池', '磁盘', '网络', '性能状态']) {
+    if (!await firstRunPage.locator('.overview-card header').getByText(label, { exact: true }).first().isVisible()) {
+      failures.push(`overview: ${label} metric is missing`)
     }
   }
-  if (!await firstRunPage.getByRole('tab', { name: /可信建议/ }).isVisible() ||
-      !await firstRunPage.getByRole('tab', { name: /审查线索/ }).isVisible()) {
-    failures.push('first-run: trusted findings and clues are not separated')
+  await navigate(firstRunPage, '清理')
+  if (!await firstRunPage.getByRole('tab', { name: /安全清理/ }).isVisible() ||
+      !await firstRunPage.getByRole('tab', { name: /需要确认/ }).isVisible()) {
+    failures.push('cleanup: safe and review findings are not separated')
   }
-  if (!await firstRunPage.locator('.health-panel.is-active .direct-action-button').first().isEnabled()) {
+  try {
+    await firstRunPage.waitForFunction(() => {
+      const button = [...document.querySelectorAll('button')]
+        .find((item) => item.textContent?.includes('清理所选项目'))
+      return button instanceof HTMLButtonElement && !button.disabled
+    }, undefined, { timeout: 15_000 })
+  } catch {
     failures.push('first-run: deterministic direct action is disabled without a provider')
   }
   await firstRunPage.screenshot({ path: '/tmp/memento-first-run-no-provider.png' })
@@ -198,12 +248,11 @@ try {
 
   const concurrentPage = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   await concurrentPage.goto(baseUrl, { waitUntil: 'networkidle' })
-  await concurrentPage.locator('.nav-button[title="Agent"]').click()
-  await concurrentPage.locator('textarea[aria-label="输入任务"]').fill('分析 Xcode 派生数据')
+  await navigate(concurrentPage, 'AI 助手')
+  await fillAgentPrompt(concurrentPage, '输入任务', '分析 Xcode 派生数据')
   await concurrentPage.locator('button[aria-label="发送"]').click()
-  await concurrentPage.locator('.nav-button[title="电脑体检"]').click()
-  await concurrentPage.getByRole('tab', { name: /存储空间/ }).click()
-  await concurrentPage.locator('.health-panel.is-active .row-actions > .secondary-button').first().click()
+  await navigate(concurrentPage, '清理')
+  await concurrentPage.locator('button[aria-label^="让 AI 解释"]').first().click()
   const taskItems = concurrentPage.locator('.agent-task-item')
   await taskItems.nth(1).waitFor()
   if (await taskItems.count() !== 2) failures.push('agent-concurrency: both analysis tasks are not visible')
@@ -227,14 +276,13 @@ try {
 
   const conversationPage = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   await conversationPage.goto(baseUrl, { waitUntil: 'networkidle' })
-  await conversationPage.locator('.nav-button[title="电脑体检"]').click()
-  await conversationPage.getByRole('tab', { name: /存储空间/ }).click()
-  await conversationPage.getByRole('tab', { name: /审查线索/ }).click()
-  const lingmaRow = conversationPage.locator('.health-panel.is-active .data-row').filter({ hasText: '.lingma' })
+  await navigate(conversationPage, '清理')
+  await conversationPage.getByRole('tab', { name: /需要确认/ }).click()
+  const lingmaRow = conversationPage.locator('.cleanup-row').filter({ hasText: '.lingma' })
   if (!await lingmaRow.count()) {
     failures.push('agent-evidence: .lingma storage finding is missing')
   } else {
-    await lingmaRow.getByRole('button', { name: 'AI 分析' }).click()
+    await lingmaRow.getByRole('button', { name: /让 AI 解释/ }).click()
     await conversationPage.locator('.agent-result-section').waitFor({ timeout: 5_000 })
     await conversationPage.locator('textarea[aria-label="输入任务"]').fill('它现在还可能被什么使用？')
     await conversationPage.locator('button[aria-label="发送"]').click()
@@ -248,31 +296,24 @@ try {
 
   const healthReviewPage = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   await healthReviewPage.goto(baseUrl, { waitUntil: 'networkidle' })
-  await healthReviewPage.locator('.nav-button[title="电脑体检"]').click()
-  const reviewButton = healthReviewPage.locator('.health-score')
-  const reviewText = await reviewButton.textContent()
-  const reviewMatch = reviewText?.match(/先查看(存储空间|后台服务|终端诊断) (\d+) 项/)
-  if (!reviewMatch) {
-    failures.push('health-summary: score does not expose the largest destination module')
-  } else {
-    await reviewButton.click()
-    if (await healthReviewPage.getByRole('tab', { name: new RegExp(reviewMatch[1]) }).getAttribute('aria-selected') !== 'true') {
-      failures.push('health-summary: review action did not open the module with the most findings')
-    }
-    await healthReviewPage.getByRole('tab', { name: /后台服务/ }).click()
-    if (!await healthReviewPage.getByRole('tab', { name: /CPU 占用异常/ }).count()) {
-      failures.push('health-services: high CPU category is missing')
-    }
-    if (!await healthReviewPage.getByRole('tab', { name: /内存占用异常/ }).count()) {
-      failures.push('health-services: high memory category is missing')
-    }
+  await navigate(healthReviewPage, '清理')
+  if (await healthReviewPage.locator('.cleanup-categories button').count() !== 7) {
+    failures.push('cleanup-categories: expected seven stable cleanup categories')
+  }
+  await healthReviewPage.getByRole('button', { name: /浏览器缓存/ }).click()
+  if (!await healthReviewPage.locator('.cleanup-row').filter({ hasText: 'Safari' }).count()) {
+    failures.push('cleanup-categories: browser category does not isolate browser rules')
+  }
+  await healthReviewPage.getByRole('tab', { name: /需要确认/ }).click()
+  await healthReviewPage.getByRole('button', { name: /全部项目/ }).click()
+  if (!await healthReviewPage.locator('.cleanup-trust.is-clue').count()) {
+    failures.push('cleanup-review: outside-rule clues are not visibly isolated')
   }
   await healthReviewPage.close()
 
   const diskPage = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   await diskPage.goto(baseUrl, { waitUntil: 'networkidle' })
-  await diskPage.locator('.nav-button[title="电脑体检"]').click()
-  await diskPage.getByRole('tab', { name: '磁盘浏览' }).click()
+  await navigate(diskPage, '磁盘分析')
   await diskPage.locator('.disk-usage-surface').waitFor({ timeout: 3_000 })
   await diskPage.locator('.disk-column').first().locator('.disk-node').first().click()
   await diskPage.locator('.disk-column').nth(1).locator('.disk-node').first().click()
@@ -290,8 +331,7 @@ try {
   } else {
     await askItem.click()
     await diskPage.locator('.message.user').filter({ hasText: '分析磁盘目录' }).waitFor()
-    await diskPage.locator('.nav-button[title="电脑体检"]').click()
-    await diskPage.getByRole('tab', { name: '磁盘浏览' }).click()
+    await navigate(diskPage, '磁盘分析')
     await diskPage.locator('.disk-column').first().locator('.disk-node').first().click()
     await diskPage.locator('.disk-column').nth(1).locator('.disk-node').first().click()
   }
@@ -325,8 +365,8 @@ try {
 
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   await page.goto(baseUrl, { waitUntil: 'networkidle' })
-  await page.locator('.nav-button[title="Agent"]').click()
-  await page.locator('textarea[aria-label="输入任务"]').fill('检查可以安全清理的空间')
+  await navigate(page, 'AI 助手')
+  await fillAgentPrompt(page, '输入任务', '检查可以安全清理的空间')
   await page.locator('button[aria-label="发送"]').click()
   const agentProgress = page.locator('.agent-progress')
   await agentProgress.waitFor({ timeout: 2_000 })
@@ -351,7 +391,7 @@ try {
   await page.waitForFunction(() => !document.querySelector('[role="dialog"] .dialog-actions button')?.hasAttribute('disabled'))
   await executionDialog.getByRole('button', { name: '完成' }).click()
 
-  await page.locator('.nav-button[title="任务记录"]').click()
+  await navigate(page, '操作记录')
   const maintenanceTab = page.getByRole('tab', { name: /维护账本/ })
   if (await maintenanceTab.getAttribute('aria-selected') !== 'true') {
     failures.push('maintenance-history: maintenance ledger is not the default history view')
@@ -395,28 +435,30 @@ try {
   await bulkDeleteDialog.locator('.danger-button').click()
   if (await historyEntries.count() !== 0) failures.push('history-delete: selected task rows were not removed')
 
-  await page.locator('.nav-button[title="电脑体检"]').click()
-  for (const tab of ['存储空间', '后台服务', '终端诊断']) {
-    await page.getByRole('tab', { name: new RegExp(tab) }).click()
-    const actionLabels = await page.locator('.health-panel.is-active .row-actions > .secondary-button:first-child').allTextContents()
-    if (!actionLabels.length || actionLabels.some((label) => label.trim() !== 'AI 分析')) {
-      failures.push(`health/${tab}: analysis actions are ambiguous ${JSON.stringify(actionLabels)}`)
-    }
-    const recommendationLabels = await page.locator('.health-panel.is-active .data-row .row-meta strong').allTextContents()
-    if (recommendationLabels.some((label) => ['可安全处理', '需要确认'].includes(label.trim()))) {
-      failures.push(`health/${tab}: obsolete risk/action labels are still visible`)
-    }
+  await navigate(page, '清理')
+  if (!await page.getByRole('tab', { name: /安全清理/ }).isVisible() ||
+      !await page.getByRole('tab', { name: /需要确认/ }).isVisible()) {
+    failures.push('cleanup: trust-level switcher is missing')
   }
-  await page.getByRole('tab', { name: /存储空间/ }).click()
-  const candidateLocation = page.locator('.health-panel.is-active .candidate-location').first()
+  if (await page.locator('.cleanup-categories button').count() !== 7) {
+    failures.push('cleanup: stable category navigation is incomplete')
+  }
+  const batchButton = page.getByRole('button', { name: /清理所选项目/ })
+  await batchButton.click()
+  const batchDialog = page.getByRole('dialog', { name: /确认清理 \d+ 项/ })
+  await batchDialog.waitFor()
+  if (!await batchDialog.getByText(/再次通过路径校验/).count()) {
+    failures.push('cleanup-batch: confirmation does not state the execution-time validation boundary')
+  }
+  await batchDialog.getByRole('button', { name: '取消' }).click()
+
+  const candidateLocation = page.locator('.cleanup-row .candidate-location').first()
   if (!await candidateLocation.isVisible()) failures.push('health/storage: cleanup finding path is missing')
   else await candidateLocation.click()
-  const directCandidate = page.locator('.health-panel.is-active .data-row').first()
+  const directCandidate = page.locator('.cleanup-row').first()
   const directCandidateId = await directCandidate.getAttribute('data-focus-id')
-  const directCandidateCount = await page.locator('.health-panel.is-active .data-row').count()
-  const directActionButton = directCandidate.locator('.direct-action-button')
-  await directActionButton.click()
-  await page.locator('.health-panel.is-active .row-menu-popover [role="menuitem"]').first().click()
+  const directCandidateCount = await page.locator('.cleanup-row').count()
+  await directCandidate.locator('.cleanup-single-action').click()
   const directConfirm = page.getByRole('dialog', { name: /直接执行/ })
   await directConfirm.waitFor()
   const directStartedAt = Date.now()
@@ -431,47 +473,26 @@ try {
   if (!directCandidateId || await page.locator(`[data-focus-id="${directCandidateId}"]`).count()) {
     failures.push('health/storage: completed permanent cleanup did not remove its current finding')
   }
-  if (await page.locator('.health-panel.is-active .data-row').count() !== directCandidateCount - 1) {
+  if (await page.locator('.cleanup-row').count() !== directCandidateCount - 1) {
     failures.push('health/storage: completed permanent cleanup removed an unexpected number of findings')
   }
   await directProgress.getByRole('button', { name: '完成' }).click()
 
-  await page.getByRole('tab', { name: /后台服务/ }).click()
-  const serviceCategoryTabs = page.locator('.service-mode-tabs [role="tab"]')
-  if (await serviceCategoryTabs.count() < 2) failures.push('health/services: horizontal category switcher is missing')
-  else {
-    await serviceCategoryTabs.nth(1).click()
-    if (await serviceCategoryTabs.nth(1).getAttribute('aria-selected') !== 'true') {
-      failures.push('health/services: category switch did not become active')
-    }
-  }
-  await page.locator('.health-panel.is-active .row-actions > .secondary-button:first-child').first().click()
-  const returnButton = page.getByRole('button', { name: '返回后台服务' })
+  await page.getByRole('tab', { name: /需要确认/ }).click()
+  const reviewRow = page.locator('.cleanup-row').filter({ hasText: '.lingma' })
+  await reviewRow.getByRole('button', { name: /让 AI 解释/ }).click()
+  const returnButton = page.getByRole('button', { name: '返回存储空间' })
   await returnButton.waitFor()
+  const healthAnalysisPrompt = await page.locator('.message.user .message-body').last().textContent()
+  if (!healthAnalysisPrompt || !/不要直接执行/.test(healthAnalysisPrompt)) {
+    failures.push(`health: analysis action did not preserve the no-change boundary ${JSON.stringify(healthAnalysisPrompt)}`)
+  }
   await returnButton.click()
-  if (await page.getByRole('tab', { name: /后台服务/ }).getAttribute('aria-selected') !== 'true') {
-    failures.push('agent-return: source health tab was not restored')
+  if (await page.getByRole('tab', { name: /需要确认/ }).getAttribute('aria-selected') !== 'true') {
+    failures.push('agent-return: source cleanup trust level was not restored')
   }
   await page.waitForFunction(() => Boolean(document.activeElement?.getAttribute('data-focus-id')))
   await page.waitForTimeout(1_000)
-
-  await page.getByRole('tab', { name: /终端诊断/ }).click()
-  const optimizeAllTerminal = page.getByRole('button', { name: /一键优化 \d+ 项/ })
-  if (!await optimizeAllTerminal.isVisible()) failures.push('health/terminal: one-click optimization is missing')
-  else {
-    await optimizeAllTerminal.click()
-    const terminalBatchDialog = page.getByRole('dialog', { name: /一键优化/ })
-    await terminalBatchDialog.waitFor()
-    if (!await terminalBatchDialog.getByText(/自动备份相关 shell 配置/).count()) {
-      failures.push('health/terminal: batch optimization does not explain backup and verification')
-    }
-    await terminalBatchDialog.getByRole('button', { name: '取消' }).click()
-  }
-  await page.locator('.health-panel.is-active .row-actions > .secondary-button').first().click()
-  const healthAnalysisPrompt = await page.locator('.message.user .message-body').last().textContent()
-  if (!healthAnalysisPrompt || !/不要(?:直接)?修改/.test(healthAnalysisPrompt)) {
-    failures.push(`health: analysis action did not preserve the no-change boundary ${JSON.stringify(healthAnalysisPrompt)}`)
-  }
   await page.locator('.nav-button[title="应用管理"]').click()
   await page.locator('select[aria-label="筛选应用"]').selectOption('system')
   const systemCard = page.locator('.app-card').filter({ hasText: 'App Store' })
@@ -508,7 +529,7 @@ try {
   await ignoredSearch.fill('')
   await page.screenshot({ path: '/tmp/memento-interaction-application-ignored.png' })
   await applicationIgnoredDialog.getByRole('button', { name: '完成' }).click()
-  await page.locator('.nav-button[title="设置"]').click()
+  await navigate(page, '设置')
   await page.getByRole('button', { name: '管理', exact: true }).click()
   await page.getByRole('tab', { name: /应用/ }).click()
   await page.locator('.ignored-row small').filter({ hasText: 'com.anthropic.claude-code-url-handler' }).waitFor()
@@ -544,8 +565,8 @@ try {
   ]) {
     const resultPage = await browser.newPage({ viewport })
     await resultPage.goto(baseUrl, { waitUntil: 'networkidle' })
-    await resultPage.locator('.nav-button[title="Agent"]').click()
-    await resultPage.locator('textarea[aria-label="输入任务"]').fill('帮我检查长期没用的应用和可以安全清理的应用残留')
+    await navigate(resultPage, 'AI 助手')
+    await fillAgentPrompt(resultPage, '输入任务', '帮我检查长期没用的应用和可以安全清理的应用残留')
     await resultPage.locator('button[aria-label="发送"]').click()
     await resultPage.locator('.agent-app-result').first().waitFor({ timeout: 5_000 })
     await resultPage.screenshot({
@@ -561,10 +582,10 @@ try {
 
   const englishPage = await browser.newPage({ viewport: { width: 1024, height: 768 } })
   await englishPage.goto(baseUrl, { waitUntil: 'networkidle' })
-  await englishPage.locator('.nav-button[title="设置"]').click()
+  await navigate(englishPage, '设置')
   await englishPage.locator('.setting-row select').last().selectOption('en-US')
-  await englishPage.locator('.nav-button[title="Agent"]').click()
-  await englishPage.locator('textarea[aria-label="Enter task"]').fill('帮我检查长期没用的应用')
+  await navigate(englishPage, 'AI assistant')
+  await fillAgentPrompt(englishPage, 'Enter task', '帮我检查长期没用的应用')
   await englishPage.locator('button[aria-label="Send"]').click()
   await englishPage.getByText('Unused applications', { exact: true }).waitFor({ timeout: 5_000 })
   const englishConversation = await englishPage.locator('.conversation').innerText()

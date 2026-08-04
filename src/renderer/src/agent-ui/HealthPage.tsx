@@ -1,45 +1,42 @@
 import {
-  Activity,
-  Box,
-  Bolt,
+  AppWindow,
+  Boxes,
+  Check,
   ChevronRight,
-  Ellipsis,
+  Code2,
   EyeOff,
+  FileWarning,
   FolderOpen,
-  Hammer,
+  Globe2,
+  HardDrive,
+  ListFilter,
   LoaderCircle,
-  Package,
-  Play,
-  RadioTower,
   RefreshCw,
-  Route,
+  ShieldCheck,
+  Smartphone,
   Sparkles,
-  Timer
+  Trash2
 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { AppSettings } from '../../../shared/app-settings'
 import type {
   CandidateOperation,
-  DiskUsageProgress,
-  DiskUsageScanResult,
+  CleanupCategory,
   ScanCandidate,
   ScanProgress,
   ScanResult
 } from '../../../shared/types'
 import {
   isActionableFinding,
-  isHealthSignal,
   isReviewClue,
-  isSafeCleanup,
-  summarizeFindingTrust
+  isSafeCleanup
 } from '../../../shared/finding-trust'
-import { selectHealthReviewTarget } from '../health-review'
 import { useI18n } from '../i18n'
-import { DiskUsageBrowser } from './DiskUsageBrowser'
 import { formatBytes, formatDateTime } from './utils'
 
 export type HealthTab = 'storage' | 'services' | 'terminal'
-export type StorageMode = 'safe' | 'clues' | 'browser'
+export type StorageMode = 'safe' | 'review'
+type CleanupCategoryFilter = CleanupCategory | 'all'
 
 export interface HealthAgentOrigin {
   tab: HealthTab
@@ -53,89 +50,73 @@ export interface PageRestoreTarget {
   scrollTop: number
 }
 
+export interface CleanupSelection {
+  candidate: ScanCandidate
+  operation: CandidateOperation
+}
+
 function operations(candidate: ScanCandidate): CandidateOperation[] {
   if (candidate.operations?.length) return candidate.operations
   return candidate.action ? [{ id: candidate.id, ...candidate.action }] : []
 }
 
-function CandidateRow({
+function categoryForCandidate(candidate: ScanCandidate): CleanupCategory {
+  if (candidate.cleanupCategory) return candidate.cleanupCategory
+  const source = `${candidate.name} ${candidate.subtitle} ${candidate.location ?? ''}`
+  if (/xcode|homebrew|npm|pnpm|yarn|gradle|cocoapods|cargo|rust|python|pip|maven|android|developer/i.test(source)) return 'developer'
+  if (/safari|chrome|chromium|firefox|edge|brave|arc|browser|浏览器/i.test(source)) return 'browsers'
+  if (/log|diagnostic|report|日志|诊断|报告/i.test(source)) return 'logs'
+  if (/simulator|device support|firmware|模拟器|设备/i.test(source)) return 'devices'
+  return 'applications'
+}
+
+function CleanupRow({
   candidate,
+  selected,
+  selectable,
+  onToggle,
   onAgentPrompt,
   onDirectAction,
   onIgnore,
   onReveal
 }: {
   candidate: ScanCandidate
-  onAgentPrompt: (prompt: string, itemId: string) => void
+  selected: boolean
+  selectable: boolean
+  onToggle: () => void
+  onAgentPrompt: (candidate: ScanCandidate) => void
   onDirectAction: (candidate: ScanCandidate, operation: CandidateOperation) => void
   onIgnore: (candidate: ScanCandidate) => void
   onReveal: (candidate: ScanCandidate) => void
 }): React.JSX.Element {
   const { text } = useI18n()
-  const [menuOpen, setMenuOpen] = useState(false)
-  const menuRef = useRef<HTMLDivElement>(null)
-  const operationCount = operations(candidate).length
-  const confidenceLabel = candidate.confidence === 'verified'
-    ? text('已验证', 'Verified')
-    : candidate.confidence === 'strong'
-      ? text('强证据', 'Strong evidence')
-      : text('弱线索', 'Weak clue')
-  const estimateLabel = candidate.estimateQuality === 'exact'
-    ? text('精确测量', 'Exact measurement')
-    : candidate.estimateQuality === 'approximate'
-      ? text('近似估算', 'Approximate estimate')
-      : text('未估算', 'No estimate')
-  const Icon = candidate.section === 'services'
-    ? RadioTower
-    : candidate.name.toLowerCase().includes('xcode')
-      ? Hammer
-      : candidate.name.toLowerCase().includes('cache') || candidate.name.includes('缓存')
-        ? Package
-        : Box
-
-  useEffect(() => {
-    if (!menuOpen) return
-    const close = (event: PointerEvent): void => {
-      if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false)
-    }
-    document.addEventListener('pointerdown', close)
-    return () => document.removeEventListener('pointerdown', close)
-  }, [menuOpen])
+  const operation = operations(candidate)[0]
+  const weak = isReviewClue(candidate)
+  const status = weak
+    ? text('规则外线索', 'Outside rules')
+    : candidate.risk === 'safe'
+      ? text('安全清理', 'Safe cleanup')
+      : text('需要确认', 'Review first')
 
   return (
-    <div className="data-row" data-focus-id={candidate.id} tabIndex={-1}>
-      <span className="row-icon"><Icon size={16} /></span>
-      <div className="row-main"><strong>{candidate.name}<span className={`finding-confidence ${candidate.confidence}`}>{confidenceLabel}</span></strong><small>{candidate.description}</small>{candidate.location && <button type="button" className="candidate-location" title={candidate.location} onClick={() => onReveal(candidate)}><FolderOpen size={12} /><span>{candidate.location}</span></button>}</div>
-      <div className="row-meta"><strong>{candidate.sizeBytes ? formatBytes(candidate.sizeBytes) : candidate.status}</strong><small>{candidate.ageDays !== undefined ? text(`${candidate.ageDays} 天`, `${candidate.ageDays} days`) : candidate.subtitle}</small></div>
-      <div className="row-meta"><strong>{operationCount ? text(`${operationCount} 个可选操作`, `${operationCount} available ${operationCount === 1 ? 'action' : 'actions'}`) : text('仅提供分析', 'Analysis only')}</strong><small>{estimateLabel}</small></div>
-      <div className="row-actions">
-        <button type="button" className="secondary-button" onClick={() => onAgentPrompt(operationCount
-          ? text(
-              `分析“${candidate.name}”。第一句话直接说明它是什么软件或服务、属于哪家公司以及主要用途；结合关联应用、后台服务、配置文件名、软件包收据和 shell 引用说明本机状态，并区分本机确认、明确签名和未确认推断；再说明影响、风险并比较全部 ${operationCount} 个可选操作。不要直接执行或默认选择操作，等我明确选择后再加入确认计划。`,
-              `Analyze "${candidate.name}". In the first sentence, directly identify the software or service, its vendor, and its main purpose. Use related apps, background services, configuration names, package receipts, and shell references to explain its local state, distinguishing locally confirmed evidence, exact signatures, and unconfirmed inference. Then explain impact and risks and compare all ${operationCount} available actions. Do not execute or select an action until I explicitly choose one.`
-            )
-          : text(
-              `分析“${candidate.name}”。第一句话直接说明它是什么软件或服务、属于哪家公司以及主要用途；结合关联应用、后台服务、配置文件名、软件包收据和 shell 引用说明本机状态，并区分本机确认、明确签名和未确认推断；再说明影响和是否需要关注，不要修改系统。`,
-              `Analyze "${candidate.name}". In the first sentence, directly identify the software or service, its vendor, and its main purpose. Use related apps, background services, configuration names, package receipts, and shell references to explain its local state, distinguishing locally confirmed evidence, exact signatures, and unconfirmed inference. Then explain impact and whether it needs attention without changing the system.`
-            ), candidate.id)}>
-          <Sparkles size={14} />{text('AI 分析', 'AI analysis')}
-        </button>
-        <div className="row-menu" ref={menuRef}>
-          <button type="button" className={operationCount ? 'secondary-button direct-action-button' : 'icon-button'} onClick={() => setMenuOpen((value) => !value)} aria-haspopup="menu" aria-expanded={menuOpen} title={text('直接操作', 'Direct actions')} aria-label={text(`${candidate.name}的直接操作`, `Direct actions for ${candidate.name}`)}>
-            {operationCount ? <><Bolt size={14} />{text('直接操作', 'Direct')}</> : <Ellipsis size={16} />}
-          </button>
-          {menuOpen && (
-            <div className="row-menu-popover" role="menu">
-              {operations(candidate).map((operation) => <button type="button" role="menuitem" key={operation.id} title={operation.consequence} onClick={() => { setMenuOpen(false); onDirectAction(candidate, operation) }}><Play size={14} />{operation.label}</button>)}
-              {operationCount > 0 && <span className="row-menu-divider" />}
-              <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); onIgnore(candidate) }}>
-                <EyeOff size={14} />{text('忽略此项', 'Ignore item')}
-              </button>
-            </div>
-          )}
-        </div>
+    <article className={`cleanup-row ${selected ? 'is-selected' : ''}`} data-focus-id={candidate.id} tabIndex={-1}>
+      <label className={`cleanup-check ${!selectable ? 'is-disabled' : ''}`}>
+        <input type="checkbox" checked={selected} disabled={!selectable} onChange={onToggle} aria-label={text(`选择 ${candidate.name}`, `Select ${candidate.name}`)} />
+        <span>{selected && <Check size={13} />}</span>
+      </label>
+      <span className="cleanup-item-icon">{categoryForCandidate(candidate) === 'developer' ? <Code2 size={17} /> : categoryForCandidate(candidate) === 'browsers' ? <Globe2 size={17} /> : <AppWindow size={17} />}</span>
+      <div className="cleanup-item-copy">
+        <div className="cleanup-item-title"><strong>{candidate.name}</strong><span className={`cleanup-trust ${weak ? 'is-clue' : candidate.risk}`}>{status}</span></div>
+        <p>{candidate.description}</p>
+        {candidate.location && <button type="button" className="candidate-location" title={candidate.location} onClick={() => onReveal(candidate)}><FolderOpen size={12} /><span>{candidate.location}</span></button>}
       </div>
-    </div>
+      <div className="cleanup-item-size"><strong>{candidate.sizeBytes ? formatBytes(candidate.sizeBytes) : '--'}</strong><small>{candidate.ageDays !== undefined ? text(`${candidate.ageDays} 天前更新`, `Updated ${candidate.ageDays} days ago`) : candidate.subtitle}</small></div>
+      <div className="cleanup-row-actions">
+        <button type="button" className="icon-button" onClick={() => onAgentPrompt(candidate)} title={text('让 AI 解释此项', 'Ask AI to explain')} aria-label={text(`让 AI 解释 ${candidate.name}`, `Ask AI to explain ${candidate.name}`)}><Sparkles size={15} /></button>
+        <button type="button" className="icon-button" onClick={() => onIgnore(candidate)} title={text('忽略此项', 'Ignore item')} aria-label={text(`忽略 ${candidate.name}`, `Ignore ${candidate.name}`)}><EyeOff size={15} /></button>
+        {operation && !weak && <button type="button" className="icon-button cleanup-single-action" onClick={() => onDirectAction(candidate, operation)} title={operation.label} aria-label={`${operation.label}: ${candidate.name}`}><Trash2 size={15} /></button>}
+      </div>
+    </article>
   )
 }
 
@@ -144,27 +125,15 @@ export function HealthPage({
   settings,
   scanBusy,
   progress,
-  tab,
   storageMode,
-  diskUsage,
-  diskUsageProgress,
-  diskUsageBusy,
-  diskUsageError,
   restoreTarget,
   onRestoreComplete,
   onScan,
-  onTabChange,
   onStorageModeChange,
-  onDiskUsageScan,
-  onDiskUsageCancel,
-  onRevealDiskUsageNode,
-  onTrashDiskUsageNode,
-  onAskDiskUsageNode,
   onRevealCandidate,
   onAgentPrompt,
   onDirectAction,
-  onDirectTerminalFix,
-  onOptimizeTerminal,
+  onDirectActions,
   onIgnore,
   onManageIgnored
 }: {
@@ -172,82 +141,62 @@ export function HealthPage({
   settings: AppSettings
   scanBusy: boolean
   progress: ScanProgress | null
-  tab: HealthTab
   storageMode: StorageMode
-  diskUsage: DiskUsageScanResult | null
-  diskUsageProgress: DiskUsageProgress | null
-  diskUsageBusy: boolean
-  diskUsageError: string | null
   restoreTarget: PageRestoreTarget | null
   onRestoreComplete: () => void
   onScan: () => void
-  onTabChange: (tab: HealthTab) => void
   onStorageModeChange: (mode: StorageMode) => void
-  onDiskUsageScan: () => void
-  onDiskUsageCancel: () => void
-  onRevealDiskUsageNode: (id: string) => void
-  onTrashDiskUsageNode: (node: import('../../../shared/types').DiskUsageNode) => void
-  onAskDiskUsageNode: (node: import('../../../shared/types').DiskUsageNode, origin: HealthAgentOrigin) => void
   onRevealCandidate: (candidate: ScanCandidate) => void
   onAgentPrompt: (prompt: string, origin: HealthAgentOrigin) => void
   onDirectAction: (candidate: ScanCandidate, operation: CandidateOperation) => void
-  onDirectTerminalFix: (finding: ScanResult['terminal']['findings'][number]) => void
-  onOptimizeTerminal: (findings: ScanResult['terminal']['findings']) => void
+  onDirectActions: (selections: CleanupSelection[]) => void
   onIgnore: (candidate: ScanCandidate) => void
-  onManageIgnored: (kind: 'storage' | 'services') => void
+  onManageIgnored: (kind: 'storage') => void
 }): React.JSX.Element {
   const { language, text } = useI18n()
   const pageRef = useRef<HTMLElement>(null)
-  const [serviceCategory, setServiceCategory] = useState<string>('all')
-  const storage = result?.candidates.filter((item) => item.section === 'storage') ?? []
-  const services = result?.candidates.filter((item) => item.section === 'services') ?? []
-  const trust = summarizeFindingTrust([...storage, ...services])
-  const safeStorage = storage.filter(isSafeCleanup)
-  const actionableStorage = storage.filter(isActionableFinding)
-  const trustedStorage = [...safeStorage, ...actionableStorage]
-  const storageClues = storage.filter(isReviewClue)
-  const serviceCategories = ([
-    ['orphaned', text('残留启动项', 'Orphaned startup items')],
-    ['failed', text('启动异常', 'Startup failures')],
-    ['high-cpu', text('CPU 占用异常', 'High CPU')],
-    ['high-memory', text('内存占用异常', 'High memory')],
-    ['long-running', text('长期运行', 'Long-running')],
-    ['stale', text('长期未使用', 'Stale items')],
-    ['other', text('其他启动项', 'Other startup items')]
-  ] as const).map(([kind, label]) => ({
-    kind,
-    label,
-    items: services.filter((service) => kind === 'other'
-      ? !(service.serviceAnomalies?.length)
-      : service.serviceAnomalies?.includes(kind))
-  })).filter((group) => group.items.length > 0)
-  const visibleServices = serviceCategory === 'all'
-    ? services
-    : services.filter((service) => serviceCategory === 'other'
-      ? !(service.serviceAnomalies?.length)
-      : service.serviceAnomalies?.includes(serviceCategory as NonNullable<ScanCandidate['serviceAnomalies']>[number]))
-  const terminalFindings = result?.terminal.findings ?? []
-  const terminalFixes = terminalFindings.filter((item) => item.fix)
-  const actionableServices = services.filter(isActionableFinding)
-  const serviceHealthSignals = services.filter(isHealthSignal)
-  const slowTerminalFindings = terminalFindings.filter((item) => item.severity === 'slow')
-  const diskFreeRatio = result?.system.diskTotalBytes
-    ? result.system.diskFreeBytes / result.system.diskTotalBytes
-    : 1
-  const diskPenalty = diskFreeRatio < 0.1 ? 25 : diskFreeRatio < 0.2 ? 10 : 0
-  const score = Math.max(45, 100 - diskPenalty - serviceHealthSignals.length * 5 - slowTerminalFindings.length * 5)
-  const actionableCount = trust.actionable.length + terminalFixes.length
-  const findingCount = trustedStorage.length + actionableServices.length + terminalFixes.length
-  const reviewTarget = selectHealthReviewTarget({
-    storage: trustedStorage.length,
-    services: actionableServices.length,
-    terminal: terminalFixes.length
+  const [category, setCategory] = useState<CleanupCategoryFilter>('all')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const storage = useMemo(
+    () => result?.candidates.filter((item) => item.section === 'storage') ?? [],
+    [result]
+  )
+  const safeItems = useMemo(() => storage.filter(isSafeCleanup), [storage])
+  const reviewItems = useMemo(() => storage.filter((item) => isActionableFinding(item) || isReviewClue(item)), [storage])
+  const reviewActionable = useMemo(() => reviewItems.filter(isActionableFinding), [reviewItems])
+  const modeItems = storageMode === 'safe' ? safeItems : reviewItems
+  const visibleItems = category === 'all'
+    ? modeItems
+    : modeItems.filter((item) => categoryForCandidate(item) === category)
+  const selectableItems = storageMode === 'safe' ? safeItems : reviewActionable
+  const visibleSelectable = visibleItems.filter((item) => selectableItems.some((selectable) => selectable.id === item.id))
+  const selectedItems = selectableItems.filter((item) => selectedIds.has(item.id))
+  const selectedSelections = selectedItems.flatMap((candidate) => {
+    const operation = operations(candidate)[0]
+    return operation ? [{ candidate, operation }] : []
   })
-  const reviewTargetLabel = reviewTarget.tab === 'storage'
-    ? text('存储空间', 'Storage')
-    : reviewTarget.tab === 'services'
-      ? text('后台服务', 'Services')
-      : text('终端诊断', 'Terminal')
+  const selectedBytes = selectedItems.reduce((sum, item) => sum + (item.sizeBytes ?? 0), 0)
+  const trustedBytes = safeItems.reduce((sum, item) => sum + (item.sizeBytes ?? 0), 0)
+  const allVisibleSelected = visibleSelectable.length > 0 && visibleSelectable.every((item) => selectedIds.has(item.id))
+  const exactRuleCount = storage.filter((item) => item.confidence !== 'weak').length
+
+  const categories: Array<{
+    id: CleanupCategoryFilter
+    label: string
+    icon: typeof HardDrive
+  }> = [
+    { id: 'all', label: text('全部项目', 'All items'), icon: ListFilter },
+    { id: 'system', label: text('系统与临时文件', 'System and temporary'), icon: HardDrive },
+    { id: 'applications', label: text('应用缓存', 'Application caches'), icon: Boxes },
+    { id: 'browsers', label: text('浏览器缓存', 'Browser caches'), icon: Globe2 },
+    { id: 'developer', label: text('开发者缓存', 'Developer caches'), icon: Code2 },
+    { id: 'logs', label: text('日志与诊断', 'Logs and diagnostics'), icon: FileWarning },
+    { id: 'devices', label: text('设备与模拟器', 'Devices and simulators'), icon: Smartphone }
+  ]
+
+  useEffect(() => {
+    setSelectedIds(new Set(safeItems.map((item) => item.id)))
+  }, [result?.scanId])
 
   useEffect(() => {
     if (!restoreTarget || !pageRef.current) return
@@ -268,138 +217,111 @@ export function HealthPage({
     return () => window.cancelAnimationFrame(frame)
   }, [onRestoreComplete, restoreTarget])
 
-  const askAgent = (prompt: string, itemId?: string): void => onAgentPrompt(prompt, {
-    tab,
-    itemId,
+  const toggleCandidate = (id: string): void => setSelectedIds((current) => {
+    const next = new Set(current)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    return next
+  })
+
+  const toggleVisible = (): void => setSelectedIds((current) => {
+    const next = new Set(current)
+    for (const item of visibleSelectable) {
+      if (allVisibleSelected) next.delete(item.id)
+      else next.add(item.id)
+    }
+    return next
+  })
+
+  const askAgent = (candidate: ScanCandidate): void => onAgentPrompt(text(
+    `解释清理项“${candidate.name}”。说明它由哪个应用或系统组件生成、规则为什么只匹配当前路径、清理后会重新生成什么；区分确定事实与推断，不要直接执行。`,
+    `Explain the cleanup item "${candidate.name}". Identify the app or system component that creates it, why the rule matches only this path, and what will be rebuilt after cleanup. Separate verified facts from inference and do not execute it.`
+  ), {
+    tab: 'storage',
+    itemId: candidate.id,
     scrollTop: pageRef.current?.scrollTop ?? 0
   })
 
-  const reviewFindings = (): void => {
-    if (reviewTarget.tab === 'storage') {
-      onStorageModeChange('safe')
-    } else if (reviewTarget.tab === 'services') {
-      setServiceCategory('all')
-    }
-    onTabChange(reviewTarget.tab)
-  }
-
   return (
-    <section ref={pageRef} className="page content-page is-active">
-      <div className="page-command-bar">
-        <span className="page-command-summary">{result
-          ? text(
-              `最后检查于 ${formatDateTime(result.completedAt, language)} · 用时 ${result.timings.find((item) => item.section === 'total')?.durationMs ?? 0} ms`,
-              `Last checked ${formatDateTime(result.completedAt, language)} · ${result.timings.find((item) => item.section === 'total')?.durationMs ?? 0} ms`
-            )
-          : text('尚未完成体检', 'No health scan yet')}</span>
-        <div className="page-command-actions">
-          <button type="button" className="secondary-button" onClick={() => askAgent(text('全面检查电脑状态并准备处理计划', 'Inspect the computer and prepare a plan'))}>
-            <Sparkles size={16} />{text('交给 Agent', 'Ask Agent')}
-          </button>
-          <button type="button" className="primary-button" onClick={onScan} disabled={scanBusy}>
-            {scanBusy ? <LoaderCircle className="spinner" size={16} /> : <RefreshCw size={16} />}
-            {scanBusy ? text('体检中', 'Scanning') : text('重新体检', 'Scan again')}
-          </button>
+    <section ref={pageRef} className="page content-page cleanup-page is-active">
+      <div className="page-command-bar cleanup-command-bar">
+        <div>
+          <h1>{text('清理', 'Cleanup')}</h1>
+          <span className="page-command-summary">{result
+            ? text(
+                `最后扫描 ${formatDateTime(result.completedAt, language)} · ${exactRuleCount} 项确定性结果`,
+                `Last scanned ${formatDateTime(result.completedAt, language)} · ${exactRuleCount} deterministic findings`
+              )
+            : text('运行本机规则扫描，查找可以稳定重建的缓存与临时文件', 'Run local rules to find caches and temporary files that can be reliably rebuilt')}</span>
         </div>
+        <button type="button" className="secondary-button cleanup-scan-button" onClick={onScan} disabled={scanBusy}>
+          {scanBusy ? <LoaderCircle className="spinner" size={16} /> : <RefreshCw size={16} />}
+          {scanBusy ? text('扫描中', 'Scanning') : text('重新扫描', 'Scan again')}
+        </button>
       </div>
 
       {scanBusy && progress && (
-        <div className="scan-status" role="status" aria-live="polite">
-          <Activity size={15} className="spinner" />
-          <span>{progress.message}</span>
+        <div className="cleanup-scan-progress" role="status" aria-live="polite">
+          <span><LoaderCircle className="spinner" size={15} />{progress.message}</span>
+          <div><i style={{ transform: `scaleX(${Math.max(0, Math.min(100, progress.progress)) / 100})` }} /></div>
           <strong>{progress.progress}%</strong>
         </div>
       )}
 
-      {!scanBusy && result && result.diagnostics.length > 0 && (
-        <div className="scan-status is-warning" role="status">
-          <Activity size={15} />
-          <span>{text(`有 ${result.diagnostics.length} 个扫描模块未完整完成`, `${result.diagnostics.length} scan modules did not complete`)}</span>
-          <strong>{result.diagnostics[0].code}</strong>
+      <div className="cleanup-summary-band">
+        <div className="cleanup-reclaimable">
+          <span>{text('安全可释放', 'Safe to reclaim')}</span>
+          <strong>{formatBytes(trustedBytes)}</strong>
+          <small><ShieldCheck size={13} />{text(`${safeItems.length} 项通过内置规则和路径测量`, `${safeItems.length} items passed built-in rules and path measurement`)}</small>
         </div>
-      )}
-
-      <div className="health-band">
-        <button
-          type="button"
-          className="health-score"
-          onClick={reviewFindings}
-          disabled={!result || findingCount === 0}
-          title={text(`打开待确认项最多的模块：${reviewTargetLabel}`, `Open the module with the most findings: ${reviewTargetLabel}`)}
-        >
-          <small className="health-score-label">{text('系统状态', 'System status')}</small>
-          <strong>{score}</strong>
-          <span>{findingCount > 0
-            ? <>{text(`先查看${reviewTargetLabel} ${reviewTarget.count} 项`, `Review ${reviewTarget.count} in ${reviewTargetLabel}`)}<ChevronRight size={12} /></>
-            : text('没有待处理项目', 'No pending findings')}</span>
-        </button>
-        <div className="health-metric"><span>{text('安全可释放空间', 'Safely reclaimable')}</span><strong>{formatBytes(trust.trustedReclaimableBytes)}</strong><small>{text(`${safeStorage.length} 个已验证项目`, `${safeStorage.length} verified findings`)}</small></div>
-        <div className="health-metric"><span>{text('可行动问题', 'Actionable findings')}</span><strong>{actionableCount}</strong><small>{text(`${trust.healthSignalCount + slowTerminalFindings.length} 项影响系统状态`, `${trust.healthSignalCount + slowTerminalFindings.length} affect system status`)}</small></div>
-        <div className="health-metric"><span>{text('审查线索', 'Review clues')}</span><strong>{storageClues.length}</strong><small>{text('不影响健康分和空间估算', 'Excluded from health and reclaimable space')}</small></div>
+        <div className="cleanup-summary-stat"><span>{text('当前选择', 'Selected')}</span><strong>{formatBytes(selectedBytes)}</strong><small>{text(`${selectedItems.length} 项`, `${selectedItems.length} items`)}</small></div>
+        <div className="cleanup-summary-stat"><span>{text('需要确认', 'Review first')}</span><strong>{reviewItems.length}</strong><small>{text(`${reviewActionable.length} 项可操作 · ${reviewItems.length - reviewActionable.length} 条规则外线索`, `${reviewActionable.length} actionable · ${reviewItems.length - reviewActionable.length} outside-rule clues`)}</small></div>
       </div>
 
-      <div className="health-tabs" role="tablist" aria-label={text('体检模块', 'Health modules')}>
-        {([
-          ['storage', text('存储空间', 'Storage')],
-          ['services', text('后台服务', 'Services')],
-          ['terminal', text('终端诊断', 'Terminal')]
-        ] as Array<[HealthTab, string]>).map(([id, label]) => (
-          <button key={id} type="button" role="tab" aria-selected={tab === id} className={`health-tab ${tab === id ? 'is-active' : ''}`} onClick={() => onTabChange(id)}>{label}</button>
-        ))}
-      </div>
+      <div className="cleanup-workspace">
+        <aside className="cleanup-categories" aria-label={text('清理类别', 'Cleanup categories')}>
+          {categories.map((item) => {
+            const Icon = item.icon
+            const categoryItems = item.id === 'all' ? modeItems : modeItems.filter((candidate) => categoryForCandidate(candidate) === item.id)
+            const categoryBytes = categoryItems.reduce((sum, candidate) => sum + (candidate.sizeBytes ?? 0), 0)
+            return <button key={item.id} type="button" className={category === item.id ? 'is-active' : ''} onClick={() => setCategory(item.id)} aria-current={category === item.id ? 'true' : undefined}><Icon size={16} /><span><strong>{item.label}</strong><small>{categoryItems.length ? `${categoryItems.length} · ${formatBytes(categoryBytes)}` : text('无项目', 'No items')}</small></span><ChevronRight size={14} /></button>
+          })}
+        </aside>
 
-      {tab === 'storage' && (
-        <div className="health-panel is-active">
-          <div className="storage-mode-toolbar">
-            <div className="storage-mode-tabs" role="tablist" aria-label={text('存储空间视图', 'Storage view')}>
-              <button type="button" role="tab" aria-selected={storageMode === 'safe'} className={`storage-mode-tab ${storageMode === 'safe' ? 'is-active' : ''}`} onClick={() => onStorageModeChange('safe')}>{text('可信建议', 'Trusted findings')} <span>{trustedStorage.length}</span></button>
-              <button type="button" role="tab" aria-selected={storageMode === 'clues'} className={`storage-mode-tab ${storageMode === 'clues' ? 'is-active' : ''}`} onClick={() => onStorageModeChange('clues')}>{text('审查线索', 'Review clues')} <span>{storageClues.length}</span></button>
-              <button type="button" role="tab" aria-selected={storageMode === 'browser'} className={`storage-mode-tab ${storageMode === 'browser' ? 'is-active' : ''}`} onClick={() => onStorageModeChange('browser')}>{text('磁盘浏览', 'Disk browser')}</button>
+        <div className="cleanup-results">
+          <div className="cleanup-results-toolbar">
+            <div className="storage-mode-tabs" role="tablist" aria-label={text('清理可信等级', 'Cleanup trust level')}>
+              <button type="button" role="tab" aria-selected={storageMode === 'safe'} className={`storage-mode-tab ${storageMode === 'safe' ? 'is-active' : ''}`} onClick={() => onStorageModeChange('safe')}>{text('安全清理', 'Safe cleanup')} <span>{safeItems.length}</span></button>
+              <button type="button" role="tab" aria-selected={storageMode === 'review'} className={`storage-mode-tab ${storageMode === 'review' ? 'is-active' : ''}`} onClick={() => onStorageModeChange('review')}>{text('需要确认', 'Review first')} <span>{reviewItems.length}</span></button>
             </div>
-            <span>{storageMode === 'safe'
-              ? text(`${safeStorage.length} 项可安全清理，${actionableStorage.length} 项有明确证据`, `${safeStorage.length} safe cleanups and ${actionableStorage.length} evidence-backed findings`)
-              : storageMode === 'clues'
-                ? text('弱证据项目不会影响健康状态或可释放空间', 'Weak evidence does not affect health or reclaimable space')
-              : diskUsage
-                ? text(`${diskUsage.retainedEntries.toLocaleString()} 个大目录和文件`, `${diskUsage.retainedEntries.toLocaleString()} large folders and files`)
-                : text('主数据卷', 'Main data volume')}</span>
+            <div className="cleanup-toolbar-actions">
+              <button type="button" className="quiet-button" onClick={() => onManageIgnored('storage')}><EyeOff size={14} />{text(`已忽略 ${settings.storageWhitelist.length}`, `${settings.storageWhitelist.length} ignored`)}</button>
+              {visibleSelectable.length > 0 && <button type="button" className="quiet-button" onClick={toggleVisible}>{allVisibleSelected ? text('取消全选', 'Deselect all') : text('全选当前类别', 'Select category')}</button>}
+            </div>
           </div>
-          {storageMode !== 'browser' ? (
-            <>
-              <div className="section-toolbar"><strong>{storageMode === 'safe' ? text('可信空间建议', 'Trusted storage findings') : text('需要确认归属的线索', 'Ownership clues to review')}</strong><button type="button" className="ignored-count-button" onClick={() => onManageIgnored('storage')}><EyeOff size={14} />{text(`已忽略 ${settings.storageWhitelist.length} 项`, `${settings.storageWhitelist.length} ignored`)}</button></div>
-              <div className="data-list">{(storageMode === 'safe' ? trustedStorage : storageClues).length ? (storageMode === 'safe' ? trustedStorage : storageClues).map((candidate) => <CandidateRow key={candidate.id} candidate={candidate} onAgentPrompt={askAgent} onDirectAction={onDirectAction} onIgnore={onIgnore} onReveal={onRevealCandidate} />) : <div className="module-empty">{storageMode === 'safe' ? text('没有发现可信的存储建议', 'No trusted storage findings') : text('没有需要确认的弱线索', 'No weak clues to review')}</div>}</div>
-            </>
-          ) : (
-            <DiskUsageBrowser result={diskUsage} progress={diskUsageProgress} busy={diskUsageBusy} error={diskUsageError} onScan={onDiskUsageScan} onCancel={onDiskUsageCancel} onReveal={onRevealDiskUsageNode} onAskAI={(node) => onAskDiskUsageNode(node, { tab: 'storage', itemId: node.id, scrollTop: pageRef.current?.scrollTop ?? 0 })} onRequestTrash={onTrashDiskUsageNode} />
-          )}
-        </div>
-      )}
 
-      {tab === 'services' && (
-        <div className="health-panel is-active">
-          <div className="service-mode-toolbar"><div className="service-mode-tabs" role="tablist" aria-label={text('后台服务分类', 'Service categories')}><button type="button" role="tab" aria-selected={serviceCategory === 'all'} className={`service-mode-tab ${serviceCategory === 'all' ? 'is-active' : ''}`} onClick={() => setServiceCategory('all')}>{text('全部', 'All')} <span>{services.length}</span></button>{serviceCategories.map((category) => <button type="button" role="tab" aria-selected={serviceCategory === category.kind} className={`service-mode-tab ${serviceCategory === category.kind ? 'is-active' : ''}`} key={category.kind} onClick={() => setServiceCategory(category.kind)}>{category.label} <span>{category.items.length}</span></button>)}</div><button type="button" className="ignored-count-button" onClick={() => onManageIgnored('services')}><EyeOff size={14} />{text(`已忽略 ${settings.serviceWhitelist.length} 项`, `${settings.serviceWhitelist.length} ignored`)}</button></div>
-          <div className="data-list">{visibleServices.length ? visibleServices.map((candidate) => <CandidateRow key={candidate.id} candidate={candidate} onAgentPrompt={askAgent} onDirectAction={onDirectAction} onIgnore={onIgnore} onReveal={onRevealCandidate} />) : <div className="module-empty">{text('此分类没有后台服务', 'No services in this category')}</div>}</div>
-        </div>
-      )}
-
-      {tab === 'terminal' && (
-        <div className="health-panel is-active">
-          <div className="section-toolbar terminal-toolbar"><div><strong>{text('启动性能', 'Startup performance')}</strong><span>{text(`当前 shell：${result?.terminal.shell ?? '--'}`, `Current shell: ${result?.terminal.shell ?? '--'}`)}</span></div>{terminalFixes.length > 0 && <button type="button" className="primary-button" onClick={() => onOptimizeTerminal(terminalFindings)} disabled={scanBusy}><Bolt size={14} />{text(`一键优化 ${terminalFixes.length} 项`, `Optimize ${terminalFixes.length} items`)}</button>}</div>
-          <div className="data-list">
-            {terminalFindings.map((finding) => (
-              <div className="data-row" key={finding.id} data-focus-id={finding.id} tabIndex={-1}>
-                <span className="row-icon">{finding.fix ? <Route size={16} /> : <Timer size={16} />}</span>
-                <div className="row-main"><strong>{finding.title}</strong><small>{finding.detail}</small></div>
-                <div className="row-meta"><strong>{finding.durationMs !== undefined ? `${finding.durationMs} ms` : finding.severity}</strong><small>{finding.source ?? result?.terminal.shell}</small></div>
-                <div className="row-meta"><strong>{finding.fix ? text('1 个可选操作', '1 available action') : text('仅提供分析', 'Analysis only')}</strong><small>{finding.fix ? text('可直接执行或先分析', 'Run directly or analyze first') : text('不会修改系统', 'No system changes')}</small></div>
-                <div className="row-actions">{finding.fix && <button type="button" className="primary-button direct-action-button" onClick={() => onDirectTerminalFix(finding)}><Bolt size={14} />{text('直接优化', 'Optimize')}</button>}<button type="button" className="secondary-button" onClick={() => askAgent(finding.fix
-                  ? text(`分析“${finding.title}”，说明性能影响和可撤销优化方案；不要直接修改，等我确认后再加入计划。`, `Analyze "${finding.title}", explain the performance impact and reversible fix, and wait for my confirmation before adding it to a plan.`)
-                  : text(`深入分析“${finding.title}”并告诉我怎样优化；不要修改系统。`, `Analyze "${finding.title}" and explain how to optimize it without changing the system.`), finding.id)}><Sparkles size={14} />{text('AI 分析', 'AI analysis')}</button></div>
-              </div>
-            ))}
+          <div className="cleanup-list">
+            {visibleItems.length ? visibleItems.map((candidate) => (
+              <CleanupRow
+                key={candidate.id}
+                candidate={candidate}
+                selected={selectedIds.has(candidate.id)}
+                selectable={selectableItems.some((item) => item.id === candidate.id)}
+                onToggle={() => toggleCandidate(candidate.id)}
+                onAgentPrompt={askAgent}
+                onDirectAction={onDirectAction}
+                onIgnore={onIgnore}
+                onReveal={onRevealCandidate}
+              />
+            )) : <div className="cleanup-empty"><ShieldCheck size={24} /><strong>{storageMode === 'safe' ? text('当前类别没有可安全清理的项目', 'No safe cleanup items in this category') : text('当前类别没有需要确认的项目', 'No review items in this category')}</strong><span>{text('重新扫描后，结果会按照内置规则自动归类。', 'Results are categorized by built-in rules after each scan.')}</span></div>}
           </div>
         </div>
-      )}
+      </div>
+
+      <footer className="cleanup-selection-bar">
+        <div><strong>{selectedItems.length ? text(`已选择 ${selectedItems.length} 项`, `${selectedItems.length} selected`) : text('未选择清理项', 'No cleanup items selected')}</strong><span>{selectedItems.length ? text(`预计释放 ${formatBytes(selectedBytes)}`, `Estimated ${formatBytes(selectedBytes)}`) : text('勾选经过验证的项目后再执行', 'Select verified items before cleanup')}</span></div>
+        <button type="button" className="primary-button" disabled={!selectedSelections.length || scanBusy} onClick={() => onDirectActions(selectedSelections)}><Trash2 size={16} />{storageMode === 'safe' ? text('清理所选项目', 'Clean selected') : text('确认并清理', 'Review and clean')}</button>
+      </footer>
     </section>
   )
 }

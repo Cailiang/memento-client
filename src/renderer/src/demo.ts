@@ -3,6 +3,7 @@ import type { MaintenanceRunRecord } from '../../shared/maintenance-types'
 import type {
   DiskUsageNode,
   DiskUsageScanResult,
+  OverviewMetrics,
   ScanCandidate,
   ScanProgress,
   ScanResult,
@@ -31,6 +32,69 @@ const APPLICATION_TRUST = {
   confidence: 'strong' as const,
   reasonCodes: ['registered-local-operation'] as const,
   estimateQuality: 'approximate' as const
+}
+
+export function localizedDemoOverviewMetrics(): OverviewMetrics {
+  return {
+    collectedAt: new Date().toISOString(),
+    hostname: "Fang's MacBook Pro",
+    osVersion: '15.5',
+    uptimeSeconds: 11 * 86_400 + 9 * 3_600,
+    hardware: {
+      model: 'MacBookPro16,2',
+      cpuModel: 'Intel Core i7-1068NG7',
+      architecture: 'x64',
+      logicalCores: 8
+    },
+    health: {
+      score: 86,
+      status: 'good',
+      issues: ['restart-recommended']
+    },
+    cpu: { usagePercent: 47, loadAverage: [3.9, 3.42, 3.18] },
+    gpu: { name: 'Intel Iris Plus Graphics', usagePercent: 13 },
+    memory: {
+      totalBytes: 32 * GB,
+      usedBytes: 20.08 * GB,
+      availableBytes: 11.92 * GB,
+      usedPercent: 62.8
+    },
+    disk: {
+      totalBytes: 500 * GB,
+      usedBytes: 425 * GB,
+      freeBytes: 75 * GB,
+      usedPercent: 85
+    },
+    network: {
+      interfaceName: 'en0',
+      receivedBytesPerSecond: 84 * 1024,
+      sentBytesPerSecond: 18 * 1024
+    },
+    battery: {
+      available: true,
+      percent: 100,
+      status: 'charged',
+      powerSource: 'ac',
+      cycleCount: 799,
+      healthPercent: 80.2
+    },
+    thermal: {
+      state: 'normal',
+      cpuSpeedLimitPercent: 100,
+      availableCpus: 8
+    },
+    processes: [
+      { pid: 85945, name: 'mediaanalysisd', command: '/System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd', cpuPercent: 84, memoryPercent: 3.2, memoryBytes: 1.03 * GB },
+      { pid: 45918, name: 'codex', command: '~/Library/Application Support/AgentDock/clients/codex/bin/codex', cpuPercent: 16.3, memoryPercent: 0.7, memoryBytes: 222 * MB },
+      { pid: 64647, name: 'iTerm2', command: '/Applications/iTerm.app/Contents/MacOS/iTerm2', cpuPercent: 4.4, memoryPercent: 2.4, memoryBytes: 785 * MB },
+      { pid: 40390, name: 'Feishu', command: '/Applications/Lark.app/Contents/MacOS/Feishu', cpuPercent: 1.9, memoryPercent: 0.8, memoryBytes: 264 * MB },
+      { pid: 604, name: 'aciseagentd', command: '/opt/cisco/anyconnect/bin/aciseagentd', cpuPercent: 1.3, memoryPercent: 0.7, memoryBytes: 244 * MB },
+      { pid: 303, name: 'symptomsd', command: '/usr/libexec/symptomsd', cpuPercent: 0.3, memoryPercent: 0.1, memoryBytes: 13 * MB },
+      { pid: 163, name: 'opendirectoryd', command: '/usr/libexec/opendirectoryd', cpuPercent: 0.1, memoryPercent: 0.1, memoryBytes: 23 * MB },
+      { pid: 120, name: 'logd', command: '/usr/libexec/logd', cpuPercent: 0.1, memoryPercent: 0.2, memoryBytes: 61 * MB }
+    ],
+    diagnostics: []
+  }
 }
 
 export function localizedDemoMaintenanceRuns(language: AppLanguage): MaintenanceRunRecord[] {
@@ -150,6 +214,7 @@ export const demoResult: ScanResult = {
       ...SAFE_TRUST,
       id: 'demo-derived-data',
       section: 'storage',
+      cleanupCategory: 'developer',
       name: 'Xcode DerivedData',
       subtitle: '~/Library/Developer/Xcode/DerivedData',
       location: '~/Library/Developer/Xcode/DerivedData',
@@ -170,6 +235,7 @@ export const demoResult: ScanResult = {
       ...SAFE_TRUST,
       id: 'demo-npm',
       section: 'storage',
+      cleanupCategory: 'developer',
       name: 'npm 内容缓存',
       subtitle: '~/.npm/_cacache',
       location: '~/.npm/_cacache',
@@ -187,9 +253,96 @@ export const demoResult: ScanResult = {
       }
     },
     {
+      ...SAFE_TRUST,
+      id: 'demo-claude-cache',
+      section: 'storage',
+      cleanupCategory: 'applications',
+      name: 'Claude 可重建缓存',
+      subtitle: '8 个确定性规则目录',
+      location: '~/Library/Application Support/Claude',
+      description: '网页、GPU 与下载缓存；登录、设置、对话和项目都会保留。',
+      sizeBytes: 2.4 * GB,
+      ageDays: 3,
+      risk: 'safe',
+      status: '可安全重建',
+      evidence: ['合计占用 2.4 GB', '只匹配内置缓存目录'],
+      action: {
+        kind: 'delete-storage-group',
+        label: '清理所列缓存',
+        consequence: '只会永久删除列出的可重建缓存目录，Claude 下次启动时可能重新下载内容。',
+        reversible: false
+      }
+    },
+    {
+      ...SAFE_TRUST,
+      id: 'demo-safari-cache',
+      section: 'storage',
+      cleanupCategory: 'browsers',
+      name: 'Safari 网页缓存',
+      subtitle: '2 个确定性规则目录',
+      location: '~/Library/Containers/com.apple.Safari/Data/Library/Caches',
+      description: 'Safari 网页与网络缓存；浏览记录、书签、Cookie 和登录状态都会保留。',
+      sizeBytes: 1.1 * GB,
+      ageDays: 1,
+      risk: 'safe',
+      status: '可安全重建',
+      evidence: ['合计占用 1.1 GB', '不包含浏览器 Profile 数据'],
+      action: {
+        kind: 'delete-storage-group',
+        label: '清理所列缓存',
+        consequence: '只删除 Safari 的缓存目录，浏览器资料不会处理。',
+        reversible: false
+      }
+    },
+    {
+      ...SAFE_TRUST,
+      id: 'demo-sandbox-cache',
+      section: 'storage',
+      cleanupCategory: 'applications',
+      name: 'com.tinyspeck.slackmacgap',
+      subtitle: '沙盒应用缓存',
+      location: '~/Library/Containers/com.tinyspeck.slackmacgap/Data/Library/Caches',
+      description: 'macOS 沙盒应用的缓存目录；账号、设置和工作区数据不会处理。',
+      sizeBytes: 786 * MB,
+      ageDays: 5,
+      risk: 'safe',
+      status: '结构已验证',
+      evidence: ['仅匹配 Caches 目录', '占用 786 MB'],
+      action: {
+        kind: 'delete-storage',
+        label: '永久清理',
+        consequence: '只删除这个容器的缓存目录，账号、设置和其他容器数据都会保留。',
+        reversible: false
+      }
+    },
+    {
+      id: 'demo-diagnostics',
+      section: 'storage',
+      cleanupCategory: 'logs',
+      name: '诊断与崩溃报告',
+      subtitle: '~/Library/DiagnosticReports',
+      location: '~/Library/DiagnosticReports',
+      description: 'macOS 和应用生成的旧诊断报告；清理后将失去这些历史排障记录。',
+      sizeBytes: 286 * MB,
+      ageDays: 22,
+      risk: 'review',
+      status: '建议确认',
+      evidence: ['占用 286 MB', '最近修改于 22 天前'],
+      confidence: 'strong',
+      reasonCodes: ['reviewable-application-log', 'registered-local-operation', 'measured-local-target'],
+      estimateQuality: 'exact',
+      action: {
+        kind: 'delete-storage',
+        label: '永久清理报告',
+        consequence: '旧诊断报告会永久删除，文稿和设置不受影响。',
+        reversible: false
+      }
+    },
+    {
       ...CLUE_TRUST,
       id: 'demo-lingma',
       section: 'storage',
+      cleanupCategory: 'applications',
       name: '.lingma',
       subtitle: 'Home 隐藏项目',
       location: '~/.lingma',
@@ -612,6 +765,34 @@ export function localizedDemoResult(language: AppLanguage): ScanResult {
       status: 'Reclaimable',
       evidence: ['Uses 4.6 GB', 'Last modified 37 days ago']
     },
+    'demo-claude-cache': {
+      name: 'Claude rebuildable caches',
+      subtitle: '8 deterministic rule targets',
+      description: 'Web, GPU, and download caches. Login, settings, conversations, and projects are preserved.',
+      status: 'Safely rebuildable',
+      evidence: ['Uses 2.4 GB in total', 'Matches only built-in cache paths']
+    },
+    'demo-safari-cache': {
+      name: 'Safari web caches',
+      subtitle: '2 deterministic rule targets',
+      description: 'Safari web and network caches. History, bookmarks, cookies, and sign-in state are preserved.',
+      status: 'Safely rebuildable',
+      evidence: ['Uses 1.1 GB in total', 'Browser profile data is excluded']
+    },
+    'demo-sandbox-cache': {
+      name: 'com.tinyspeck.slackmacgap',
+      subtitle: 'Sandboxed application cache',
+      description: 'Cache storage from a sandboxed macOS app. Accounts, settings, and workspace data are preserved.',
+      status: 'Structure verified',
+      evidence: ['Matches only the Caches folder', 'Uses 786 MB']
+    },
+    'demo-diagnostics': {
+      name: 'Diagnostic and crash reports',
+      subtitle: '~/Library/DiagnosticReports',
+      description: 'Historical diagnostics from macOS and applications. Cleanup removes old troubleshooting records.',
+      status: 'Review first',
+      evidence: ['Uses 286 MB', 'Last modified 22 days ago']
+    },
     'demo-lingma': {
       name: '.lingma',
       subtitle: 'Hidden Home item',
@@ -657,6 +838,10 @@ export function localizedDemoResult(language: AppLanguage): ScanResult {
   const actionCopy: Record<string, { label: string; consequence: string }> = {
     'demo-derived-data': { label: 'Clean permanently', consequence: 'The cache will be permanently deleted to release space immediately. Xcode recreates it during the next full build.' },
     'demo-npm': { label: 'Clean permanently', consequence: 'The cache will be permanently deleted to release space immediately. npm may download dependencies again later.' },
+    'demo-claude-cache': { label: 'Clean listed caches', consequence: 'Only listed rebuildable cache folders are permanently removed. Claude may download content again.' },
+    'demo-safari-cache': { label: 'Clean listed caches', consequence: 'Only Safari cache folders are removed. Browser profile data is preserved.' },
+    'demo-sandbox-cache': { label: 'Clean permanently', consequence: 'Only this container cache folder is removed. Accounts, settings, and other container data are preserved.' },
+    'demo-diagnostics': { label: 'Delete reports permanently', consequence: 'Old diagnostic reports are permanently removed. Documents and settings are not affected.' },
     'demo-lingma': { label: 'Move to Trash', consequence: 'The hidden directory and its data will move to the Trash. Settings may reset if an app or command still uses it.' },
     'demo-postgres': { label: 'Stop service', consequence: 'The service will stop immediately and no longer start automatically at login.' },
     'demo-sunlogin-stop': { label: 'Stop service only', consequence: 'The process will stop, while the app, configuration, and user data remain.' },

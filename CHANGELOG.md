@@ -8,6 +8,24 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.7.1 - 2026-08-04
+
+### English
+
+- Reorganized the primary macOS product around Overview, Cleanup, Applications, and Disk analysis. Overview now presents live health, processor, graphics, memory, battery, disk, network, and process signals without making AI a prerequisite.
+- Rebuilt Cleanup as a deterministic category workspace with Safe cleanup and Review first modes, safe-by-default selection, one confirmed batch execution, precise partial-success reconciliation, and non-selectable outside-rule clues. AI is limited to an optional explanation action on each finding.
+- Added one shared cleanup-rule registry for both discovery and execution, covering explicit macOS, browser, Electron client, developer-tool, diagnostic, and simulator caches. Expanded dynamic discovery to all eligible application caches and bounded third-party Sandbox/Group Container cache folders, with Apple and credential identities protected.
+- Removed the first-80 cache measurement limit and now rank candidates after complete eligible measurement. Real-device scan coverage increased from about 26.1 GB to 44.6 GB of trusted reclaimable data while remaining around nine seconds on the development Mac.
+- Added rule-registry, symlink-ancestor, batch UI, Overview monitor, four-viewport, and real Electron regression coverage.
+
+### 简体中文
+
+- macOS 主产品结构调整为“概览、清理、应用管理、磁盘分析”。概览直接展示健康度、处理器、图形、内存、电池、磁盘、网络和进程状态，不把 AI 作为前置条件。
+- 清理重做为确定性分类工作台，提供“安全清理”和“需要确认”两种模式；安全项默认选择，批量执行只确认一次，部分成功时精确更新结果，规则外弱线索不可勾选。AI 只保留为单项解释入口。
+- 扫描与执行改为共用同一个清理规则注册表，覆盖 macOS、浏览器、Electron 客户端、开发工具、诊断和模拟器缓存；动态发现扩展到全部合格应用缓存，以及受限的第三方 Sandbox/Group Container 缓存目录，并保护 Apple 与凭据类身份。
+- 移除只测量前 80 个缓存目录的限制，改为完成全部合格路径测量后再按价值排序。开发机实扫的可信可释放空间从约 26.1 GB 提升到 44.6 GB，总耗时仍保持在约 9 秒。
+- 新增规则注册表、符号链接祖先、批量清理界面、概览监控、四视口和真实 Electron 回归覆盖。
+
 ## 0.7.0 - 2026-08-04
 
 ### English

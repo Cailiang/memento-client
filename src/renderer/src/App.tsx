@@ -28,13 +28,14 @@ import type {
   DiskUsageProgress,
   DiskUsageScanResult,
   InstalledApplication,
+  OverviewMetrics,
   ScanCandidate,
   ScanProgress,
-  ScanResult,
-  TerminalFinding
+  ScanResult
 } from '../../shared/types'
 import { AgentPage } from './agent-ui/AgentPage'
 import { ApplicationsPage } from './agent-ui/ApplicationsPage'
+import { DiskAnalysisPage } from './agent-ui/DiskAnalysisPage'
 import {
   ApplicationIgnoreConfirmDialog,
   DeleteMaintenanceHistoryDialog,
@@ -48,11 +49,17 @@ import {
   IgnoredItemsDialog,
   UninstallDialog
 } from './agent-ui/Dialogs'
-import { HealthPage, type HealthAgentOrigin, type HealthTab, type PageRestoreTarget, type StorageMode } from './agent-ui/HealthPage'
+import { HealthPage, type CleanupSelection, type HealthAgentOrigin, type HealthTab, type PageRestoreTarget, type StorageMode } from './agent-ui/HealthPage'
 import { HistoryPage } from './agent-ui/HistoryPage'
+import { OverviewPage } from './agent-ui/OverviewPage'
 import { SettingsPage } from './agent-ui/SettingsPage'
 import { type AgentViewKey, Shell } from './agent-ui/Shell'
-import { localizedDemoDiskUsageResult, localizedDemoMaintenanceRuns, localizedDemoResult } from './demo'
+import {
+  localizedDemoDiskUsageResult,
+  localizedDemoMaintenanceRuns,
+  localizedDemoOverviewMetrics,
+  localizedDemoResult
+} from './demo'
 import { withoutDiskUsageNode } from './disk-usage-tree'
 import { I18nProvider } from './i18n'
 import {
@@ -286,9 +293,10 @@ function demoPlanItemFromPresentation(
 type AgentOrigin =
   | { view: 'health'; tab: HealthTab; itemId?: string; scrollTop: number }
   | { view: 'apps'; itemId?: string; scrollTop: number }
+  | { view: 'disk' }
 
 interface RestoreTarget extends PageRestoreTarget {
-  view: AgentOrigin['view']
+  view: Extract<AgentOrigin['view'], 'health' | 'apps'>
 }
 
 interface ExecutionState {
@@ -324,15 +332,18 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
   const [providers, setProviders] = useState<AgentProvider[]>([])
   const [runs, setRuns] = useState<AgentRunRecord[]>([])
   const [maintenanceRuns, setMaintenanceRuns] = useState<MaintenanceRunRecord[]>([])
+  const [overviewMetrics, setOverviewMetrics] = useState<OverviewMetrics | null>(null)
+  const [overviewBusy, setOverviewBusy] = useState(false)
+  const [overviewPaused, setOverviewPaused] = useState(false)
+  const [overviewError, setOverviewError] = useState<string | null>(null)
   const [result, setResult] = useState<ScanResult | null>(null)
-  const [view, setView] = useState<AgentViewKey>('health')
+  const [view, setView] = useState<AgentViewKey>('overview')
   const [scanBusy, setScanBusy] = useState(false)
   const [progress, setProgress] = useState<ScanProgress | null>(null)
   const [activeRun, setActiveRun] = useState<AgentRunRecord | null>(null)
   const [workspaceConversationIds, setWorkspaceConversationIds] = useState<string[]>([])
   const [runStatusMessage, setRunStatusMessage] = useState('')
   const [selectedPlanIds, setSelectedPlanIds] = useState<Set<string>>(new Set())
-  const [healthTab, setHealthTab] = useState<HealthTab>('storage')
   const [storageMode, setStorageMode] = useState<StorageMode>('safe')
   const [diskUsage, setDiskUsage] = useState<DiskUsageScanResult | null>(null)
   const [diskUsageProgress, setDiskUsageProgress] = useState<DiskUsageProgress | null>(null)
@@ -363,6 +374,10 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
   const activeRunId = useRef<string | null>(null)
   const latestAgentStartToken = useRef(0)
   const diskUsageCancelRequested = useRef(false)
+  const overviewRequestInFlight = useRef(false)
+  const overviewMetricsRef = useRef<OverviewMetrics | null>(null)
+  const resultRef = useRef<ScanResult | null>(null)
+  const automaticScanStarted = useRef(false)
   const appText = (chinese: string, english: string): string => (
     settings.language === 'en-US' ? english : chinese
   )
@@ -372,9 +387,41 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     [providers]
   )
 
+  const refreshOverview = useCallback(async (showBusy = false): Promise<void> => {
+    if (overviewRequestInFlight.current) return
+    overviewRequestInFlight.current = true
+    if (showBusy || !overviewMetricsRef.current) setOverviewBusy(true)
+    try {
+      const next = window.memento
+        ? await window.memento.getOverviewMetrics()
+        : localizedDemoOverviewMetrics()
+      overviewMetricsRef.current = next
+      setOverviewMetrics(next)
+      setOverviewError(null)
+    } catch (error) {
+      setOverviewError(error instanceof Error
+        ? error.message
+        : settings.language === 'en-US' ? 'Could not refresh system status.' : '无法刷新系统状态')
+    } finally {
+      overviewRequestInFlight.current = false
+      setOverviewBusy(false)
+    }
+  }, [settings.language])
+
+  useEffect(() => {
+    if (view !== 'overview' || overviewPaused) return
+    void refreshOverview()
+    const interval = window.setInterval(() => void refreshOverview(), 2_500)
+    return () => window.clearInterval(interval)
+  }, [overviewPaused, refreshOverview, view])
+
   useEffect(() => {
     activeRunId.current = activeRun?.id ?? null
   }, [activeRun?.id])
+
+  useEffect(() => {
+    resultRef.current = result
+  }, [result])
 
   const refreshProviders = useCallback(async (): Promise<AgentProvider[]> => {
     const next = window.memento
@@ -400,6 +447,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     try {
       const language = languageOverride ?? settings.language
       const next = window.memento ? await window.memento.scan(language) : localizedDemoResult(language)
+      resultRef.current = next
       setResult(next)
       return next
     } catch (error) {
@@ -523,8 +571,11 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
 
   const changeStorageMode = (mode: StorageMode): void => {
     setStorageMode(mode)
-    if (mode === 'browser' && !diskUsage && !diskUsageBusy) void scanDiskUsage()
   }
+
+  useEffect(() => {
+    if (view === 'disk' && !diskUsage && !diskUsageBusy) void scanDiskUsage()
+  }, [diskUsage, diskUsageBusy, scanDiskUsage, view])
 
   const revealDiskUsageNode = (id: string): void => {
     if (!window.memento) {
@@ -581,18 +632,23 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
         onLanguageChange(initialSettings.language)
         document.documentElement.dataset.theme = initialSettings.theme
         await Promise.all([refreshProviders(), refreshRuns(), refreshMaintenanceRuns()])
-        setScanBusy(true)
-        const initialResult = window.memento
-          ? await window.memento.scan(initialSettings.language)
-          : localizedDemoResult(initialSettings.language)
-        setResult(initialResult)
       } catch (error) {
         setToast(error instanceof Error ? error.message : 'Memento 初始化失败')
-      } finally {
-        setScanBusy(false)
       }
     })()
   }, [onLanguageChange, refreshMaintenanceRuns, refreshProviders, refreshRuns])
+
+  useEffect(() => {
+    if (
+      !result &&
+      !scanBusy &&
+      !automaticScanStarted.current &&
+      (view === 'health' || view === 'apps' || view === 'agent')
+    ) {
+      automaticScanStarted.current = true
+      void scanNow()
+    }
+  }, [result, scanBusy, scanNow, view])
 
   useEffect(() => {
     if (view === 'history') void refreshMaintenanceRuns()
@@ -613,7 +669,9 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     onLanguageChange(next.language)
     document.documentElement.dataset.theme = next.theme
     if (next.language !== previousLanguage) {
+      resultRef.current = null
       setResult(null)
+      automaticScanStarted.current = true
       await scanNow(next.language)
     }
   }
@@ -622,7 +680,8 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     const uiText = (chinese: string, english: string): string => (
       settings.language === 'en-US' ? english : chinese
     )
-    if (!result) {
+    const activeResult = resultRef.current
+    if (!activeResult) {
       setToast(uiText('请先完成一次电脑体检', 'Complete a computer health scan first.'))
       return
     }
@@ -665,8 +724,8 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
         run.conversationId
       ))
       window.setTimeout(() => {
-        const plan = demoPlan(result, settings.language)
-        const presentation = demoPresentation(result, prompt, settings.language)
+        const plan = demoPlan(activeResult, settings.language)
+        const presentation = demoPresentation(activeResult, prompt, settings.language)
         const completed = {
           ...run,
           status: 'awaiting-confirmation' as const,
@@ -703,6 +762,17 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     }).catch((error) => setToast(error instanceof Error
       ? error.message
       : uiText('无法启动 Agent', 'Could not start the Agent.')))
+  }
+
+  const askDiskUsageNode = async (node: DiskUsageNode): Promise<void> => {
+    if (!resultRef.current && !await scanNow()) return
+    startAgentRun(
+      appText(
+        `分析磁盘目录“${node.name}”（${node.location}）。只读分析它的用途和当前使用状态，不要直接修改。`,
+        `Analyze the disk directory "${node.name}" (${node.location}) in read-only mode. Explain its purpose and current usage without changing it.`
+      ),
+      { isolated: true, origin: { view: 'disk' }, diskUsageNodeId: node.id }
+    )
   }
 
   const executePlan = async (): Promise<void> => {
@@ -824,41 +894,24 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     })
   }
 
-  const requestDirectTerminalFix = (finding: TerminalFinding): void => {
-    if (!finding.fix) return
+  const requestDirectActions = (selections: CleanupSelection[]): void => {
+    if (!selections.length) return
     if (scanBusy) {
-      setToast(appText('请等待当前体检完成后再操作', 'Wait for the current scan to finish before running an action.'))
+      setToast(appText('请等待当前扫描完成后再操作', 'Wait for the current scan to finish before running actions.'))
       return
     }
+    const reversible = selections.every(({ operation }) => operation.reversible)
     setPendingDirectAction({
-      id: finding.fix.id,
-      kind: 'terminal-fix',
-      verificationMode: 'scan',
-      subject: finding.title,
-      label: finding.fix.label,
-      consequence: finding.fix.consequence,
-      reversible: true,
-      estimatedBytes: 0
-    })
-  }
-
-  const requestTerminalFixBatch = (findings: TerminalFinding[]): void => {
-    const fixes = findings.flatMap((finding) => finding.fix ? [finding.fix] : [])
-    if (!fixes.length) return
-    if (scanBusy) {
-      setToast(appText('请等待当前体检完成后再操作', 'Wait for the current scan to finish before running an action.'))
-      return
-    }
-    setPendingDirectAction({
-      id: fixes[0].id,
-      ids: fixes.map((fix) => fix.id),
-      kind: 'terminal-fix',
-      verificationMode: 'scan',
-      subject: appText(`${fixes.length} 项终端启动问题`, `${fixes.length} terminal startup issues`),
-      label: appText(`一键优化 ${fixes.length} 项`, `Optimize ${fixes.length} items`),
-      consequence: appText('自动备份相关 shell 配置，执行全部可安全应用的优化，校验语法后重新体检。', 'Back up the relevant shell configuration, apply every safe optimization, validate syntax, and scan again.'),
-      reversible: true,
-      estimatedBytes: 0
+      id: selections[0].operation.id,
+      ids: selections.map(({ operation }) => operation.id),
+      candidateIds: selections.map(({ candidate }) => candidate.id),
+      kind: 'action',
+      verificationMode: 'local',
+      subject: appText(`${selections.length} 项清理规则`, `${selections.length} cleanup items`),
+      label: appText(`清理所选 ${selections.length} 项`, `Clean ${selections.length} selected items`),
+      consequence: appText('只执行当前扫描注册的确定性清理操作；执行前主进程会再次校验每个目标。', 'Only deterministic cleanup actions registered by the current scan will run. The main process validates every target again before execution.'),
+      reversible,
+      estimatedBytes: selections.reduce((sum, { candidate, operation }) => sum + (operation.estimatedBytes ?? candidate.sizeBytes ?? 0), 0)
     })
   }
 
@@ -882,7 +935,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       const results = window.memento
         ? action.kind === 'terminal-fix'
           ? (await window.memento.runTerminalFixes(actionIds)).results
-          : await window.memento.runActions([action.id])
+          : await window.memento.runActions(actionIds)
         : await new Promise<Array<{ id: string; ok: boolean; message: string }>>((resolve) => {
             window.setTimeout(() => resolve(actionIds.map((id) => ({
               id,
@@ -904,6 +957,11 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
           : appText('正在重新体检并验证结果。', 'Scanning again to verify the result.')
       })
       if (action.verificationMode === 'local') {
+        const completedCandidateIds = new Set<string>()
+        if (action.candidateId && completedIds.has(action.id)) completedCandidateIds.add(action.candidateId)
+        action.candidateIds?.forEach((candidateId, index) => {
+          if (completedIds.has(actionIds[index])) completedCandidateIds.add(candidateId)
+        })
         await waitUntilElapsed(startedAt, 1_600)
         setExecutionState((current) => current ? { ...current, progress: 72 } : current)
         await waitUntilElapsed(startedAt, 2_250)
@@ -918,8 +976,8 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
           )
           return {
             ...current,
-            candidates: action.candidateId && completedIds.has(action.id)
-              ? reconciled.filter((candidate) => candidate.id !== action.candidateId)
+            candidates: completedCandidateIds.size
+              ? reconciled.filter((candidate) => !completedCandidateIds.has(candidate.id))
               : reconciled
           }
         })
@@ -978,7 +1036,11 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
 
   const returnToAgentOrigin = (): void => {
     if (!agentOrigin) return
-    if (agentOrigin.view === 'health') setHealthTab(agentOrigin.tab)
+    if (agentOrigin.view === 'disk') {
+      setAgentOrigin(null)
+      setView('disk')
+      return
+    }
     setRestoreTarget({
       view: agentOrigin.view,
       itemId: agentOrigin.itemId,
@@ -1442,9 +1504,9 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
 
   const healthCount = result
     ? result.candidates.filter((candidate) => (
-        (candidate.section === 'storage' || candidate.section === 'services') &&
+        candidate.section === 'storage' &&
         !isReviewClue(candidate) && (isSafeCleanup(candidate) || isActionableFinding(candidate))
-      )).length + result.terminal.findings.filter((finding) => finding.fix).length
+      )).length
     : 0
   const conversationRuns = useMemo(() => {
     if (!activeRun) return []
@@ -1490,6 +1552,8 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
   }
   const agentOriginLabel = agentOrigin?.view === 'apps'
     ? appText('应用管理', 'Applications')
+    : agentOrigin?.view === 'disk'
+      ? appText('磁盘分析', 'Disk analysis')
     : agentOrigin?.view === 'health'
       ? agentOrigin.tab === 'services'
         ? appText('后台服务', 'Services')
@@ -1517,14 +1581,32 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       applicationCount={result?.applications.length ?? 0}
       appVersion={appVersion}
       updateState={updateState}
-      hostname={result?.system.hostname ?? ''}
-      osVersion={result?.system.osVersion ?? ''}
+      hostname={overviewMetrics?.hostname ?? result?.system.hostname ?? ''}
+      osVersion={overviewMetrics?.osVersion ?? result?.system.osVersion ?? ''}
       onNavigate={setView}
       onInstallUpdate={installUpdate}
     >
+      {view === 'overview' && <OverviewPage metrics={overviewMetrics} busy={overviewBusy} paused={overviewPaused} error={overviewError} onRefresh={() => void refreshOverview(true)} onPausedChange={setOverviewPaused} />}
       {view === 'agent' && <AgentPage scan={result} run={activeRun} conversationRuns={conversationRuns} workspaceRuns={workspaceRuns} statusMessage={runStatusMessage} selectedPlanIds={selectedPlanIds} providerConfigured={Boolean(defaultProvider)} addingOperationId={addingOperationId} openingApplicationId={openingApplicationId} returnLabel={agentOriginLabel} onSubmit={startAgentRun} onSelectWorkspaceRun={selectWorkspaceRun} onCloseWorkspaceRun={closeWorkspaceRun} onNewTask={() => { setActiveRun(null); activeRunId.current = null; setSelectedPlanIds(new Set()); setRunStatusMessage(''); setAgentOrigin(null) }} onOpenHistory={() => setView('history')} onOpenSettings={() => setView('settings')} onReturn={returnToAgentOrigin} onOpenApplication={openAgentApplication} onAddPlanItem={(id) => void addAgentPlanItem(id)} onTogglePlanItem={(id) => setSelectedPlanIds((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next })} onExecutePlan={() => void executePlan()} onDiscardPlan={discardPlan} />}
-      {view === 'health' && <HealthPage result={result} settings={settings} scanBusy={scanBusy} progress={progress} tab={healthTab} storageMode={storageMode} diskUsage={diskUsage} diskUsageProgress={diskUsageProgress} diskUsageBusy={diskUsageBusy} diskUsageError={diskUsageError} restoreTarget={restoreTarget?.view === 'health' ? restoreTarget : null} onRestoreComplete={() => setRestoreTarget(null)} onScan={() => void scanNow()} onTabChange={setHealthTab} onStorageModeChange={changeStorageMode} onDiskUsageScan={() => void scanDiskUsage()} onDiskUsageCancel={cancelDiskUsageScan} onRevealDiskUsageNode={revealDiskUsageNode} onTrashDiskUsageNode={setPendingDiskUsageTrash} onAskDiskUsageNode={(node, origin) => startAgentRun(appText(`分析磁盘目录“${node.name}”（${node.location}）。直接说明它属于什么软件或用途、当前是否仍被使用，以及能否删除。结合已安装应用、后台服务、目录内容、软件包收据和 shell 引用给出证据；如果确认是已卸载软件的残留并且有已注册操作，请生成移到废纸篓的确认任务，不要直接执行。`, `Analyze the disk directory "${node.name}" (${node.location}). Directly explain what software or purpose it belongs to, whether it is still in use, and whether it can be deleted. Use installed apps, background services, directory entries, package receipts, and shell references as evidence. If it is confirmed leftover data from uninstalled software and a registered operation is available, prepare a confirmation task to move it to Trash without executing it.`), { isolated: true, origin: { view: 'health', ...origin }, diskUsageNodeId: node.id })} onRevealCandidate={revealCandidate} onAgentPrompt={(prompt, origin: HealthAgentOrigin) => startAgentRun(prompt, { isolated: true, origin: { view: 'health', ...origin } })} onDirectAction={requestDirectAction} onDirectTerminalFix={requestDirectTerminalFix} onOptimizeTerminal={requestTerminalFixBatch} onIgnore={setPendingIgnore} onManageIgnored={openIgnoredManager} />}
+      {view === 'health' && <HealthPage
+        result={result}
+        settings={settings}
+        scanBusy={scanBusy}
+        progress={progress}
+        storageMode={storageMode}
+        restoreTarget={restoreTarget?.view === 'health' ? restoreTarget : null}
+        onRestoreComplete={() => setRestoreTarget(null)}
+        onScan={() => void scanNow()}
+        onStorageModeChange={changeStorageMode}
+        onRevealCandidate={revealCandidate}
+        onAgentPrompt={(prompt, origin: HealthAgentOrigin) => startAgentRun(prompt, { isolated: true, origin: { view: 'health', ...origin } })}
+        onDirectAction={requestDirectAction}
+        onDirectActions={requestDirectActions}
+        onIgnore={setPendingIgnore}
+        onManageIgnored={openIgnoredManager}
+      />}
       {view === 'apps' && <ApplicationsPage applications={result?.applications ?? []} openingId={openingApplicationId} removingId={removingApplicationId} restoreTarget={restoreTarget?.view === 'apps' ? restoreTarget : null} onRestoreComplete={() => setRestoreTarget(null)} ignoredCount={settings.applicationWhitelist.length} onOpen={(application) => void openApplication(application)} onUninstall={setPendingUninstall} onIgnore={setPendingApplicationIgnore} onManageIgnored={() => openIgnoredManager('applications')} onAgentPrompt={(prompt, origin) => startAgentRun(prompt, { isolated: true, origin: { view: 'apps', ...origin } })} />}
+      {view === 'disk' && <DiskAnalysisPage result={diskUsage} progress={diskUsageProgress} busy={diskUsageBusy} error={diskUsageError} onScan={() => void scanDiskUsage()} onCancel={cancelDiskUsageScan} onReveal={revealDiskUsageNode} onAskAI={(node) => void askDiskUsageNode(node)} onRequestTrash={setPendingDiskUsageTrash} />}
       {view === 'history' && <HistoryPage runs={runs} maintenanceRuns={maintenanceRuns} onOpenRun={(run) => { setActiveRun(run); activeRunId.current = run.id; setSelectedPlanIds(new Set()); setView('agent') }} onDeleteRuns={setPendingHistoryDelete} onDeleteMaintenanceRuns={setPendingMaintenanceDelete} onRevealRecovery={revealMaintenanceRecovery} />}
       {view === 'settings' && <SettingsPage settings={settings} providers={providers} appVersion={appVersion} updateState={updateState} onUpdateSettings={updateSettings} onDiscoverModels={discoverProviderModels} onSaveProvider={saveProvider} onTestProvider={testProvider} onDeleteProvider={deleteProvider} onSetDefaultProvider={setDefaultProvider} onImportLocalAi={importLocalAiConfigurations} onImportCcSwitch={importCcSwitchProviders} onCheckUpdates={checkForUpdates} onManageIgnored={() => openIgnoredManager()} onToast={setToast} />}
 

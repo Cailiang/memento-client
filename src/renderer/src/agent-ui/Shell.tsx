@@ -1,19 +1,21 @@
 import {
-  Activity,
   AppWindow,
   Archive,
+  HardDrive,
   History,
+  LayoutDashboard,
   LoaderCircle,
   Monitor,
   RefreshCw,
   Settings2,
-  Sparkles
+  Sparkles,
+  Trash2
 } from 'lucide-react'
 import type { AgentProvider } from '../../../shared/agent-types'
 import type { AppUpdateState } from '../../../shared/types'
 import { useI18n } from '../i18n'
 
-export type AgentViewKey = 'agent' | 'health' | 'apps' | 'history' | 'settings'
+export type AgentViewKey = 'overview' | 'health' | 'apps' | 'disk' | 'agent' | 'history' | 'settings'
 
 export function Shell({
   activeView,
@@ -47,10 +49,18 @@ export function Shell({
     icon: typeof Sparkles
     count?: number
   }> = [
-    { id: 'agent', label: ['Agent', 'Agent'], icon: Sparkles },
-    { id: 'health', label: ['电脑体检', 'Health'], icon: Activity, count: healthCount },
+    { id: 'overview', label: ['概览', 'Overview'], icon: LayoutDashboard },
+    { id: 'health', label: ['清理', 'Cleanup'], icon: Trash2, count: healthCount },
     { id: 'apps', label: ['应用管理', 'Applications'], icon: AppWindow, count: applicationCount },
-    { id: 'history', label: ['任务记录', 'History'], icon: History },
+    { id: 'disk', label: ['磁盘分析', 'Disk analysis'], icon: HardDrive }
+  ]
+  const utilities: Array<{
+    id: Extract<AgentViewKey, 'agent' | 'history' | 'settings'>
+    label: [string, string]
+    icon: typeof Sparkles
+  }> = [
+    { id: 'agent', label: ['AI 助手', 'AI assistant'], icon: Sparkles },
+    { id: 'history', label: ['操作记录', 'Activity'], icon: History },
     { id: 'settings', label: ['设置', 'Settings'], icon: Settings2 }
   ]
   const showUpdateControl = updateState && [
@@ -124,6 +134,12 @@ export function Shell({
         </nav>
 
         <div className="sidebar-footer">
+          <nav className="utility-nav" aria-label={text('辅助功能', 'Utilities')}>
+            {utilities.map((item) => {
+              const Icon = item.icon
+              return <button key={item.id} type="button" className={`utility-button ${activeView === item.id ? 'is-active' : ''}`} onClick={() => onNavigate(item.id)} title={text(...item.label)} aria-current={activeView === item.id ? 'page' : undefined}><Icon size={15} /><span>{text(...item.label)}</span></button>
+            })}
+          </nav>
           <div className="provider-state">
             <span className={`status-dot ${provider?.connectionState === 'connected' ? '' : 'is-muted'}`} />
             <div>
@@ -145,9 +161,15 @@ export function Shell({
             <span><Monitor size={15} /></span>
             <div>
               <strong>{hostname || text('这台 Mac', 'This Mac')}</strong>
-              <small>{text(`macOS ${osVersion || '--'} · 本地 Agent`, `macOS ${osVersion || '--'} · Local Agent`)}</small>
+              <small>{text(`macOS ${osVersion || '--'} · 本机状态`, `macOS ${osVersion || '--'} · Local Mac`)}</small>
             </div>
           </div>
+          <nav className="topbar-tools" aria-label={text('辅助功能', 'Utilities')}>
+            {utilities.map((item) => {
+              const Icon = item.icon
+              return <button key={item.id} type="button" className={`icon-button ${activeView === item.id ? 'is-active' : ''}`} onClick={() => onNavigate(item.id)} title={text(...item.label)} aria-label={text(...item.label)}><Icon size={15} /></button>
+            })}
+          </nav>
         </header>
         <main className="page-stack">{children}</main>
       </div>

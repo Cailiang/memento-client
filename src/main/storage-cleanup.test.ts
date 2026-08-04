@@ -69,12 +69,42 @@ describe('storage cleanup', () => {
 
       expect(isAllowedStorageCleanupTarget(linkedTarget, home)).toBe(true)
       await expect(deleteStorageTarget(linkedTarget, home)).rejects.toThrow(
-        'resolved storage target'
+        'Symbolic links in storage target ancestors'
       )
       expect(await fs.readFile(path.join(outsideCache, 'cache.bin'), 'utf8')).toBe('preserved')
     } finally {
       await fs.rm(home, { recursive: true, force: true })
       await fs.rm(outside, { recursive: true, force: true })
     }
+  })
+
+  it('removes only a validated sandbox cache and preserves sibling app data', async () => {
+    const home = await fs.mkdtemp(path.join(os.tmpdir(), 'memento-storage-container-'))
+    try {
+      const data = path.join(home, 'Library', 'Containers', 'com.example.Editor', 'Data')
+      const cache = path.join(data, 'Library', 'Caches')
+      const document = path.join(data, 'Documents', 'draft.txt')
+      await fs.mkdir(cache, { recursive: true })
+      await fs.mkdir(path.dirname(document), { recursive: true })
+      await fs.writeFile(path.join(cache, 'cache.bin'), 'cache')
+      await fs.writeFile(document, 'preserved')
+
+      expect(isAllowedStorageCleanupTarget(cache, home)).toBe(true)
+      expect(isAllowedStorageCleanupTarget(data, home)).toBe(false)
+      await deleteStorageTarget(cache, home)
+
+      await expect(fs.lstat(cache)).rejects.toMatchObject({ code: 'ENOENT' })
+      await expect(fs.readFile(document, 'utf8')).resolves.toBe('preserved')
+    } finally {
+      await fs.rm(home, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects protected Apple and credential container caches', () => {
+    const apple = path.join('/Users/test', 'Library', 'Containers', 'com.apple.mail', 'Data', 'Library', 'Caches')
+    const credentials = path.join('/Users/test', 'Library', 'Group Containers', 'TEAMID.com.1password.shared', 'Library', 'Caches')
+
+    expect(isAllowedStorageCleanupTarget(apple, '/Users/test')).toBe(false)
+    expect(isAllowedStorageCleanupTarget(credentials, '/Users/test')).toBe(false)
   })
 })

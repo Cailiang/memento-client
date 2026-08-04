@@ -28,6 +28,7 @@ const api: MementoApi = {
   getUpdateState: () => ipcRenderer.invoke('memento:update:get'),
   checkForUpdates: () => ipcRenderer.invoke('memento:update:check'),
   installUpdate: () => ipcRenderer.invoke('memento:update:install'),
+  getOverviewMetrics: () => ipcRenderer.invoke('memento:overview:get'),
   getAppSettings: () => ipcRenderer.invoke('memento:settings:get'),
   updateAppSettings: (input) => ipcRenderer.invoke('memento:settings:update', input),
   scan: (language) => ipcRenderer.invoke('memento:scan', language),

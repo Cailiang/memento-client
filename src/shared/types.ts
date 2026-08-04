@@ -6,6 +6,14 @@ import type { MaintenanceRunRecord } from './maintenance-types'
 
 export type RiskLevel = 'safe' | 'review' | 'protected'
 
+export type CleanupCategory =
+  | 'system'
+  | 'applications'
+  | 'browsers'
+  | 'developer'
+  | 'logs'
+  | 'devices'
+
 export type FindingConfidence = 'verified' | 'strong' | 'weak'
 export type EstimateQuality = 'exact' | 'approximate' | 'unknown'
 export type FindingReasonCode =
@@ -63,6 +71,7 @@ export interface ScanCandidate {
   confidence: FindingConfidence
   reasonCodes: readonly FindingReasonCode[]
   estimateQuality: EstimateQuality
+  cleanupCategory?: CleanupCategory
   action?: CandidateAction
   operations?: CandidateOperation[]
   serviceAnomalies?: ServiceAnomalyKind[]
@@ -154,6 +163,81 @@ export interface SystemSnapshot {
   memoryTotalBytes: number
   memoryUsedBytes: number
   uptimeSeconds: number
+}
+
+export type OverviewHealthIssue =
+  | 'cpu-high'
+  | 'memory-high'
+  | 'disk-low'
+  | 'thermal-limited'
+  | 'battery-service'
+  | 'restart-recommended'
+
+export interface OverviewProcess {
+  pid: number
+  name: string
+  command: string
+  cpuPercent: number
+  memoryPercent: number
+  memoryBytes: number
+}
+
+export interface OverviewMetrics {
+  collectedAt: string
+  hostname: string
+  osVersion: string
+  uptimeSeconds: number
+  hardware: {
+    model: string
+    cpuModel: string
+    architecture: string
+    logicalCores: number
+  }
+  health: {
+    score: number
+    status: 'excellent' | 'good' | 'fair' | 'attention'
+    issues: OverviewHealthIssue[]
+  }
+  cpu: {
+    usagePercent: number
+    loadAverage: [number, number, number]
+  }
+  gpu: {
+    name: string | null
+    usagePercent: number | null
+  }
+  memory: {
+    totalBytes: number
+    usedBytes: number
+    availableBytes: number
+    usedPercent: number
+  }
+  disk: {
+    totalBytes: number
+    usedBytes: number
+    freeBytes: number
+    usedPercent: number
+  }
+  network: {
+    interfaceName: string | null
+    receivedBytesPerSecond: number
+    sentBytesPerSecond: number
+  }
+  battery: {
+    available: boolean
+    percent: number | null
+    status: 'charging' | 'charged' | 'discharging' | 'unknown'
+    powerSource: 'ac' | 'battery' | 'unknown'
+    cycleCount: number | null
+    healthPercent: number | null
+  }
+  thermal: {
+    state: 'normal' | 'limited' | 'unknown'
+    cpuSpeedLimitPercent: number | null
+    availableCpus: number | null
+  }
+  processes: OverviewProcess[]
+  diagnostics: string[]
 }
 
 export interface ScanResult {
@@ -275,6 +359,7 @@ export interface MementoApi extends MementoAgentApi, MementoSettingsApi {
   getUpdateState: () => Promise<AppUpdateState>
   checkForUpdates: () => Promise<AppUpdateState>
   installUpdate: () => Promise<void>
+  getOverviewMetrics: () => Promise<OverviewMetrics>
   scan: (language?: import('./app-settings').AppLanguage) => Promise<ScanResult>
   scanDiskUsage: () => Promise<DiskUsageScanResult>
   cancelDiskUsageScan: () => Promise<void>

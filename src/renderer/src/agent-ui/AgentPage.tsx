@@ -177,7 +177,7 @@ export function AgentPage({
 
   const submit = (): void => {
     const prompt = input.trim()
-    if (!prompt || busy) return
+    if (!prompt || busy || !scan) return
     if (!providerConfigured) {
       onOpenSettings()
       return
@@ -254,7 +254,7 @@ export function AgentPage({
               {QUICK_ACTIONS.map((action) => {
                 const Icon = action.icon
                 return (
-                  <button key={action.title[0]} type="button" className="quick-action" onClick={() => onSubmit(text(...action.prompt))} disabled={!providerConfigured}>
+                  <button key={action.title[0]} type="button" className="quick-action" onClick={() => onSubmit(text(...action.prompt))} disabled={!providerConfigured || !scan}>
                     <span><Icon size={16} /></span>
                     <span><strong>{text(...action.title)}</strong><small>{text(...action.detail)}</small></span>
                   </button>
@@ -320,10 +320,12 @@ export function AgentPage({
               rows={1}
               aria-label={text('输入任务', 'Enter task')}
               placeholder={providerConfigured
-                ? text('描述你想检查或处理的问题', 'Describe what you want to inspect or handle')
+                ? scan
+                  ? text('描述你想检查或处理的问题', 'Describe what you want to inspect or handle')
+                  : text('正在准备本机规则扫描', 'Preparing the local rules scan')
                 : text('请先在设置中配置模型供应商', 'Configure a model provider in Settings first')}
               value={input}
-              disabled={busy}
+              disabled={busy || !scan}
               onChange={(event) => {
                 setInput(event.target.value)
                 event.currentTarget.style.height = 'auto'
@@ -336,7 +338,7 @@ export function AgentPage({
                 }
               }}
             />
-            <button type="submit" className="send-button" title={text('发送', 'Send')} aria-label={text('发送', 'Send')} disabled={!input.trim() || busy}>
+            <button type="submit" className="send-button" title={text('发送', 'Send')} aria-label={text('发送', 'Send')} disabled={!input.trim() || busy || !scan}>
               {busy ? <LoaderCircle className="spinner" size={17} /> : <ArrowUp size={17} />}
             </button>
           </form>

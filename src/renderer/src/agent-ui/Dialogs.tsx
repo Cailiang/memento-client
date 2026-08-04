@@ -81,6 +81,7 @@ function DialogFrame({
 export interface DirectActionRequest {
   id: string
   candidateId?: string
+  candidateIds?: string[]
   ids?: string[]
   kind: 'action' | 'terminal-fix'
   verificationMode: 'local' | 'scan'
@@ -103,11 +104,14 @@ export function DirectActionConfirmDialog({
   onConfirm: () => void
 }): React.JSX.Element {
   const { text } = useI18n()
+  const itemCount = action.ids?.length ?? 1
   return (
     <DialogFrame
-      title={text(`直接执行“${action.label}”？`, `Run "${action.label}" directly?`)}
+      title={itemCount > 1
+        ? text(`确认清理 ${itemCount} 项？`, `Clean ${itemCount} items?`)
+        : text(`直接执行“${action.label}”？`, `Run "${action.label}" directly?`)}
       description={action.verificationMode === 'local'
-        ? text('不会经过 AI 分析；只执行下面这项已注册操作，完成后在约 3 秒内更新当前列表。', 'AI analysis is skipped. Only this registered action runs, and the current list updates in about 3 seconds.')
+        ? text('不会经过 AI 分析；只执行当前扫描已经注册并再次通过路径校验的操作，完成后更新列表。', 'AI analysis is skipped. Only actions registered by the current scan and validated again will run, followed by a list update.')
         : text('不会经过 AI 分析；只执行下面这项已注册操作，完成后自动复检。', 'AI analysis is skipped. Only this registered action runs, followed by automatic verification.')}
       onClose={onClose}
       actions={<><button type="button" className="secondary-button" onClick={onClose}>{text('取消', 'Cancel')}</button><button type="button" className={action.reversible ? 'primary-button' : 'danger-button'} onClick={onConfirm}><Play size={15} />{text('确认并执行', 'Confirm and run')}</button></>}

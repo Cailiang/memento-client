@@ -1,54 +1,7 @@
 import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-
-const EXACT_STORAGE_PATHS = [
-  ['Library', 'Developer', 'Xcode', 'DerivedData'],
-  ['Library', 'Developer', 'Xcode', 'iOS DeviceSupport'],
-  ['Library', 'Developer', 'CoreSimulator', 'Caches'],
-  ['.npm', '_cacache'],
-  ['Library', 'pnpm', 'store'],
-  ['.gradle', 'caches'],
-  ['Library', 'Caches', 'Codex'],
-  ['Library', 'Caches', 'com.openai.codex'],
-  ['Library', 'Caches', 'claude-cli-nodejs'],
-  ['Library', 'Caches', 'com.anthropic.claudefordesktop'],
-  ['Library', 'Caches', 'com.google.antigravity'],
-  ['Library', 'Caches', 'com.google.antigravity-ide'],
-  ['Library', 'Caches', 'ai.x.grok'],
-  ['Library', 'Caches', 'com.xai.grok'],
-  ['Library', 'Application Support', 'Claude', 'Cache'],
-  ['Library', 'Application Support', 'Claude', 'Code Cache'],
-  ['Library', 'Application Support', 'Claude', 'GPUCache'],
-  ['Library', 'Application Support', 'Claude', 'Service Worker', 'CacheStorage'],
-  ['Library', 'Application Support', 'Claude', 'Shared Dictionary', 'cache'],
-  ['Library', 'Application Support', 'Codex', 'Default', 'Cache'],
-  ['Library', 'Application Support', 'Codex', 'Default', 'Code Cache'],
-  ['Library', 'Application Support', 'Codex', 'Default', 'GPUCache'],
-  ['Library', 'Application Support', 'Codex', 'codex-browser-app', 'Cache'],
-  ['Library', 'Application Support', 'Codex', 'codex-browser-app', 'Code Cache'],
-  ['Library', 'Application Support', 'Codex', 'codex-browser-app', 'GPUCache'],
-  ['Library', 'Application Support', 'Codex', 'GPUPersistentCache', 'GPUCache'],
-  ['Library', 'Application Support', 'Antigravity', 'Cache'],
-  ['Library', 'Application Support', 'Antigravity', 'CachedData'],
-  ['Library', 'Application Support', 'Antigravity', 'Code Cache'],
-  ['Library', 'Application Support', 'Antigravity', 'GPUCache'],
-  ['Library', 'Application Support', 'Antigravity', 'Service Worker', 'CacheStorage'],
-  ['Library', 'Application Support', 'Antigravity', 'Shared Dictionary', 'cache'],
-  ['Library', 'Application Support', 'Antigravity IDE', 'Cache'],
-  ['Library', 'Application Support', 'Antigravity IDE', 'CachedData'],
-  ['Library', 'Application Support', 'Antigravity IDE', 'Code Cache'],
-  ['Library', 'Application Support', 'Antigravity IDE', 'GPUCache'],
-  ['Library', 'Application Support', 'Antigravity IDE', 'Service Worker', 'CacheStorage'],
-  ['Library', 'Application Support', 'Antigravity IDE', 'Shared Dictionary', 'cache'],
-  ['Library', 'Application Support', 'Grok', 'Cache'],
-  ['Library', 'Application Support', 'Grok', 'Code Cache'],
-  ['Library', 'Application Support', 'Grok', 'GPUCache'],
-  ['Library', 'Application Support', 'Grok', 'Service Worker', 'CacheStorage'],
-  ['.claude', 'cache'],
-  ['.codex', 'log'],
-  ['.codex', 'tmp']
-] as const
+import { isAllowedCleanupTarget } from './cleanup-rules'
 
 export function isAllowedStorageCleanupTarget(
   target: string,
@@ -57,16 +10,20 @@ export function isAllowedStorageCleanupTarget(
   if (!path.isAbsolute(target)) return false
   const resolvedTarget = path.resolve(target)
   const resolvedHome = path.resolve(home)
-  if (EXACT_STORAGE_PATHS.some((parts) =>
-    resolvedTarget === path.join(resolvedHome, ...parts)
-  )) return true
+  return isAllowedCleanupTarget(resolvedTarget, resolvedHome)
+}
 
-  const cacheRoot = path.join(resolvedHome, 'Library', 'Caches')
-  const logRoot = path.join(resolvedHome, 'Library', 'Logs')
-  const parent = path.dirname(resolvedTarget)
-  return (parent === cacheRoot || parent === logRoot) &&
-    path.basename(resolvedTarget).length > 0 &&
-    !path.basename(resolvedTarget).startsWith('com.apple.')
+async function assertNoSymlinkedAncestors(target: string, home: string): Promise<void> {
+  const relative = path.relative(home, target)
+  const parts = relative.split(path.sep)
+  let current = home
+  for (const part of parts.slice(0, -1)) {
+    current = path.join(current, part)
+    const stats = await fs.lstat(current)
+    if (stats.isSymbolicLink()) {
+      throw new Error('Symbolic links in storage target ancestors cannot be cleaned automatically.')
+    }
+  }
 }
 
 export async function deleteStorageTargets(
@@ -97,6 +54,7 @@ export async function deleteStorageTarget(
   if (stats.isSymbolicLink()) {
     throw new Error('Symbolic links cannot be cleaned automatically.')
   }
+  await assertNoSymlinkedAncestors(path.resolve(target), path.resolve(home))
   const [realTarget, realHome] = await Promise.all([
     fs.realpath(target),
     fs.realpath(home)

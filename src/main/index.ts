@@ -60,6 +60,7 @@ import {
   trashDestination
 } from './application-trash'
 import { runFullScan, type RegisteredAction } from './scanner'
+import { OverviewMonitor } from './overview-monitor'
 import { inferFindingTrust } from '../shared/finding-trust'
 import { applyScanWhitelist } from './scan-whitelist'
 import { buildPrivilegedMoves, privilegedMoveArguments } from './privileged-cleanup'
@@ -106,6 +107,7 @@ let lastTerminalFixBackups = new Map<string, TerminalFixBackup>()
 let scanInProgress = false
 let currentScanResult: ScanResult | null = null
 let diskUsageScanner: DiskUsageScanner | null = null
+const overviewMonitor = new OverviewMonitor()
 let registeredDiskUsageTargets = new Map<string, string>()
 let registeredDiskUsageNodes = new Map<string, DiskUsageNode>()
 let agentStore: AgentStore | null = null
@@ -1323,6 +1325,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('memento:update:get', () => updateState ?? emptyUpdateState())
   ipcMain.handle('memento:update:check', () => checkForAppUpdate())
   ipcMain.handle('memento:update:install', () => installAppUpdate())
+  ipcMain.handle('memento:overview:get', () => overviewMonitor.collect())
   ipcMain.handle('memento:get-application-icon', async (_event, id: string) => {
     if (typeof id !== 'string' || id.length > 100) return null
     const application = [

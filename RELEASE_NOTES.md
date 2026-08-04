@@ -1,29 +1,29 @@
-# Memento Agent 0.7.0 - 信任重置 / Trust Reset
+# Memento Agent 0.7.1 - 确定性清理 / Deterministic Cleanup
 
 ## 简体中文
 
-`0.7.0` 重新定义 Memento 第一次打开时如何表达本机状态：确定性体检是基础能力，AI 是按需使用的解释与计划层，弱证据不会被包装成系统问题。
+`0.7.1` 把“信任重置”落实到新的 macOS 主界面与清理闭环：规则负责发现和执行，AI 只在用户需要时解释结果。
 
 ### 主要变化
 
-- **健康、空间、线索分开：** 首页独立展示系统状态、安全可释放空间、可行动问题和审查线索。仅凭年龄和身份未匹配得到的隐藏目录不会扣健康分，也不会计入安全可释放空间。
-- **Finding 信任合同：** 每个候选显式包含 `confidence`、稳定 `reasonCodes` 和 `estimateQuality`。存储页拆为“可信建议”“审查线索”和“磁盘浏览”。
-- **无模型首次体验：** 应用启动后直接完成本机体检；不配置 Provider 也能查看可信结果、确认直接操作，并在历史中审计。
-- **统一维护账本：** SQLite schema v4 记录直接操作、应用卸载、磁盘删除、终端优化与恢复、Agent 计划的逐项结果、恢复入口和稳定错误码。删除历史只删除审计记录。
-- **可诊断扫描：** 扫描结果提供系统、服务、存储、应用、终端和总耗时；模块失败使用稳定诊断码，避免只能解析本地化文案。
-- **反馈与安全：** 新增私密漏洞报告、安全政策、贡献指南、Bug 表单和保护隐私的误报模板。
-- **macOS 正式发布：** GitHub Release 只发布 Intel/Apple Silicon 的签名、公证 macOS 包和更新载荷，共 8 个资产；校验清单只包含 2 个 DMG。Windows/Linux 仅作为内部 CI 可移植性产物。
+- **四个主模块：** 主导航收敛为“概览、清理、应用管理、磁盘分析”。概览显示实时硬件和进程指标，磁盘容量浏览不再混入清理规则列表。
+- **规则优先：** 扫描与执行共用一个规则注册表，明确标记系统、应用、浏览器、开发工具、日志和设备分类；规则路径、最低体积、风险和是否可执行不再分散维护。
+- **覆盖更完整：** 增加浏览器、Electron 应用、Python、Go、Rust、Android、Maven、Xcode、AI 客户端和系统诊断规则；完整测量合格应用缓存，并发现第三方 Sandbox 与 Group Container 中受限的缓存目录。
+- **安全批量清理：** 安全项默认选择但仍需一次确认；需要确认项由用户主动选择；规则外弱线索不能执行。批量操作只移除实际成功的结果，失败项保留供检查。
+- **AI 锦上添花：** AI 只作为每个清理项的解释入口，不参与规则匹配、空间统计、默认选择或执行授权。
+- **执行保护：** 动态目标仅允许固定层级的缓存或临时目录，Apple 与凭据类容器受保护，目录本身及其祖先中的符号链接都会被拒绝。
+- **实机结果：** 当前开发 Mac 的可信可释放空间由约 26.1 GB 提升到 44.6 GB，完整扫描仍约 9 秒。
 
 ## English
 
-`0.7.0` resets how Memento communicates trust on first launch: deterministic health inspection is the product baseline, AI is an optional explanation and planning layer, and weak evidence is no longer presented as a system problem.
+`0.7.1` carries the trust reset into the primary macOS workspace and cleanup loop: rules own discovery and execution, while AI explains findings only when requested.
 
 ### Highlights
 
-- **Health, space, and clues are separate:** System status, safely reclaimable space, actionable findings, and review clues are independent. Age-only unmatched directories do not reduce health or increase safe reclaimable space.
-- **Explicit finding trust:** Every candidate carries `confidence`, stable `reasonCodes`, and `estimateQuality`. Storage now has Trusted findings, Review clues, and Disk browser modes.
-- **Provider-free first run:** Memento opens on Health. Trusted review, confirmed direct execution, and audit history work without configuring a model.
-- **Unified maintenance ledger:** SQLite schema v4 records per-operation results, stable errors, and recovery availability for direct actions, app removal, disk Trash, terminal fixes/restores, and Agent plans. Deleting history removes records only.
-- **Diagnosable scans:** Results include system, service, storage, application, terminal, and total timings plus stable module diagnostic codes.
-- **Security and feedback:** Adds private vulnerability reporting, a security policy, contribution guidance, bug reporting, and a privacy-conscious false-positive form.
-- **macOS public distribution:** GitHub Releases now contain only signed and notarized Intel/Apple Silicon macOS packages and updater payloads: eight assets with two DMG checksums. Windows/Linux builds remain internal CI portability artifacts.
+- **Four primary modules:** Navigation is centered on Overview, Cleanup, Applications, and Disk analysis. Overview shows live hardware and process metrics, while disk-capacity browsing remains separate from cleanup rules.
+- **Rules first:** Discovery and execution share one registry with explicit System, Applications, Browsers, Developer, Logs, and Devices categories. Paths, thresholds, risk, and action eligibility no longer drift between scanners and executors.
+- **Broader measured coverage:** Adds browser, Electron app, Python, Go, Rust, Android, Maven, Xcode, AI-client, and system-diagnostic rules; measures every eligible application cache and bounded third-party Sandbox/Group Container cache folder.
+- **Safe batch cleanup:** Safe items are preselected but still require confirmation. Review items are opt-in and weak outside-rule clues are not executable. Batch reconciliation removes only operations that actually succeed.
+- **AI as enhancement:** AI remains a per-item explanation action and does not control rule matching, size estimates, default selection, or execution authorization.
+- **Execution protection:** Dynamic targets are limited to exact cache or temporary-directory depths. Apple and credential identities are protected, and targets with symbolic-link ancestors are rejected.
+- **Real-device result:** Trusted reclaimable coverage increased from about 26.1 GB to 44.6 GB on the development Mac while the complete scan remained around nine seconds.

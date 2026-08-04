@@ -9,8 +9,10 @@ Memento is a local desktop maintenance agent. It combines deterministic device i
 ## Capabilities
 
 - **Agent:** describe a maintenance goal in plain language, inspect structured results, review a proposed plan, and verify the outcome.
-- **Computer health:** separate verified safe cleanup, evidence-backed actions, and weak review clues; browse disk usage, inspect background services, and diagnose terminal startup issues.
+- **Overview:** inspect health, CPU, GPU, memory, battery, disk, network, and high-usage processes in one quiet live workspace.
+- **Cleanup:** scan rebuildable data by system, application, browser, developer, log, and device categories; safe items are preselected while review items and outside-rule clues remain separate.
 - **Applications:** inspect installed applications and metadata, open or ignore an app, and move supported apps to Trash after confirmation.
+- **Disk analysis:** browse storage hierarchically and use validated opaque node operations to reveal a directory, ask AI for an explanation, or move it to Trash.
 - **History:** audit every direct, Agent, disk-browser, terminal, and recovery operation in one local maintenance ledger; Agent conversations remain available on a separate tab.
 - **Settings:** manage model providers, automatic background updates, window behavior, ignored items, theme, and language.
 
@@ -48,7 +50,7 @@ npm ci
 npm run dev
 ```
 
-The application opens on the deterministic computer-health scan. No model is required to inspect trusted findings, run a confirmed direct action, or review its maintenance record. Configure a provider in **Settings** only when AI explanation or plan generation is needed. Choose OpenAI, Anthropic, Google Gemini, DeepSeek, Grok/xAI, Antigravity, or a custom OpenAI-compatible endpoint; Memento supplies the protocol, official endpoint, and a tested recommended model for named providers.
+The application opens on the local Overview. No model is required for live metrics, deterministic rule scanning, categorized selection, confirmed batch cleanup, or maintenance history. Configure a provider in **Settings** only when an item needs AI explanation or plan generation. Choose OpenAI, Anthropic, Google Gemini, DeepSeek, Grok/xAI, Antigravity, or a custom OpenAI-compatible endpoint; Memento supplies the protocol, official endpoint, and a tested recommended model for named providers.
 
 On its first local-configuration scan, Memento reads API configurations from `~/.claude`, `~/.codex`, `~/.gemini`, and `~/.grok`. Before importing, it uses the provider's read-only model catalog to validate the credential, endpoint, and configured model. Malformed, incomplete, unauthorized, OAuth-only, unsupported session-token, and unavailable-model configurations are filtered out; a new scan also removes previously imported local configurations that no longer pass validation. CC Switch is never required or read automatically; **Import CC Switch** is a separate user-initiated optional action that applies the same validation and removes invalid or deleted earlier CC Switch imports when repeated.
 
