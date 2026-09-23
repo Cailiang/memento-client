@@ -41,6 +41,8 @@ export type ActionKind =
   | 'trash-launch-agent-config'
   | 'trash-service-software'
   | 'trash-service-directory'
+  | 'terminate-process'
+  | 'terminate-process-force'
   | 'brew-cleanup'
 
 export interface CandidateAction {

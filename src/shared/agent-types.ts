@@ -88,6 +88,16 @@ export type AgentRunStatus =
 
 export type AgentPlanItemKind = 'action' | 'terminal-fix'
 
+export interface AgentProcessContext {
+  pid: number
+  name: string
+  command: string
+  cpuPercent: number
+  memoryPercent: number
+  memoryBytes: number
+  isSystem: boolean
+}
+
 export interface AgentPlanItem {
   id: string
   kind: AgentPlanItemKind
@@ -99,7 +109,7 @@ export interface AgentPlanItem {
   reversible: boolean
 }
 
-export type AgentResultKind = 'services' | 'storage' | 'applications' | 'terminal'
+export type AgentResultKind = 'services' | 'storage' | 'applications' | 'processes' | 'terminal'
 
 export interface AgentResultOperation {
   id: string
@@ -151,6 +161,12 @@ export interface AgentApplicationResultItem {
   operation: AgentResultOperation | null
 }
 
+export interface AgentProcessResultItem extends AgentProcessContext {
+  kind: 'processes'
+  id: string
+  operations: AgentResultOperation[]
+}
+
 export interface AgentTerminalResultItem {
   kind: 'terminal'
   id: string
@@ -166,6 +182,7 @@ export interface AgentTerminalResultItem {
 export type AgentResultItem =
   | AgentCandidateResultItem
   | AgentApplicationResultItem
+  | AgentProcessResultItem
   | AgentTerminalResultItem
 
 export interface AgentResultSection {
@@ -208,6 +225,7 @@ export interface StartAgentRunInput {
   prompt: string
   conversationId?: string
   diskUsageNodeId?: string
+  process?: AgentProcessContext
 }
 
 export type AgentRunEvent =

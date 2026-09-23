@@ -1,3 +1,27 @@
+# Memento Agent 0.7.4 - Agent 进程操作 / Agent Process Actions
+
+## 简体中文
+
+`0.7.4` 补齐了从概览进程询问 AI 到结束进程的确认操作，并优化了 Top 5 饼图。
+
+### 主要变化
+
+- **Agent 进程操作：** 询问具体进程后，Agent 结果显示“退出进程”和“强制退出进程”两个需要确认的操作，不再把进程问题误配成应用打开或卸载。
+- **主进程复核：** 进程操作使用实时 PID、所有者和命令路径重新校验，系统进程和其他用户进程不会注册为可执行操作。
+- **饼图：** CPU 和内存 Top 5 饼图尺寸增大，移除图形内部的 TOP 文案。
+
+## English
+
+`0.7.4` completes the focused process workflow from Ask AI to confirmed termination and improves the Top 5 charts.
+
+### Highlights
+
+- **Agent process actions:** Asking about a specific process now renders separate confirmable Quit process and Force quit process actions instead of unrelated application Open or Uninstall actions.
+- **Main-process revalidation:** Process operations recheck the live PID, owner, and command path; system and other-user processes never become executable operations.
+- **Pie charts:** CPU and memory Top 5 charts are larger and no longer place a TOP label inside the graphic.
+
+---
+
 # Memento Agent 0.7.3 - 稳定进程交互 / Stable Process Interaction
 
 ## 简体中文

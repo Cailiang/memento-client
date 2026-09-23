@@ -2,6 +2,8 @@ import { CheckCircle2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   AgentPresentation,
+  AgentProcessContext,
+  AgentProcessResultItem,
   AgentProviderModelsResult,
   AgentPlanItem,
   AgentProvider,
@@ -106,6 +108,16 @@ function demoOperationCopy(
   fallbackLabel: string,
   fallbackConsequence: string
 ): { label: string; consequence: string } {
+  if (kind === 'terminate-process') {
+    return language === 'en-US'
+      ? { label: 'Quit process', consequence: 'Send SIGTERM and allow the process to clean up and exit.' }
+      : { label: '退出进程', consequence: '发送 SIGTERM，让进程自行清理后退出。' }
+  }
+  if (kind === 'terminate-process-force') {
+    return language === 'en-US'
+      ? { label: 'Force quit process', consequence: 'Send SIGKILL; unsaved data may be lost.' }
+      : { label: '强制退出进程', consequence: '发送 SIGKILL，未保存的数据可能丢失。' }
+  }
   if (language !== 'en-US') return { label: fallbackLabel, consequence: fallbackConsequence }
   if (kind.startsWith('stop-')) {
     return { label: 'Stop service', consequence: 'Stop the registered background service.' }
@@ -119,10 +131,42 @@ function demoOperationCopy(
   return { label: 'Clean permanently', consequence: 'Remove the registered rebuildable content.' }
 }
 
+function demoProcessResult(process: AgentProcessContext, language: AppSettings['language']): AgentProcessResultItem {
+  const operations = process.isSystem ? [] : (['terminate-process', 'terminate-process-force'] as const).map((kind) => {
+    const copy = demoOperationCopy(kind, language, '', '')
+    return {
+      id: `overview-process-${process.pid}-${kind === 'terminate-process-force' ? 'force' : 'quit'}`,
+      label: copy.label,
+      consequence: copy.consequence,
+      reversible: false,
+      estimatedBytes: 0
+    }
+  })
+  return {
+    kind: 'processes',
+    id: `overview-process-${process.pid}`,
+    ...process,
+    operations
+  }
+}
+
 function demoPlan(
   scan: ScanResult,
-  language: AppSettings['language'] = 'zh-CN'
+  language: AppSettings['language'] = 'zh-CN',
+  process?: AgentProcessContext
 ): AgentPlanItem[] {
+  if (process && !process.isSystem) {
+    return demoProcessResult(process, language).operations.map((operation) => ({
+      id: operation.id,
+      kind: 'action',
+      actionKind: operation.id.endsWith('-force') ? 'terminate-process-force' : 'terminate-process',
+      title: operation.label,
+      detail: `${process.name} · ${operation.consequence}`,
+      estimatedBytes: 0,
+      risk: 'review',
+      reversible: false
+    }))
+  }
   const items: AgentPlanItem[] = []
   for (const candidate of scan.candidates) {
     const operation = candidate.operations?.[0] ?? (candidate.action ? { id: candidate.id, ...candidate.action } : null)
@@ -150,8 +194,22 @@ function demoPlan(
 function demoPresentation(
   scan: ScanResult,
   prompt: string,
-  language: AppSettings['language']
+  language: AppSettings['language'],
+  process?: AgentProcessContext
 ): AgentPresentation {
+  if (process) {
+    const item = demoProcessResult(process, language)
+    return {
+      summary: language === 'en-US'
+        ? `I found the focused process ${process.name} (PID ${process.pid}). Its registered quit actions are shown below.`
+        : `已定位到进程 ${process.name}（PID ${process.pid}），下面展示可执行的退出操作。`,
+      sections: [{
+        kind: 'processes',
+        title: language === 'en-US' ? 'Process' : '进程',
+        items: [item]
+      }]
+    }
+  }
   const applicationTask = /应用|app|残留|unused/i.test(prompt)
   const normalizedPrompt = prompt.toLocaleLowerCase()
   const directlyNamedCandidate = scan.candidates.find((item) => (
@@ -276,6 +334,8 @@ function demoPlanItemFromPresentation(
         ? 'safe'
         : item.kind === 'applications'
           ? 'review'
+          : item.kind === 'processes'
+            ? 'review'
           : item.risk === 'safe' && operation.reversible ? 'safe' : 'review'
       return {
         id: operation.id,
@@ -679,7 +739,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     }
   }
 
-  const startAgentRun = (prompt: string, options: { isolated?: boolean; origin?: AgentOrigin; diskUsageNodeId?: string } = {}): void => {
+  const startAgentRun = (prompt: string, options: { isolated?: boolean; origin?: AgentOrigin; diskUsageNodeId?: string; process?: AgentProcessContext } = {}): void => {
     const uiText = (chinese: string, english: string): string => (
       settings.language === 'en-US' ? english : chinese
     )
@@ -727,8 +787,8 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
         run.conversationId
       ))
       window.setTimeout(() => {
-        const plan = demoPlan(activeResult, settings.language)
-        const presentation = demoPresentation(activeResult, prompt, settings.language)
+        const plan = demoPlan(activeResult, settings.language, options.process)
+        const presentation = demoPresentation(activeResult, prompt, settings.language, options.process)
         const completed = {
           ...run,
           status: 'awaiting-confirmation' as const,
@@ -751,7 +811,8 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     void window.memento.startAgentRun({
       prompt,
       conversationId: options.isolated ? undefined : activeRun?.conversationId,
-      diskUsageNodeId: options.diskUsageNodeId
+      diskUsageNodeId: options.diskUsageNodeId,
+      process: options.process
     }).then((run) => {
       setRuns((current) => [run, ...current.filter((item) => item.id !== run.id)])
       setWorkspaceConversationIds((current) => appendWorkspaceConversation(
@@ -782,10 +843,22 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     if (!resultRef.current && !await scanNow()) return
     startAgentRun(
       appText(
-        `分析实时进程“${process.name}”（PID ${process.pid}，CPU ${process.cpuPercent.toFixed(1)}%，内存 ${formatBytes(process.memoryBytes)}）。只读说明它的用途、是否值得关注以及安全的下一步，不要直接结束进程。`,
-        `Analyze the live process "${process.name}" (PID ${process.pid}, CPU ${process.cpuPercent.toFixed(1)}%, memory ${formatBytes(process.memoryBytes)}). Explain its purpose, whether it needs attention, and safe next steps in read-only mode. Do not terminate it directly.`
+        `分析实时进程“${process.name}”（PID ${process.pid}，CPU ${process.cpuPercent.toFixed(1)}%，内存 ${formatBytes(process.memoryBytes)}）。说明它的用途和是否值得关注，并明确给出“退出进程”和“强制退出进程”两个需要确认的操作，不要直接执行。`,
+        `Analyze the live process "${process.name}" (PID ${process.pid}, CPU ${process.cpuPercent.toFixed(1)}%, memory ${formatBytes(process.memoryBytes)}). Explain its purpose and whether it needs attention, then provide both confirmable actions: quit process and force quit process. Do not execute either action directly.`
       ),
-      { isolated: true, origin: { view: 'overview' } }
+      {
+        isolated: true,
+        origin: { view: 'overview' },
+        process: {
+          pid: process.pid,
+          name: process.name,
+          command: process.command,
+          cpuPercent: process.cpuPercent,
+          memoryPercent: process.memoryPercent,
+          memoryBytes: process.memoryBytes,
+          isSystem: process.isSystem
+        }
+      }
     )
   }
 

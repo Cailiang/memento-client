@@ -33,7 +33,8 @@ import type {
   ExecuteAgentPlanInput,
   LocalAiImportResult,
   SaveAgentProviderInput,
-  StartAgentRunInput
+  StartAgentRunInput,
+  AgentProcessContext
 } from '../shared/agent-types'
 import type {
   CreateMaintenanceOperationInput,
@@ -184,6 +185,54 @@ async function terminateOverviewProcess(pidInput: unknown, forceInput: unknown):
   }
 }
 
+function isAgentProcessContext(input: unknown): input is AgentProcessContext {
+  if (!input || typeof input !== 'object') return false
+  const value = input as Record<string, unknown>
+  return Number.isSafeInteger(value.pid) && typeof value.name === 'string' &&
+    typeof value.command === 'string' && Number.isFinite(value.cpuPercent) &&
+    Number.isFinite(value.memoryPercent) && Number.isFinite(value.memoryBytes) &&
+    typeof value.isSystem === 'boolean'
+}
+
+async function prepareOverviewProcessAgentActions(input: unknown): Promise<AgentProcessContext> {
+  if (!isAgentProcessContext(input)) {
+    throw new Error(mainText('进程信息无效，请刷新列表', 'The process information is invalid. Refresh the list.'))
+  }
+  const pid = validateOverviewProcessPid(input.pid)
+  if (pid <= 1 || pid === process.pid) {
+    throw new Error(mainText('不能操作 Memento 自身', 'Memento cannot operate on itself.'))
+  }
+  const processInfo = await inspectOverviewProcess(pid)
+  const currentUser = (() => {
+    try {
+      return os.userInfo().username
+    } catch {
+      return ''
+    }
+  })()
+  if (!currentUser || processInfo.user !== currentUser || isSystemProcess(processInfo.user, processInfo.command)) {
+    throw new Error(mainText('系统进程或其他用户的进程不能从这里操作', 'System and other users\' processes cannot be operated here.'))
+  }
+  const processContext: AgentProcessContext = {
+    ...input,
+    pid,
+    name: path.basename(processInfo.command) || input.name,
+    command: processInfo.command,
+    isSystem: false
+  }
+  registeredActions.set(`overview-process-${pid}-quit`, {
+    kind: 'terminate-process',
+    pid,
+    processName: processContext.name
+  })
+  registeredActions.set(`overview-process-${pid}-force`, {
+    kind: 'terminate-process-force',
+    pid,
+    processName: processContext.name
+  })
+  return processContext
+}
+
 interface MaintenanceExecutionOptions {
   source: MaintenanceOperationSource
   title: string
@@ -216,6 +265,17 @@ function describeRegisteredOperation(
   id: string,
   action: RegisteredAction | undefined
 ): CreateMaintenanceOperationInput {
+  if (action?.kind === 'terminate-process' || action?.kind === 'terminate-process-force') {
+    const force = action.kind === 'terminate-process-force'
+    return {
+      operationId: id,
+      kind: action.kind,
+      title: `${action.processName} · ${force ? mainText('强制退出进程', 'Force quit process') : mainText('退出进程', 'Quit process')}`,
+      reversible: false,
+      estimatedBytes: null,
+      recoveryMode: 'none'
+    }
+  }
   for (const candidate of currentScanResult?.candidates ?? []) {
     const operation = candidate.operations?.find((item) => item.id === id) ??
       (candidate.action && candidate.id === id ? { id, ...candidate.action } : null)
@@ -898,6 +958,11 @@ function createWindow(): void {
 }
 
 async function executeRegisteredAction(action: RegisteredAction): Promise<void> {
+  if (action.kind === 'terminate-process' || action.kind === 'terminate-process-force') {
+    await terminateOverviewProcess(action.pid, action.kind === 'terminate-process-force')
+    return
+  }
+
   if (action.kind === 'delete-storage') {
     if (!isAllowedStorageCleanupTarget(action.target, os.homedir())) {
       throw new Error(mainText('存储目标未通过本地安全校验，请重新扫描', 'The storage target did not pass local validation. Scan again.'))
@@ -1621,10 +1686,14 @@ app.whenReady().then(async () => {
         'The computer health scan is still running. Start the Agent after it completes.'
       ))
     }
+    const processContext = input?.process
+      ? await prepareOverviewProcessAgentActions(input.process)
+      : undefined
+    const agentInput = processContext ? { ...input, process: processContext } : input
     const explicitFocusIds = input?.diskUsageNodeId
       ? [await prepareDiskUsageAgentFocus(input.diskUsageNodeId)]
       : []
-    return agentRuntime!.start(input, currentScanResult, appSettings.language, (agentEvent) => {
+    return agentRuntime!.start(agentInput, currentScanResult, appSettings.language, (agentEvent) => {
       if (!event.sender.isDestroyed()) event.sender.send('memento:agent-run-event', agentEvent)
     }, explicitFocusIds)
   })

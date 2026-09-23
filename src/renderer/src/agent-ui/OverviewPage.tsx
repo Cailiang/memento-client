@@ -96,7 +96,7 @@ function ProcessPie({
     <article className="overview-process-chart">
       <header><strong>{title}</strong><span>Top 5</span></header>
       <div className="overview-process-chart-body">
-        <div className="process-pie" role="img" aria-label={title} style={{ background: `conic-gradient(${segments.join(', ')})` }}><span>{top.length || 0}</span><small>TOP</small></div>
+        <div className="process-pie" role="img" aria-label={title} style={{ background: `conic-gradient(${segments.join(', ')})` }}><span>{top.length || 0}</span></div>
         <ol className="process-pie-legend">
           {top.map((process, index) => <li key={process.pid}><i style={{ background: PROCESS_PIE_COLORS[index] }} /><span title={process.name}>{process.name}</span><strong>{formatValue(process[metric])}</strong></li>)}
           {!top.length && <li className="process-pie-empty">--</li>}

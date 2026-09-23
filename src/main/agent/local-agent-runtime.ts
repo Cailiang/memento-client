@@ -6,6 +6,8 @@ import type {
   AddAgentPlanItemsInput,
   AgentFocus,
   AgentPlanItem,
+  AgentProcessContext,
+  AgentProcessResultItem,
   AgentPresentation,
   AgentResultItem,
   AgentResultKind,
@@ -32,7 +34,7 @@ import {
 
 type EmitAgentEvent = (event: AgentRunEvent) => void
 
-const RESULT_KINDS: AgentResultKind[] = ['services', 'storage', 'applications', 'terminal']
+const RESULT_KINDS: AgentResultKind[] = ['services', 'storage', 'applications', 'processes', 'terminal']
 
 function t(language: AppLanguage, chinese: string, english: string): string {
   return language === 'en-US' ? english : chinese
@@ -58,7 +60,8 @@ function resultOperation(
 
 export function availablePlanItems(
   scan: ScanResult,
-  language: AppLanguage = 'zh-CN'
+  language: AppLanguage = 'zh-CN',
+  process?: AgentProcessContext
 ): AgentPlanItem[] {
   const items: AgentPlanItem[] = []
   for (const candidate of scan.candidates) {
@@ -91,6 +94,18 @@ export function availablePlanItems(
       risk: 'review',
       reversible: application.action.reversible
     })
+  }
+  if (process && !process.isSystem) {
+    items.push(...processOperations(process, language).map((operation) => ({
+      id: operation.id,
+      kind: 'action' as const,
+      actionKind: operation.id.endsWith('-force') ? 'terminate-process-force' : 'terminate-process',
+      title: operation.label,
+      detail: `${process.name} · ${operation.consequence}`,
+      estimatedBytes: 0,
+      risk: 'review' as const,
+      reversible: operation.reversible
+    })))
   }
   for (const finding of scan.terminal.findings) {
     if (!finding.fix) continue
@@ -175,12 +190,47 @@ function terminalResult(finding: TerminalFinding): AgentResultItem {
   }
 }
 
-function resultRegistry(scan: ScanResult): Map<string, AgentResultItem> {
+function processOperations(process: AgentProcessContext, language: AppLanguage): AgentResultOperation[] {
+  if (process.isSystem) return []
+  return [
+    {
+      id: `overview-process-${process.pid}-quit`,
+      label: t(language, '退出进程', 'Quit process'),
+      consequence: t(language, '发送 SIGTERM，让进程自行清理后退出', 'Send SIGTERM and allow the process to clean up and exit'),
+      reversible: false,
+      estimatedBytes: 0
+    },
+    {
+      id: `overview-process-${process.pid}-force`,
+      label: t(language, '强制退出进程', 'Force quit process'),
+      consequence: t(language, '发送 SIGKILL，未保存的数据可能丢失', 'Send SIGKILL; unsaved data may be lost'),
+      reversible: false,
+      estimatedBytes: 0
+    }
+  ]
+}
+
+function processResult(process: AgentProcessContext, language: AppLanguage = 'zh-CN'): AgentProcessResultItem {
+  return {
+    kind: 'processes',
+    id: `overview-process-${process.pid}`,
+    ...process,
+    operations: processOperations(process, language)
+  }
+}
+
+function processContextFromResult(item: AgentProcessResultItem): AgentProcessContext {
+  const { kind: _kind, id: _id, operations: _operations, ...context } = item
+  return context
+}
+
+function resultRegistry(scan: ScanResult, process?: AgentProcessContext, language: AppLanguage = 'zh-CN'): Map<string, AgentResultItem> {
   const items: AgentResultItem[] = [
     ...scan.candidates.map(candidateResult),
     ...scan.applications.map(applicationResult),
     ...scan.terminal.findings.map(terminalResult)
   ]
+  if (process) items.push(processResult(process, language))
   return new Map(items.map((item) => [item.id, item]))
 }
 
@@ -263,6 +313,14 @@ function compactApplication(application: InstalledApplication): Record<string, u
   }
 }
 
+function compactProcess(process: AgentProcessContext, language: AppLanguage): Record<string, unknown> {
+  return {
+    ...process,
+    id: `overview-process-${process.pid}`,
+    operations: processOperations(process, language)
+  }
+}
+
 function compactFinding(finding: TerminalFinding): Record<string, unknown> {
   return {
     id: finding.id,
@@ -281,6 +339,7 @@ function sectionTitle(kind: AgentResultKind, language: AppLanguage): string {
     services: ['后台服务', 'Background services'],
     storage: ['存储空间', 'Storage'],
     applications: ['应用管理', 'Applications'],
+    processes: ['进程', 'Processes'],
     terminal: ['终端诊断', 'Terminal diagnostics']
   }
   return labels[kind][language === 'en-US' ? 1 : 0]
@@ -425,14 +484,17 @@ export class LocalAgentRuntime {
       : null
     const conversationId = requestedConversationId ?? randomUUID()
     const provider = this.store.getDefaultPrivateProvider()
+    const process = input.process
+    const registry = resultRegistry(scan, process, language)
     const explicitFocus = focusForItems(explicitFocusIds
-      .map((id) => resultRegistry(scan).get(id))
+      .map((id) => registry.get(id))
       .filter((item): item is AgentResultItem => Boolean(item)))
-    const directFocus = explicitFocus.length ? explicitFocus : inferPromptFocus(cleanPrompt, scan)
+    const processFocus = process ? focusForItems([processResult(process, language)]) : []
+    const directFocus = explicitFocus.length ? explicitFocus : processFocus.length ? processFocus : inferPromptFocus(cleanPrompt, scan)
     const run = this.store.createRun(cleanPrompt, provider, language, conversationId, directFocus)
     const controller = new AbortController()
     this.controllers.set(run.id, controller)
-    void this.execute(run, scan, provider, controller, emit)
+    void this.execute(run, scan, provider, controller, emit, process)
     return run
   }
 
@@ -464,7 +526,14 @@ export class LocalAgentRuntime {
     if (!Array.isArray(input.itemIds) || input.itemIds.length === 0 || input.itemIds.length > 100) {
       throw new Error(t(run.language, '处理计划包含无效操作', 'The action plan contains invalid operations.'))
     }
-    const available = new Map(availablePlanItems(scan, run.language).map((item) => [item.id, item]))
+    const processItem = run.presentation?.sections
+      .flatMap((section) => section.items)
+      .find((item): item is AgentProcessResultItem => item.kind === 'processes')
+    const available = new Map(availablePlanItems(
+      scan,
+      run.language,
+      processItem ? processContextFromResult(processItem) : undefined
+    ).map((item) => [item.id, item]))
     const uniqueIds = [...new Set(input.itemIds)]
     const additions = uniqueIds
       .map((id) => available.get(id))
@@ -486,12 +555,13 @@ export class LocalAgentRuntime {
     scan: ScanResult,
     provider: PrivateAgentProvider,
     controller: AbortController,
-    emit: EmitAgentEvent
+    emit: EmitAgentEvent,
+    process?: AgentProcessContext
   ): Promise<void> {
     const language = initialRun.language
-    const allPlanItems = availablePlanItems(scan, language)
+    const allPlanItems = availablePlanItems(scan, language, process)
     const planItemMap = new Map(allPlanItems.map((item) => [item.id, item]))
-    const registry = resultRegistry(scan)
+    const registry = resultRegistry(scan, process, language)
     const priorRuns = this.store.listConversationRuns(initialRun.conversationId)
       .filter((run) => run.id !== initialRun.id)
     const conversationContext = compactConversationContext(priorRuns)
@@ -538,6 +608,17 @@ export class LocalAgentRuntime {
             terminalStartupMs: scan.terminal.startupMs,
             warnings: scan.warnings
           })
+        }),
+        inspect_process: tool({
+          description: 'Inspect the focused process and return only its registered quit and force-quit operations. Never substitute application operations for this process.',
+          inputSchema: z.object({}),
+          execute: async (input) => {
+            inspectedKinds.add('processes')
+            setStatus('analyzing', '正在检查目标进程', 'Inspecting the focused process')
+            return recordTool('inspect_process', input, process
+              ? compactProcess(process, language)
+              : { items: [] })
+          }
         }),
         inspect_storage: tool({
           description: 'List storage findings, stable item IDs, registered operations, and correlated local evidence for a focused item.',
@@ -671,11 +752,14 @@ export class LocalAgentRuntime {
             const uniqueIds = [...new Set(input.operationIds)]
             proposedPlan = uniqueIds
               .map((id) => planItemMap.get(id))
+              .filter((item) => !process || item?.id.startsWith(`overview-process-${process.pid}-`))
               .filter((item): item is AgentPlanItem => Boolean(item))
             setStatus('plan-ready', '处理计划已经准备好', 'The action plan is ready')
             return recordTool('prepare_action_plan', input, {
               acceptedOperationIds: proposedPlan.map((item) => item.id),
-              rejectedOperationIds: uniqueIds.filter((id) => !planItemMap.has(id)),
+              rejectedOperationIds: uniqueIds.filter((id) => (
+                !planItemMap.has(id) || Boolean(process && !id.startsWith(`overview-process-${process.pid}-`))
+              )),
               requiresUserConfirmation: true
             })
           }
@@ -703,6 +787,7 @@ export class LocalAgentRuntime {
           'The conversation context below is authoritative for follow-up references.',
           'When the user says this service, this app, it, that item, or an equivalent pronoun, resolve it to the latest focused entity. If there is exactly one matching focused entity, never ask which entity and never list unrelated entities.',
           'Memento has native Application Management, Storage, Background Services, and Terminal Diagnostics modules.',
+          'When a focused process is provided, call inspect_process first and present its process item with its registered quit and force-quit operations. Do not replace a focused process with Open or Uninstall operations from an application that happens to have a similar name.',
           'After inspection, call present_results exactly once with the most relevant stable item IDs so Memento can render compact interactive controls. Do not output HTML, Markdown tables, shell commands, or a wall of text.',
           'Only operations returned by inspection tools are real and executable.',
           'When focused inspection reveals additional correlated problems with registered operations, present them in the same task as separate optional items. Explain the relationship and do not select or execute them automatically.',
@@ -734,6 +819,21 @@ export class LocalAgentRuntime {
         if (fallback) {
           presented = fallback.presentation
           presentedFocus = fallback.focus
+        }
+      }
+      if (process) {
+        const processItem = processResult(process, language)
+        const processSection = {
+          kind: 'processes' as const,
+          title: sectionTitle('processes', language),
+          items: [processItem]
+        }
+        if (!presented) {
+          presented = { summary: fallbackSummary, sections: [processSection] }
+          presentedFocus = focusForItems([processItem])
+        } else if (!presented.sections.some((section) => section.kind === 'processes')) {
+          presented = { ...presented, sections: [processSection, ...presented.sections] }
+          presentedFocus = focusForItems(presented.sections.flatMap((section) => section.items))
         }
       }
       if (presented) {

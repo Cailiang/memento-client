@@ -8,6 +8,18 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.7.4 - 2026-09-23
+
+### English
+
+- Focused process prompts now render registered Quit process and Force quit process actions in Agent results. The main process revalidates ownership, the live command, and protected system boundaries before registering or executing either action.
+- Enlarged the Overview CPU and memory Top 5 pie charts and removed the inner TOP label so the chart area stays clear.
+
+### 简体中文
+
+- 针对进程询问 AI 时，Agent 结果现在会展示已注册的“退出进程”和“强制退出进程”操作；主进程在注册和执行前都会重新校验进程所有者、实时命令和系统保护边界。
+- 放大概览中的 CPU、内存 Top 5 饼图，并移除饼图内部的 TOP 文案，让图形区域更清晰。
+
 ## 0.7.3 - 2026-09-23
 
 ### English

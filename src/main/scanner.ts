@@ -70,8 +70,13 @@ function t(language: AppLanguage, chinese: string, english: string): string {
 
 export type RegisteredAction =
   | {
-      kind: Exclude<ActionKind, 'trash-launch-agent-config' | 'trash-service-software' | 'trash-service-directory' | 'brew-cleanup' | 'delete-storage-group' | 'trash-home-artifact' | 'trash-disk-usage'>
+      kind: Exclude<ActionKind, 'trash-launch-agent-config' | 'trash-service-software' | 'trash-service-directory' | 'brew-cleanup' | 'delete-storage-group' | 'trash-home-artifact' | 'trash-disk-usage' | 'terminate-process' | 'terminate-process-force'>
       target: string
+    }
+  | {
+      kind: 'terminate-process' | 'terminate-process-force'
+      pid: number
+      processName: string
     }
   | {
       kind: 'delete-storage-group'

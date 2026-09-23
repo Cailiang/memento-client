@@ -110,6 +110,13 @@ try {
         if (await page.locator('.overview-process-chart').count() !== 2) {
           failures.push(`${viewportName}/overview: CPU and memory Top 5 charts are missing`)
         }
+        if (await page.locator('.process-pie small').count()) {
+          failures.push(`${viewportName}/overview: pie chart still renders the TOP label inside the chart`)
+        }
+        const pieSize = await page.locator('.process-pie').first().evaluate((element) => element.getBoundingClientRect().width)
+        if (pieSize < 90) {
+          failures.push(`${viewportName}/overview: process pie chart is too small (${pieSize})`)
+        }
         if (await page.locator('.overview-process-head button').count() < 3) {
           failures.push(`${viewportName}/overview: process sort controls are incomplete`)
         }
@@ -126,6 +133,17 @@ try {
           if (!await page.locator('.process-action-menu').isVisible()) {
             failures.push(`${viewportName}/overview: process action menu moved or closed during live refresh`)
           }
+          await page.locator('.process-action-menu').getByRole('menuitem', { name: '询问 AI' }).click()
+          try {
+            await page.getByText('退出进程', { exact: true }).waitFor({ state: 'visible', timeout: 4_000 })
+            if (!await page.getByText('强制退出进程', { exact: true }).isVisible()) {
+              failures.push(`${viewportName}/overview: Agent process results are missing Force quit`)
+            }
+          } catch {
+            failures.push(`${viewportName}/overview: Ask AI did not render process termination actions`)
+          }
+          await page.locator('.nav-button[title="概览"]').click()
+          await page.waitForTimeout(220)
         }
         if (await page.locator('.nav-list .nav-button').count() !== 4) {
           failures.push(`${viewportName}/overview: primary navigation is not limited to four product modules`)

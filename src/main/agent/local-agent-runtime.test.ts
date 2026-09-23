@@ -93,6 +93,17 @@ describe('LocalAgentRuntime boundaries', () => {
     expect(inferPromptFocus('分析 com.example.editor 是否可以卸载', scan)).toEqual([{
       kind: 'applications', id: 'app-1', name: 'Editor'
     }])
+    expect(availablePlanItems(scan, 'en-US', {
+      pid: 4321,
+      name: 'Worker',
+      command: '/Users/test/Worker',
+      cpuPercent: 62.5,
+      memoryPercent: 4.2,
+      memoryBytes: 1024,
+      isSystem: false
+    }).map((item) => item.id)).toEqual([
+      'candidate-1', 'app-action', 'overview-process-4321-quit', 'overview-process-4321-force', 'terminal-fix'
+    ])
   })
 
   it('keeps the exact service focus and pending plan in follow-up context', () => {

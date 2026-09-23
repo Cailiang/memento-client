@@ -1,6 +1,7 @@
 import {
   AppWindow,
   Check,
+  Cpu,
   ExternalLink,
   FolderCog,
   HardDrive,
@@ -47,6 +48,7 @@ function operationButton(
 function ResultIcon({ item }: { item: AgentResultItem }): React.JSX.Element {
   if (item.kind === 'applications') return <AppWindow size={15} />
   if (item.kind === 'services') return <RadioTower size={15} />
+  if (item.kind === 'processes') return <Cpu size={15} />
   if (item.kind === 'terminal') return <SquareTerminal size={15} />
   return item.name.toLocaleLowerCase().includes('cache') || item.name.includes('缓存')
     ? <FolderCog size={15} />
@@ -74,7 +76,7 @@ export function AgentResults({
     <div className="agent-results">
       {presentation.sections.map((section, sectionIndex) => {
         const bytes = section.items.reduce((sum, item) => (
-          sum + (item.kind === 'terminal' ? 0 : item.sizeBytes)
+          sum + (item.kind === 'terminal' || item.kind === 'processes' ? 0 : item.sizeBytes)
         ), 0)
         return (
           <section className="agent-result-section" key={`${section.kind}-${sectionIndex}`}>
@@ -137,7 +139,13 @@ export function AgentResults({
                       </strong>
                       <small>{item.kind === 'terminal'
                         ? [item.detail, item.source].filter(Boolean).join(' · ')
-                        : [item.status, item.description, item.location].filter(Boolean).join(' · ')}</small>
+                        : item.kind === 'processes'
+                          ? [
+                              `PID ${item.pid}`,
+                              `CPU ${item.cpuPercent.toFixed(1)}%`,
+                              `${formatBytes(item.memoryBytes)} · ${item.memoryPercent.toFixed(1)}%`
+                            ].join(' · ')
+                          : [item.status, item.description, item.location].filter(Boolean).join(' · ')}</small>
                     </div>
                     <div className="agent-result-actions">
                       {item.kind === 'terminal'
