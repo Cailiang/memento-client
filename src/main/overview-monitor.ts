@@ -201,19 +201,38 @@ function processName(command: string): string {
   return binary || command.trim()
 }
 
+export function isSystemProcess(user: string | null, command: string): boolean {
+  const normalizedUser = user?.trim().toLowerCase() ?? ''
+  const normalizedCommand = command.trim()
+  return normalizedUser === 'root' || /^\/(?:system\/|usr\/(?:bin|sbin|libexec|lib)\/|bin\/|sbin\/|private\/var\/db\/)/i.test(normalizedCommand)
+}
+
 export function parseProcesses(output: string, limit = 12): OverviewProcess[] {
   const processes: OverviewProcess[] = []
   for (const line of output.split('\n')) {
-    const match = line.match(/^\s*(\d+)\s+([\d.]+)\s+([\d.]+)\s+(\d+)\s+(.+?)\s*$/)
-    if (!match) continue
-    const [, pid, cpu, memory, rss, command] = match
+    const fields = line.trim().split(/\s+/)
+    if (fields.length < 5) continue
+    const pid = Number.parseInt(fields[0] ?? '', 10)
+    if (!Number.isFinite(pid)) continue
+    const hasUser = fields.length >= 6 && !Number.isFinite(Number(fields[1]))
+    const user = hasUser ? fields[1] ?? null : null
+    const cpuIndex = hasUser ? 2 : 1
+    const memoryIndex = cpuIndex + 1
+    const rssIndex = cpuIndex + 2
+    const commandIndex = cpuIndex + 3
+    const cpu = Number(fields[cpuIndex])
+    const memory = Number(fields[memoryIndex])
+    const rss = Number.parseInt(fields[rssIndex] ?? '', 10)
+    const command = fields.slice(commandIndex).join(' ').trim()
+    if (!Number.isFinite(cpu) || !Number.isFinite(memory) || !Number.isFinite(rss) || !command) continue
     processes.push({
-      pid: Number.parseInt(pid, 10),
+      pid,
       name: processName(command),
       command,
-      cpuPercent: round(Number(cpu)),
-      memoryPercent: round(Number(memory)),
-      memoryBytes: Number.parseInt(rss, 10) * 1024
+      cpuPercent: round(cpu),
+      memoryPercent: round(memory),
+      memoryBytes: rss * 1024,
+      isSystem: isSystemProcess(user, command)
     })
   }
   return processes
@@ -300,7 +319,7 @@ export class OverviewMonitor {
       this.collectBatteryDetails(diagnostics, now),
       optionalCommand(diagnostics, 'overview.gpu.unavailable', '/usr/sbin/ioreg', ['-r', '-d', '1', '-w', '0', '-c', 'IOAccelerator']),
       optionalCommand(diagnostics, 'overview.thermal.unavailable', '/usr/bin/pmset', ['-g', 'therm']),
-      optionalCommand(diagnostics, 'overview.processes.unavailable', '/bin/ps', ['-axo', 'pid=,%cpu=,%mem=,rss=,comm='])
+      optionalCommand(diagnostics, 'overview.processes.unavailable', '/bin/ps', ['-axo', 'pid=,user=,%cpu=,%mem=,rss=,comm='])
     ])
 
     if (!this.hardware) this.hardware = await this.collectHardware(diagnostics)

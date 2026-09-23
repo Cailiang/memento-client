@@ -107,6 +107,22 @@ try {
         if (!await page.locator('.overview-process-row').first().isVisible()) {
           failures.push(`${viewportName}/overview: process table is missing`)
         }
+        if (await page.locator('.overview-process-chart').count() !== 2) {
+          failures.push(`${viewportName}/overview: CPU and memory Top 5 charts are missing`)
+        }
+        if (await page.locator('.overview-process-head button').count() < 3) {
+          failures.push(`${viewportName}/overview: process sort controls are incomplete`)
+        }
+        const processMenuRow = page.locator('.overview-process-row').filter({ hasText: 'codex' }).first()
+        if (await processMenuRow.count()) {
+          await processMenuRow.getByRole('button', { name: /打开 .* 的操作/ }).click()
+          if (!await page.locator('.process-action-menu').getByRole('menuitem', { name: '询问 AI' }).isVisible()) {
+            failures.push(`${viewportName}/overview: process action menu is missing Ask AI`)
+          }
+          if (!await page.locator('.process-action-menu').getByRole('menuitem', { name: '退出进程' }).isVisible()) {
+            failures.push(`${viewportName}/overview: user process action menu is missing Quit`)
+          }
+        }
         if (await page.locator('.nav-list .nav-button').count() !== 4) {
           failures.push(`${viewportName}/overview: primary navigation is not limited to four product modules`)
         }

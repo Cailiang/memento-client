@@ -180,6 +180,7 @@ export interface OverviewProcess {
   cpuPercent: number
   memoryPercent: number
   memoryBytes: number
+  isSystem: boolean
 }
 
 export interface OverviewMetrics {
@@ -360,6 +361,9 @@ export interface MementoApi extends MementoAgentApi, MementoSettingsApi {
   checkForUpdates: () => Promise<AppUpdateState>
   installUpdate: () => Promise<void>
   getOverviewMetrics: () => Promise<OverviewMetrics>
+  copyOverviewProcessName: (name: string) => Promise<void>
+  copyOverviewProcessPid: (pid: number) => Promise<void>
+  terminateOverviewProcess: (input: { pid: number; force: boolean }) => Promise<void>
   scan: (language?: import('./app-settings').AppLanguage) => Promise<ScanResult>
   scanDiskUsage: () => Promise<DiskUsageScanResult>
   cancelDiskUsageScan: () => Promise<void>

@@ -1,3 +1,27 @@
+# Memento Agent 0.7.2 - 进程监控 / Process Monitoring
+
+## 简体中文
+
+`0.7.2` 扩展了概览中的高占用进程工作流，让用户可以比较资源占用、了解进程并在安全边界内处理自己的进程。
+
+### 主要变化
+
+- **排序与图表：** 高占用进程支持按名称、CPU、内存排序，并新增 CPU 和内存 Top 5 饼图。
+- **进程操作：** 可询问 AI、复制进程名称或 PID；非系统进程可选择退出或强制退出。主进程会在执行前重新读取 PID、所有者和命令路径，系统进程与其他用户进程保持保护。
+- **回归覆盖：** demo、preload、真实 Electron 和四视口 UI 冒烟测试覆盖了新增进程界面。
+
+## English
+
+`0.7.2` extends Overview's high-usage process workflow so users can compare resource use, understand a process, and act on their own processes within a protected boundary.
+
+### Highlights
+
+- **Sorting and charts:** Sort high-usage processes by name, CPU, or memory and view CPU and memory Top 5 pie charts.
+- **Process actions:** Ask AI, copy a process name or PID, and gracefully or force-quit non-system processes. The main process re-reads the PID, owner, and command path before execution; system and other-user processes remain protected.
+- **Regression coverage:** Demo, preload, real Electron, and four-viewport UI smoke tests cover the new process surface.
+
+---
+
 # Memento Agent 0.7.1 - 确定性清理 / Deterministic Cleanup
 
 ## 简体中文

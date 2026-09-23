@@ -1,18 +1,25 @@
 import {
   Activity,
+  ArrowDownUp,
   BatteryCharging,
   BatteryFull,
   BatteryMedium,
+  BrainCircuit,
+  Copy,
   Cpu,
   Gauge,
   HardDrive,
   MemoryStick,
+  MoreHorizontal,
   Network,
   Pause,
+  Power,
   Play,
   RefreshCw,
   Search,
-  ThermometerSun
+  Skull,
+  ThermometerSun,
+  Zap
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import type { OverviewHealthIssue, OverviewMetrics } from '../../../shared/types'
@@ -51,6 +58,52 @@ function Sparkline({
 function BarHistory({ values }: { values: number[] }): React.JSX.Element {
   const safeValues = values.length ? values.slice(-10) : [0]
   return <div className="overview-bars" aria-hidden="true">{safeValues.map((value, index) => <i key={index} style={{ height: `${Math.max(8, Math.min(100, value))}%` }} />)}</div>
+}
+
+const PROCESS_PIE_COLORS = [
+  'var(--accent)',
+  'var(--warning)',
+  'var(--success)',
+  'var(--danger)',
+  'var(--text-secondary)'
+]
+
+function ProcessPie({
+  title,
+  processes,
+  metric,
+  formatValue
+}: {
+  title: string
+  processes: OverviewMetrics['processes']
+  metric: 'cpuPercent' | 'memoryBytes'
+  formatValue: (value: number) => string
+}): React.JSX.Element {
+  const top = [...processes]
+    .sort((left, right) => right[metric] - left[metric])
+    .slice(0, 5)
+  const total = top.reduce((sum, process) => sum + Math.max(0, process[metric]), 0)
+  const safeTotal = total || 1
+  let cursor = 0
+  const segments = top.map((process, index) => {
+    const share = Math.max(0, process[metric]) / safeTotal * 100
+    const start = cursor
+    cursor += share
+    return `${PROCESS_PIE_COLORS[index]} ${start.toFixed(2)}% ${cursor.toFixed(2)}%`
+  })
+  if (!segments.length) segments.push('var(--surface-strong) 0 100%')
+  return (
+    <article className="overview-process-chart">
+      <header><strong>{title}</strong><span>Top 5</span></header>
+      <div className="overview-process-chart-body">
+        <div className="process-pie" role="img" aria-label={title} style={{ background: `conic-gradient(${segments.join(', ')})` }}><span>{top.length || 0}</span><small>TOP</small></div>
+        <ol className="process-pie-legend">
+          {top.map((process, index) => <li key={process.pid}><i style={{ background: PROCESS_PIE_COLORS[index] }} /><span title={process.name}>{process.name}</span><strong>{formatValue(process[metric])}</strong></li>)}
+          {!top.length && <li className="process-pie-empty">--</li>}
+        </ol>
+      </div>
+    </article>
+  )
 }
 
 function HealthGauge({ value }: { value: number }): React.JSX.Element {
@@ -108,7 +161,11 @@ export function OverviewPage({
   paused,
   error,
   onRefresh,
-  onPausedChange
+  onPausedChange,
+  onAskProcess,
+  onCopyProcessName,
+  onCopyProcessPid,
+  onTerminateProcess
 }: {
   metrics: OverviewMetrics | null
   busy: boolean
@@ -116,10 +173,16 @@ export function OverviewPage({
   error: string | null
   onRefresh: () => void
   onPausedChange: (paused: boolean) => void
+  onAskProcess: (process: OverviewMetrics['processes'][number]) => void
+  onCopyProcessName: (name: string) => void
+  onCopyProcessPid: (pid: number) => void
+  onTerminateProcess: (process: OverviewMetrics['processes'][number], force: boolean) => void
 }): React.JSX.Element {
   const { language, text } = useI18n()
   const [query, setQuery] = useState('')
-  const [processSort, setProcessSort] = useState<'cpu' | 'memory'>('cpu')
+  const [processSort, setProcessSort] = useState<'name' | 'cpu' | 'memory'>('cpu')
+  const [processSortDirection, setProcessSortDirection] = useState<'asc' | 'desc'>('desc')
+  const [openProcessMenu, setOpenProcessMenu] = useState<number | null>(null)
   const [cpuHistory, setCpuHistory] = useState<number[]>([])
   const [gpuHistory, setGpuHistory] = useState<number[]>([])
   const [memoryHistory, setMemoryHistory] = useState<number[]>([])
@@ -139,10 +202,33 @@ export function OverviewPage({
     const normalized = query.trim().toLocaleLowerCase()
     return [...(metrics?.processes ?? [])]
       .filter((process) => !normalized || `${process.name} ${process.command} ${process.pid}`.toLocaleLowerCase().includes(normalized))
-      .sort((left, right) => processSort === 'cpu'
-        ? right.cpuPercent - left.cpuPercent
-        : right.memoryBytes - left.memoryBytes)
-  }, [metrics?.processes, processSort, query])
+      .sort((left, right) => {
+        const result = processSort === 'name'
+          ? left.name.localeCompare(right.name, language)
+          : processSort === 'cpu'
+            ? right.cpuPercent - left.cpuPercent
+            : right.memoryBytes - left.memoryBytes
+        return processSortDirection === 'asc' ? -result : result
+      })
+  }, [language, metrics?.processes, processSort, processSortDirection, query])
+
+  const chooseProcessSort = (sort: 'name' | 'cpu' | 'memory'): void => {
+    if (sort === processSort) {
+      setProcessSortDirection((current) => current === 'asc' ? 'desc' : 'asc')
+      return
+    }
+    setProcessSort(sort)
+    setProcessSortDirection(sort === 'name' ? 'asc' : 'desc')
+  }
+
+  const confirmTerminate = (process: OverviewMetrics['processes'][number], force: boolean): void => {
+    if (force && !window.confirm(text(
+      `确定强制退出“${process.name}”（PID ${process.pid}）吗？未保存的数据可能丢失。`,
+      `Force quit “${process.name}” (PID ${process.pid})? Unsaved data may be lost.`
+    ))) return
+    setOpenProcessMenu(null)
+    onTerminateProcess(process, force)
+  }
 
   if (!metrics && busy) return <OverviewSkeleton />
   if (!metrics) {
@@ -244,14 +330,37 @@ export function OverviewPage({
           <div><strong>{text('高占用进程', 'Top processes')}</strong><span>{text(`${metrics.processes.length} 个进程样本`, `${metrics.processes.length} sampled processes`)}</span></div>
           <label className="search-field overview-process-search"><Search size={15} /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={text('搜索名称或 PID', 'Search name or PID')} aria-label={text('搜索进程', 'Search processes')} /></label>
         </header>
-        <div className="overview-process-head"><span>{text('进程', 'Process')}</span><span>PID</span><button type="button" className={processSort === 'cpu' ? 'is-active' : ''} onClick={() => setProcessSort('cpu')}>CPU</button><button type="button" className={processSort === 'memory' ? 'is-active' : ''} onClick={() => setProcessSort('memory')}>{text('内存', 'Memory')}</button></div>
+        <div className="overview-process-insights">
+          <ProcessPie title="CPU" processes={metrics.processes} metric="cpuPercent" formatValue={(value) => `${value.toFixed(1)}%`} />
+          <ProcessPie title={text('内存', 'Memory')} processes={metrics.processes} metric="memoryBytes" formatValue={formatBytes} />
+        </div>
+        <div className="overview-process-head">
+          <button type="button" className={processSort === 'name' ? 'is-active' : ''} onClick={() => chooseProcessSort('name')} aria-sort={processSort === 'name' ? processSortDirection === 'asc' ? 'ascending' : 'descending' : 'none'}>{text('进程', 'Process')}<ArrowDownUp size={11} /></button>
+          <span>PID</span>
+          <button type="button" className={processSort === 'cpu' ? 'is-active' : ''} onClick={() => chooseProcessSort('cpu')} aria-sort={processSort === 'cpu' ? processSortDirection === 'asc' ? 'ascending' : 'descending' : 'none'}>CPU<ArrowDownUp size={11} /></button>
+          <button type="button" className={processSort === 'memory' ? 'is-active' : ''} onClick={() => chooseProcessSort('memory')} aria-sort={processSort === 'memory' ? processSortDirection === 'asc' ? 'ascending' : 'descending' : 'none'}>{text('内存', 'Memory')}<ArrowDownUp size={11} /></button>
+          <span aria-hidden="true" />
+        </div>
         <div className="overview-process-list">
           {processes.length ? processes.map((process) => (
             <div className="overview-process-row" key={process.pid}>
-              <span className="overview-process-name"><i><Activity size={13} /></i><strong>{process.name}</strong><small>{process.command}</small></span>
+              <span className="overview-process-name"><i><Activity size={13} /></i><strong>{process.name}</strong><small>{process.command} · {process.isSystem ? text('系统进程', 'System process') : text('用户进程', 'User process')}</small></span>
               <span>{process.pid}</span>
               <span className={process.cpuPercent >= 80 ? 'is-hot' : ''}><i className="process-meter"><b style={{ width: `${Math.min(100, process.cpuPercent)}%` }} /></i><strong>{process.cpuPercent.toFixed(1)}%</strong></span>
               <span><strong>{formatBytes(process.memoryBytes)}</strong><small>{process.memoryPercent.toFixed(1)}%</small></span>
+              <span className="overview-process-actions">
+                <button type="button" className="icon-button process-menu-button" onClick={() => setOpenProcessMenu((current) => current === process.pid ? null : process.pid)} title={text('进程操作', 'Process actions')} aria-label={text(`打开 ${process.name} 的操作`, `Open actions for ${process.name}`)} aria-expanded={openProcessMenu === process.pid}><MoreHorizontal size={15} /></button>
+                {openProcessMenu === process.pid && <span className="process-action-menu" role="menu">
+                  <button type="button" role="menuitem" onClick={() => { setOpenProcessMenu(null); onAskProcess(process) }}><BrainCircuit size={13} />{text('询问 AI', 'Ask AI')}</button>
+                  <button type="button" role="menuitem" onClick={() => { setOpenProcessMenu(null); onCopyProcessName(process.name) }}><Copy size={13} />{text('复制进程名称', 'Copy name')}</button>
+                  <button type="button" role="menuitem" onClick={() => { setOpenProcessMenu(null); onCopyProcessPid(process.pid) }}><Copy size={13} />{text('复制进程 PID', 'Copy PID')}</button>
+                  {!process.isSystem && <>
+                    <button type="button" role="menuitem" onClick={() => confirmTerminate(process, false)}><Power size={13} />{text('退出进程', 'Quit process')}</button>
+                    <button type="button" role="menuitem" className="is-danger" onClick={() => confirmTerminate(process, true)}><Zap size={13} />{text('强制退出', 'Force quit')}</button>
+                  </>}
+                  {process.isSystem && <span className="process-action-note"><Skull size={12} />{text('系统进程不可退出', 'System process protected')}</span>}
+                </span>}
+              </span>
             </div>
           )) : <div className="overview-process-empty">{text('没有匹配的进程', 'No matching processes')}</div>}
         </div>

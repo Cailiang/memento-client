@@ -1,6 +1,7 @@
 import {
   app,
   BrowserWindow,
+  clipboard,
   ipcMain,
   Menu,
   nativeImage,
@@ -60,7 +61,7 @@ import {
   trashDestination
 } from './application-trash'
 import { runFullScan, type RegisteredAction } from './scanner'
-import { OverviewMonitor } from './overview-monitor'
+import { isSystemProcess, OverviewMonitor } from './overview-monitor'
 import { inferFindingTrust } from '../shared/finding-trust'
 import { applyScanWhitelist } from './scan-whitelist'
 import { buildPrivilegedMoves, privilegedMoveArguments } from './privileged-cleanup'
@@ -122,6 +123,65 @@ let updateCheckPromise: Promise<AppUpdateState> | null = null
 
 function mainText(chinese: string, english: string): string {
   return appSettings.language === 'en-US' ? english : chinese
+}
+
+function validateOverviewProcessName(name: unknown): string {
+  if (typeof name !== 'string' || !name.trim() || name.length > 256) {
+    throw new Error(mainText('进程名称无效', 'The process name is invalid.'))
+  }
+  return name.trim()
+}
+
+function validateOverviewProcessPid(pid: unknown): number {
+  if (typeof pid !== 'number' || !Number.isSafeInteger(pid) || pid < 1 || pid > 9_999_999) {
+    throw new Error(mainText('进程 PID 无效', 'The process PID is invalid.'))
+  }
+  return pid
+}
+
+async function inspectOverviewProcess(pid: number): Promise<{ user: string; command: string }> {
+  try {
+    const { stdout } = await execFileAsync('/bin/ps', ['-p', String(pid), '-o', 'user=,comm='], {
+      timeout: 3_000,
+      maxBuffer: 64 * 1024,
+      env: { ...process.env, LC_ALL: 'C' }
+    })
+    const fields = String(stdout).trim().split(/\s+/)
+    const user = fields.shift() ?? ''
+    const command = fields.join(' ')
+    if (!user || !command) throw new Error('missing process details')
+    return { user, command }
+  } catch {
+    throw new Error(mainText('进程已经退出，请刷新列表', 'The process has already exited. Refresh the list.'))
+  }
+}
+
+async function terminateOverviewProcess(pidInput: unknown, forceInput: unknown): Promise<void> {
+  const pid = validateOverviewProcessPid(pidInput)
+  if (pid <= 1 || pid === process.pid) {
+    throw new Error(mainText('不能退出 Memento 自身', 'Memento cannot terminate itself.'))
+  }
+  const processInfo = await inspectOverviewProcess(pid)
+  const currentUser = (() => {
+    try {
+      return os.userInfo().username
+    } catch {
+      return ''
+    }
+  })()
+  if (
+    !currentUser ||
+    processInfo.user !== currentUser ||
+    isSystemProcess(processInfo.user, processInfo.command)
+  ) {
+    throw new Error(mainText('系统进程或其他用户的进程不能从这里退出', 'System and other users\' processes cannot be terminated here.'))
+  }
+  const signal = forceInput === true ? 'SIGKILL' : 'SIGTERM'
+  try {
+    process.kill(pid, signal)
+  } catch {
+    throw new Error(mainText('进程未能退出，请刷新后重试', 'The process could not be terminated. Refresh and try again.'))
+  }
 }
 
 interface MaintenanceExecutionOptions {
@@ -1326,6 +1386,16 @@ app.whenReady().then(async () => {
   ipcMain.handle('memento:update:check', () => checkForAppUpdate())
   ipcMain.handle('memento:update:install', () => installAppUpdate())
   ipcMain.handle('memento:overview:get', () => overviewMonitor.collect())
+  ipcMain.handle('memento:overview:process-copy-name', (_event, name: unknown) => {
+    clipboard.writeText(validateOverviewProcessName(name))
+  })
+  ipcMain.handle('memento:overview:process-copy-pid', (_event, pid: unknown) => {
+    clipboard.writeText(String(validateOverviewProcessPid(pid)))
+  })
+  ipcMain.handle('memento:overview:process-terminate', (_event, input: unknown) => {
+    const record = input && typeof input === 'object' ? input as { pid?: unknown; force?: unknown } : {}
+    return terminateOverviewProcess(record.pid, record.force)
+  })
   ipcMain.handle('memento:get-application-icon', async (_event, id: string) => {
     if (typeof id !== 'string' || id.length > 100) return null
     const application = [

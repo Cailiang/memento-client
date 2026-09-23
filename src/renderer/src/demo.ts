@@ -84,14 +84,14 @@ export function localizedDemoOverviewMetrics(): OverviewMetrics {
       availableCpus: 8
     },
     processes: [
-      { pid: 85945, name: 'mediaanalysisd', command: '/System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd', cpuPercent: 84, memoryPercent: 3.2, memoryBytes: 1.03 * GB },
-      { pid: 45918, name: 'codex', command: '~/Library/Application Support/AgentDock/clients/codex/bin/codex', cpuPercent: 16.3, memoryPercent: 0.7, memoryBytes: 222 * MB },
-      { pid: 64647, name: 'iTerm2', command: '/Applications/iTerm.app/Contents/MacOS/iTerm2', cpuPercent: 4.4, memoryPercent: 2.4, memoryBytes: 785 * MB },
-      { pid: 40390, name: 'Feishu', command: '/Applications/Lark.app/Contents/MacOS/Feishu', cpuPercent: 1.9, memoryPercent: 0.8, memoryBytes: 264 * MB },
-      { pid: 604, name: 'aciseagentd', command: '/opt/cisco/anyconnect/bin/aciseagentd', cpuPercent: 1.3, memoryPercent: 0.7, memoryBytes: 244 * MB },
-      { pid: 303, name: 'symptomsd', command: '/usr/libexec/symptomsd', cpuPercent: 0.3, memoryPercent: 0.1, memoryBytes: 13 * MB },
-      { pid: 163, name: 'opendirectoryd', command: '/usr/libexec/opendirectoryd', cpuPercent: 0.1, memoryPercent: 0.1, memoryBytes: 23 * MB },
-      { pid: 120, name: 'logd', command: '/usr/libexec/logd', cpuPercent: 0.1, memoryPercent: 0.2, memoryBytes: 61 * MB }
+      { pid: 85945, name: 'mediaanalysisd', command: '/System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd', cpuPercent: 84, memoryPercent: 3.2, memoryBytes: 1.03 * GB, isSystem: true },
+      { pid: 45918, name: 'codex', command: '~/Library/Application Support/AgentDock/clients/codex/bin/codex', cpuPercent: 16.3, memoryPercent: 0.7, memoryBytes: 222 * MB, isSystem: false },
+      { pid: 64647, name: 'iTerm2', command: '/Applications/iTerm.app/Contents/MacOS/iTerm2', cpuPercent: 4.4, memoryPercent: 2.4, memoryBytes: 785 * MB, isSystem: false },
+      { pid: 40390, name: 'Feishu', command: '/Applications/Lark.app/Contents/MacOS/Feishu', cpuPercent: 1.9, memoryPercent: 0.8, memoryBytes: 264 * MB, isSystem: false },
+      { pid: 604, name: 'aciseagentd', command: '/opt/cisco/anyconnect/bin/aciseagentd', cpuPercent: 1.3, memoryPercent: 0.7, memoryBytes: 244 * MB, isSystem: false },
+      { pid: 303, name: 'symptomsd', command: '/usr/libexec/symptomsd', cpuPercent: 0.3, memoryPercent: 0.1, memoryBytes: 13 * MB, isSystem: true },
+      { pid: 163, name: 'opendirectoryd', command: '/usr/libexec/opendirectoryd', cpuPercent: 0.1, memoryPercent: 0.1, memoryBytes: 23 * MB, isSystem: true },
+      { pid: 120, name: 'logd', command: '/usr/libexec/logd', cpuPercent: 0.1, memoryPercent: 0.2, memoryBytes: 61 * MB, isSystem: true }
     ],
     diagnostics: []
   }

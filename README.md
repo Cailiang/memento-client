@@ -9,7 +9,7 @@ Memento is a local desktop maintenance agent. It combines deterministic device i
 ## Capabilities
 
 - **Agent:** describe a maintenance goal in plain language, inspect structured results, review a proposed plan, and verify the outcome.
-- **Overview:** inspect health, CPU, GPU, memory, battery, disk, network, and high-usage processes in one quiet live workspace.
+- **Overview:** inspect health, CPU, GPU, memory, battery, disk, network, and high-usage processes in one quiet live workspace. Sort processes by name, CPU, or memory, view CPU/memory Top 5 charts, ask the local Agent about a process, copy its name/PID, and quit only non-system processes with a revalidated graceful or force action.
 - **Cleanup:** scan rebuildable data by system, application, browser, developer, log, and device categories; safe items are preselected while review items and outside-rule clues remain separate.
 - **Applications:** inspect installed applications and metadata, open or ignore an app, and move supported apps to Trash after confirmation.
 - **Disk analysis:** browse storage hierarchically and use validated opaque node operations to reveal a directory, ask AI for an explanation, or move it to Trash.

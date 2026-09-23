@@ -22,6 +22,9 @@ try {
     window.memento.cancelDiskUsageScan &&
     window.memento.revealDiskUsageNode &&
     window.memento.onDiskUsageProgress &&
+    window.memento.copyOverviewProcessName &&
+    window.memento.copyOverviewProcessPid &&
+    window.memento.terminateOverviewProcess &&
     window.memento.listMaintenanceRuns &&
     window.memento.deleteMaintenanceRuns &&
     window.memento.revealMaintenanceRecovery

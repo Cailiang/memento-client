@@ -49,8 +49,13 @@ describe('overview monitor parsing', () => {
       command: '/Applications/Code.app/Contents/MacOS/Code',
       cpuPercent: 88.4,
       memoryPercent: 2.5,
-      memoryBytes: 1024 ** 3
+      memoryBytes: 1024 ** 3,
+      isSystem: false
     }])
+    expect(parseProcesses(' 7 root 1.0 0.2 2048 /usr/libexec/logd\n')).toEqual([expect.objectContaining({
+      pid: 7,
+      isSystem: true
+    })])
   })
 
   it('counts reclaimable macOS pages as available memory', () => {

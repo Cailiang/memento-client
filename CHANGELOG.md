@@ -8,6 +8,20 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.7.2 - 2026-09-23
+
+### English
+
+- Expanded Overview high-usage process monitoring with name, CPU, and memory sorting plus CPU/memory Top 5 pie charts.
+- Added process actions for Ask AI, copying the process name or PID, and graceful or force termination of non-system processes. Main-process validation rechecks ownership, live command path, and protected system boundaries before termination.
+- Added deterministic demo coverage, Electron preload checks, and four-viewport UI smoke coverage for process charts and action menus.
+
+### 简体中文
+
+- 概览高占用进程新增按名称、CPU 和内存排序，并用两张饼图展示 CPU/内存 Top 5。
+- 新增询问 AI、复制进程名称或 PID，以及退出/强制退出非系统进程的操作；主进程在执行前重新校验进程所有者、实时命令路径和系统保护边界。
+- 补充确定性 demo、Electron preload 检查和四视口 UI 冒烟覆盖，验证进程图表与操作菜单。
+
 ## 0.7.1 - 2026-08-04
 
 ### English

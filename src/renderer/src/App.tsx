@@ -29,6 +29,7 @@ import type {
   DiskUsageScanResult,
   InstalledApplication,
   OverviewMetrics,
+  OverviewProcess,
   ScanCandidate,
   ScanProgress,
   ScanResult
@@ -68,6 +69,7 @@ import {
 } from './agent-workspace'
 import { applyCompletedCandidateActions } from './candidate-actions'
 import { isActionableFinding, isReviewClue, isSafeCleanup } from '../../shared/finding-trust'
+import { formatBytes } from './agent-ui/utils'
 
 const DEMO_PROVIDER: AgentProvider = {
   id: 'demo-provider',
@@ -291,6 +293,7 @@ function demoPlanItemFromPresentation(
 }
 
 type AgentOrigin =
+  | { view: 'overview' }
   | { view: 'health'; tab: HealthTab; itemId?: string; scrollTop: number }
   | { view: 'apps'; itemId?: string; scrollTop: number }
   | { view: 'disk' }
@@ -775,6 +778,50 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     )
   }
 
+  const askOverviewProcess = async (process: OverviewProcess): Promise<void> => {
+    if (!resultRef.current && !await scanNow()) return
+    startAgentRun(
+      appText(
+        `分析实时进程“${process.name}”（PID ${process.pid}，CPU ${process.cpuPercent.toFixed(1)}%，内存 ${formatBytes(process.memoryBytes)}）。只读说明它的用途、是否值得关注以及安全的下一步，不要直接结束进程。`,
+        `Analyze the live process "${process.name}" (PID ${process.pid}, CPU ${process.cpuPercent.toFixed(1)}%, memory ${formatBytes(process.memoryBytes)}). Explain its purpose, whether it needs attention, and safe next steps in read-only mode. Do not terminate it directly.`
+      ),
+      { isolated: true, origin: { view: 'overview' } }
+    )
+  }
+
+  const copyOverviewProcessName = async (name: string): Promise<void> => {
+    try {
+      if (window.memento) await window.memento.copyOverviewProcessName(name)
+      else await navigator.clipboard?.writeText(name)
+      setToast(appText('已复制进程名称', 'Process name copied'))
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : appText('复制失败', 'Copy failed'))
+    }
+  }
+
+  const copyOverviewProcessPid = async (pid: number): Promise<void> => {
+    try {
+      if (window.memento) await window.memento.copyOverviewProcessPid(pid)
+      else await navigator.clipboard?.writeText(String(pid))
+      setToast(appText('已复制进程 PID', 'Process PID copied'))
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : appText('复制失败', 'Copy failed'))
+    }
+  }
+
+  const terminateOverviewProcess = async (process: OverviewProcess, force: boolean): Promise<void> => {
+    try {
+      if (window.memento) await window.memento.terminateOverviewProcess({ pid: process.pid, force })
+      setToast(appText(
+        force ? `已强制退出 ${process.name}` : `已请求退出 ${process.name}`,
+        force ? `${process.name} was force quit` : `Quit requested for ${process.name}`
+      ))
+      await refreshOverview(true)
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : appText('进程操作失败', 'Process action failed'))
+    }
+  }
+
   const executePlan = async (): Promise<void> => {
     if (!activeRun || !selectedPlanIds.size) return
     if (scanBusy) {
@@ -1036,6 +1083,11 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
 
   const returnToAgentOrigin = (): void => {
     if (!agentOrigin) return
+    if (agentOrigin.view === 'overview') {
+      setAgentOrigin(null)
+      setView('overview')
+      return
+    }
     if (agentOrigin.view === 'disk') {
       setAgentOrigin(null)
       setView('disk')
@@ -1550,7 +1602,9 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     setSelectedPlanIds(new Set())
     setRunStatusMessage('')
   }
-  const agentOriginLabel = agentOrigin?.view === 'apps'
+  const agentOriginLabel = agentOrigin?.view === 'overview'
+    ? appText('概览', 'Overview')
+    : agentOrigin?.view === 'apps'
     ? appText('应用管理', 'Applications')
     : agentOrigin?.view === 'disk'
       ? appText('磁盘分析', 'Disk analysis')
@@ -1586,7 +1640,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       onNavigate={setView}
       onInstallUpdate={installUpdate}
     >
-      {view === 'overview' && <OverviewPage metrics={overviewMetrics} busy={overviewBusy} paused={overviewPaused} error={overviewError} onRefresh={() => void refreshOverview(true)} onPausedChange={setOverviewPaused} />}
+      {view === 'overview' && <OverviewPage metrics={overviewMetrics} busy={overviewBusy} paused={overviewPaused} error={overviewError} onRefresh={() => void refreshOverview(true)} onPausedChange={setOverviewPaused} onAskProcess={(process) => void askOverviewProcess(process)} onCopyProcessName={(name) => void copyOverviewProcessName(name)} onCopyProcessPid={(pid) => void copyOverviewProcessPid(pid)} onTerminateProcess={(process, force) => void terminateOverviewProcess(process, force)} />}
       {view === 'agent' && <AgentPage scan={result} run={activeRun} conversationRuns={conversationRuns} workspaceRuns={workspaceRuns} statusMessage={runStatusMessage} selectedPlanIds={selectedPlanIds} providerConfigured={Boolean(defaultProvider)} addingOperationId={addingOperationId} openingApplicationId={openingApplicationId} returnLabel={agentOriginLabel} onSubmit={startAgentRun} onSelectWorkspaceRun={selectWorkspaceRun} onCloseWorkspaceRun={closeWorkspaceRun} onNewTask={() => { setActiveRun(null); activeRunId.current = null; setSelectedPlanIds(new Set()); setRunStatusMessage(''); setAgentOrigin(null) }} onOpenHistory={() => setView('history')} onOpenSettings={() => setView('settings')} onReturn={returnToAgentOrigin} onOpenApplication={openAgentApplication} onAddPlanItem={(id) => void addAgentPlanItem(id)} onTogglePlanItem={(id) => setSelectedPlanIds((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next })} onExecutePlan={() => void executePlan()} onDiscardPlan={discardPlan} />}
       {view === 'health' && <HealthPage
         result={result}
