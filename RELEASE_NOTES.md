@@ -1,3 +1,25 @@
+# Memento Agent 0.7.3 - 稳定进程交互 / Stable Process Interaction
+
+## 简体中文
+
+`0.7.3` 解决了实时刷新导致进程行和操作菜单移动的问题。
+
+### 主要变化
+
+- **稳定操作目标：** 鼠标或键盘焦点进入高占用进程列表后，暂存当前进程顺序和数据；刷新继续更新页面其他状态，但不会移动当前操作入口。离开列表后恢复实时数据。
+- **回归覆盖：** 四视口 UI 冒烟测试验证操作菜单跨刷新周期保持打开。
+
+## English
+
+`0.7.3` fixes process rows and action menus moving while live monitoring refreshes.
+
+### Highlights
+
+- **Stable targets:** When the pointer or keyboard focus enters the high-usage process panel, the current process order and values are held while the rest of the Overview keeps refreshing. Live process data resumes when focus leaves the panel.
+- **Regression coverage:** Four-viewport UI smoke coverage keeps an action menu open across a refresh interval.
+
+---
+
 # Memento Agent 0.7.2 - 进程监控 / Process Monitoring
 
 ## 简体中文

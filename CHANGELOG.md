@@ -8,6 +8,18 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.7.3 - 2026-09-23
+
+### English
+
+- Stabilized the live Overview process list during pointer and keyboard interaction. The current row order and action menu remain fixed across refresh ticks, then resume live updates when focus leaves the panel.
+- Added a UI smoke assertion that keeps a process action menu open across a refresh interval.
+
+### 简体中文
+
+- 稳定概览实时进程列表的交互：鼠标或键盘焦点位于列表内时，当前行顺序和操作菜单跨刷新保持不变，离开后恢复实时更新。
+- 新增 UI 冒烟断言，验证进程操作菜单跨刷新周期仍保持打开。
+
 ## 0.7.2 - 2026-09-23
 
 ### English

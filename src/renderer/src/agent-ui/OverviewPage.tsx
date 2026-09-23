@@ -183,6 +183,8 @@ export function OverviewPage({
   const [processSort, setProcessSort] = useState<'name' | 'cpu' | 'memory'>('cpu')
   const [processSortDirection, setProcessSortDirection] = useState<'asc' | 'desc'>('desc')
   const [openProcessMenu, setOpenProcessMenu] = useState<number | null>(null)
+  const [processInteractionActive, setProcessInteractionActive] = useState(false)
+  const [heldProcesses, setHeldProcesses] = useState<OverviewMetrics['processes']>([])
   const [cpuHistory, setCpuHistory] = useState<number[]>([])
   const [gpuHistory, setGpuHistory] = useState<number[]>([])
   const [memoryHistory, setMemoryHistory] = useState<number[]>([])
@@ -198,9 +200,13 @@ export function OverviewPage({
     setNetworkSentHistory((current) => boundedHistory(current, metrics.network.sentBytesPerSecond))
   }, [metrics])
 
+  useEffect(() => {
+    if (!processInteractionActive) setHeldProcesses(metrics?.processes ?? [])
+  }, [metrics?.processes, processInteractionActive])
+
   const processes = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase()
-    return [...(metrics?.processes ?? [])]
+    return [...(processInteractionActive ? heldProcesses : metrics?.processes ?? [])]
       .filter((process) => !normalized || `${process.name} ${process.command} ${process.pid}`.toLocaleLowerCase().includes(normalized))
       .sort((left, right) => {
         const result = processSort === 'name'
@@ -210,7 +216,22 @@ export function OverviewPage({
             : right.memoryBytes - left.memoryBytes
         return processSortDirection === 'asc' ? -result : result
       })
-  }, [language, metrics?.processes, processSort, processSortDirection, query])
+  }, [heldProcesses, language, metrics?.processes, processInteractionActive, processSort, processSortDirection, query])
+
+  const beginProcessInteraction = (): void => {
+    setHeldProcesses(metrics?.processes ?? [])
+    setProcessInteractionActive(true)
+  }
+
+  const endProcessInteraction = (): void => {
+    setProcessInteractionActive(false)
+    setOpenProcessMenu(null)
+  }
+
+  const closeProcessMenu = (): void => {
+    setOpenProcessMenu(null)
+    setProcessInteractionActive(false)
+  }
 
   const chooseProcessSort = (sort: 'name' | 'cpu' | 'memory'): void => {
     if (sort === processSort) {
@@ -226,7 +247,7 @@ export function OverviewPage({
       `确定强制退出“${process.name}”（PID ${process.pid}）吗？未保存的数据可能丢失。`,
       `Force quit “${process.name}” (PID ${process.pid})? Unsaved data may be lost.`
     ))) return
-    setOpenProcessMenu(null)
+    closeProcessMenu()
     onTerminateProcess(process, force)
   }
 
@@ -325,7 +346,16 @@ export function OverviewPage({
         </article>
       </div>
 
-      <section className="overview-process-panel">
+      <section
+        className="overview-process-panel"
+        onPointerEnter={beginProcessInteraction}
+        onPointerLeave={endProcessInteraction}
+        onFocusCapture={beginProcessInteraction}
+        onBlurCapture={(event) => {
+          const nextTarget = event.relatedTarget
+          if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) endProcessInteraction()
+        }}
+      >
         <header>
           <div><strong>{text('高占用进程', 'Top processes')}</strong><span>{text(`${metrics.processes.length} 个进程样本`, `${metrics.processes.length} sampled processes`)}</span></div>
           <label className="search-field overview-process-search"><Search size={15} /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={text('搜索名称或 PID', 'Search name or PID')} aria-label={text('搜索进程', 'Search processes')} /></label>
@@ -349,11 +379,11 @@ export function OverviewPage({
               <span className={process.cpuPercent >= 80 ? 'is-hot' : ''}><i className="process-meter"><b style={{ width: `${Math.min(100, process.cpuPercent)}%` }} /></i><strong>{process.cpuPercent.toFixed(1)}%</strong></span>
               <span><strong>{formatBytes(process.memoryBytes)}</strong><small>{process.memoryPercent.toFixed(1)}%</small></span>
               <span className="overview-process-actions">
-                <button type="button" className="icon-button process-menu-button" onClick={() => setOpenProcessMenu((current) => current === process.pid ? null : process.pid)} title={text('进程操作', 'Process actions')} aria-label={text(`打开 ${process.name} 的操作`, `Open actions for ${process.name}`)} aria-expanded={openProcessMenu === process.pid}><MoreHorizontal size={15} /></button>
+                <button type="button" className="icon-button process-menu-button" onClick={() => { beginProcessInteraction(); setOpenProcessMenu((current) => current === process.pid ? null : process.pid) }} title={text('进程操作', 'Process actions')} aria-label={text(`打开 ${process.name} 的操作`, `Open actions for ${process.name}`)} aria-expanded={openProcessMenu === process.pid}><MoreHorizontal size={15} /></button>
                 {openProcessMenu === process.pid && <span className="process-action-menu" role="menu">
-                  <button type="button" role="menuitem" onClick={() => { setOpenProcessMenu(null); onAskProcess(process) }}><BrainCircuit size={13} />{text('询问 AI', 'Ask AI')}</button>
-                  <button type="button" role="menuitem" onClick={() => { setOpenProcessMenu(null); onCopyProcessName(process.name) }}><Copy size={13} />{text('复制进程名称', 'Copy name')}</button>
-                  <button type="button" role="menuitem" onClick={() => { setOpenProcessMenu(null); onCopyProcessPid(process.pid) }}><Copy size={13} />{text('复制进程 PID', 'Copy PID')}</button>
+                  <button type="button" role="menuitem" onClick={() => { closeProcessMenu(); onAskProcess(process) }}><BrainCircuit size={13} />{text('询问 AI', 'Ask AI')}</button>
+                  <button type="button" role="menuitem" onClick={() => { closeProcessMenu(); onCopyProcessName(process.name) }}><Copy size={13} />{text('复制进程名称', 'Copy name')}</button>
+                  <button type="button" role="menuitem" onClick={() => { closeProcessMenu(); onCopyProcessPid(process.pid) }}><Copy size={13} />{text('复制进程 PID', 'Copy PID')}</button>
                   {!process.isSystem && <>
                     <button type="button" role="menuitem" onClick={() => confirmTerminate(process, false)}><Power size={13} />{text('退出进程', 'Quit process')}</button>
                     <button type="button" role="menuitem" className="is-danger" onClick={() => confirmTerminate(process, true)}><Zap size={13} />{text('强制退出', 'Force quit')}</button>

@@ -201,7 +201,7 @@ Concurrent Agent starts are kept in a Renderer workspace list even when they use
 - Storage, service, and application pages open their own ignored-item tab directly; Settings retains the combined manager.
 - Preload initialization must not touch the DOM before `DOMContentLoaded`; losing the preload API silently activates browser demo data instead of real device data.
 
-Web development mode uses deterministic demo scan data and an in-memory demo Provider so every page and dialog can be visually tested without touching the computer. Overview process rows support name/CPU/memory sorting, CPU and memory Top 5 charts, local Agent prompts, name/PID clipboard actions, and user-process termination. The main process revalidates the live PID, owner, and system path before allowing graceful or force termination; system and other-user processes remain protected.
+Web development mode uses deterministic demo scan data and an in-memory demo Provider so every page and dialog can be visually tested without touching the computer. Overview process rows support name/CPU/memory sorting, CPU and memory Top 5 charts, local Agent prompts, name/PID clipboard actions, and user-process termination. The process list holds its current snapshot while the pointer or keyboard focus is inside the panel, so the live monitor cannot move an action target mid-interaction. The main process revalidates the live PID, owner, and system path before allowing graceful or force termination; system and other-user processes remain protected.
 
 ## 9. Adding a Capability
 

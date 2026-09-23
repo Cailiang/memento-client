@@ -122,6 +122,10 @@ try {
           if (!await page.locator('.process-action-menu').getByRole('menuitem', { name: '退出进程' }).isVisible()) {
             failures.push(`${viewportName}/overview: user process action menu is missing Quit`)
           }
+          await page.waitForTimeout(2_700)
+          if (!await page.locator('.process-action-menu').isVisible()) {
+            failures.push(`${viewportName}/overview: process action menu moved or closed during live refresh`)
+          }
         }
         if (await page.locator('.nav-list .nav-button').count() !== 4) {
           failures.push(`${viewportName}/overview: primary navigation is not limited to four product modules`)
