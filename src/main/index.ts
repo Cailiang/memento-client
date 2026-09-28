@@ -97,6 +97,7 @@ import {
   type RegisteredTerminalFix,
   type TerminalFixBackup
 } from './terminal-fixes'
+import { shouldKeepWindowInTray } from './window-lifecycle'
 
 const execFileAsync = promisify(execFile)
 let registeredActions = new Map<string, RegisteredAction>()
@@ -532,11 +533,16 @@ function installAppUpdate(): void {
   if (updateState?.phase !== 'downloaded') {
     throw new Error(mainText('新版本尚未下载完成', 'The update has not finished downloading.'))
   }
+  // quitAndInstall closes the BrowserWindow before the app's before-quit event.
+  // Mark the quit first so the close-to-tray handler cannot hide the window and
+  // prevent Squirrel.Mac from completing the installation.
+  isQuitting = true
   nextUpdateState({ type: 'installing' })
   setImmediate(() => {
     try {
       autoUpdater.quitAndInstall(false, true)
     } catch (error) {
+      isQuitting = false
       nextUpdateState({ type: 'error', message: updaterErrorMessage(error) })
     }
   })
@@ -940,7 +946,7 @@ function createWindow(): void {
 
   window.once('ready-to-show', () => window.show())
   window.on('close', (event) => {
-    if (!isQuitting && appSettings.closeToTray && refreshTray()) {
+    if (shouldKeepWindowInTray(isQuitting, appSettings.closeToTray) && refreshTray()) {
       event.preventDefault()
       window.hide()
       void app.dock?.hide()

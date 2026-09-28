@@ -102,7 +102,7 @@ Memento 使用 Electron 应用数据目录中的本地 SQLite 数据库保存设
 | --- | --- | --- |
 | macOS | Intel x64、Apple Silicon arm64 | DMG |
 
-Memento 每小时自动检查更新。发现新版本后会在后台下载，下载完成后在侧边栏版本号旁显示“更新”按钮；点击后直接安装并重启，不再弹出单独的更新提示。
+Memento 每小时自动检查更新。发现新版本后会在后台下载，下载完成后在侧边栏版本号旁显示“更新”按钮；点击后直接安装并重启，不再弹出单独的更新提示。即使开启“关闭后驻留菜单栏”，更新时也会明确退出应用，不会被驻留逻辑拦截。
 
 每个 GitHub Release 包含 2 个 DMG、2 个已签名应用的更新 ZIP、2 个 blockmap、`latest-mac.yml` 和 `SHA256SUMS.txt`，共 8 个资产；校验清单严格只包含 2 个 DMG。Windows/Linux 构建只作为临时 GitHub Actions 可移植性产物，不进入公开 Release。macOS 安装包会使用项目 Developer ID Application 证书签名，经 Apple 公证并装订票据后再上传。
 

@@ -1,3 +1,25 @@
+# Memento Agent 0.7.6 - 更新安装退出修复 / Update Installation Exit Fix
+
+## 简体中文
+
+`0.7.6` 修复更新安装时应用没有真正退出的问题。
+
+### 主要变化
+
+- **菜单栏驻留兼容：** 开始更新前明确标记应用正在退出，避免“关闭后驻留菜单栏”拦截 `quitAndInstall` 的窗口关闭流程。
+- **失败恢复：** 如果更新器同步抛出错误，会恢复正常窗口关闭行为并显示错误状态。
+
+## English
+
+`0.7.6` fixes updates that remained stuck in the Installing state.
+
+### Highlights
+
+- **Tray compatibility:** Mark the app as quitting before `quitAndInstall` so Keep in menu bar cannot intercept the updater's shutdown.
+- **Failure recovery:** Restore normal window-close behavior when the updater throws synchronously and expose the error state.
+
+---
+
 # Memento Agent 0.7.5 - macOS 磁盘容量一致性 / macOS Disk Capacity Alignment
 
 ## 简体中文

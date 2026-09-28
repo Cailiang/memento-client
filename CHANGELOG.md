@@ -8,6 +8,16 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.7.6 - 2026-09-28
+
+### English
+
+- Fixed the macOS updater remaining in the Installing state when Keep in menu bar was enabled. Update installation now marks the process as quitting before `quitAndInstall`, so the tray close handler cannot intercept the updater shutdown.
+
+### 简体中文
+
+- 修复开启“关闭后驻留菜单栏”时更新一直停留在“安装中”的问题。开始安装前会先标记应用即将退出，避免驻留逻辑拦截更新器关闭流程。
+
 ## 0.7.5 - 2026-09-28
 
 ### English

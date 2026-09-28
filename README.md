@@ -102,7 +102,7 @@ The `Release` GitHub Actions workflow builds the following packages from a match
 | --- | --- | --- |
 | macOS | Intel x64, Apple Silicon arm64 | DMG |
 
-Memento checks for updates hourly. A new version downloads in the background, then an **Update** button appears beside the sidebar version; selecting it installs the downloaded package and restarts the app without a separate update popup.
+Memento checks for updates hourly. A new version downloads in the background, then an **Update** button appears beside the sidebar version; selecting it installs the downloaded package and restarts the app without a separate update popup. The updater exits the app explicitly even when the optional keep-in-menu-bar setting is enabled.
 
 Each GitHub Release contains two DMGs, two signed-app updater ZIPs, two blockmaps, `latest-mac.yml`, and `SHA256SUMS.txt` (eight assets total). The checksum manifest contains exactly the two DMGs. Windows and Linux builds remain temporary GitHub Actions artifacts for portability checks and are excluded from public Release collection. macOS packages are signed with the project's Developer ID Application certificate, notarized by Apple, and stapled before upload.
 
