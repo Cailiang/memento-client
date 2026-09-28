@@ -122,7 +122,7 @@ function demoOperationCopy(
   if (kind.startsWith('stop-')) {
     return { label: 'Stop service', consequence: 'Stop the registered background service.' }
   }
-  if (kind === 'trash' || kind === 'trash-home-artifact') {
+  if (kind === 'trash' || kind === 'trash-home-artifact' || kind === 'trash-project-artifact') {
     return { label: 'Move to Trash', consequence: 'Move the registered item to the Trash.' }
   }
   if (kind === 'brew-cleanup') {
@@ -403,6 +403,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
   const [view, setView] = useState<AgentViewKey>('overview')
   const [scanBusy, setScanBusy] = useState(false)
   const [progress, setProgress] = useState<ScanProgress | null>(null)
+  const [scanError, setScanError] = useState<string | null>(null)
   const [activeRun, setActiveRun] = useState<AgentRunRecord | null>(null)
   const [workspaceConversationIds, setWorkspaceConversationIds] = useState<string[]>([])
   const [runStatusMessage, setRunStatusMessage] = useState('')
@@ -507,6 +508,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
   const scanNow = useCallback(async (languageOverride?: AppSettings['language']): Promise<ScanResult | null> => {
     if (scanBusy) return null
     setScanBusy(true)
+    setScanError(null)
     try {
       const language = languageOverride ?? settings.language
       const next = window.memento ? await window.memento.scan(language) : localizedDemoResult(language)
@@ -514,9 +516,11 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       setResult(next)
       return next
     } catch (error) {
-      setToast(error instanceof Error
+      const message = error instanceof Error
         ? error.message
-        : (languageOverride ?? settings.language) === 'en-US' ? 'Computer health scan failed.' : '电脑体检失败')
+        : (languageOverride ?? settings.language) === 'en-US' ? 'Computer health scan failed.' : '电脑体检失败'
+      setScanError(message)
+      setToast(message)
       return null
     } finally {
       setScanBusy(false)
@@ -1732,7 +1736,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
         onIgnore={setPendingIgnore}
         onManageIgnored={openIgnoredManager}
       />}
-      {view === 'apps' && <ApplicationsPage applications={result?.applications ?? []} openingId={openingApplicationId} removingId={removingApplicationId} restoreTarget={restoreTarget?.view === 'apps' ? restoreTarget : null} onRestoreComplete={() => setRestoreTarget(null)} ignoredCount={settings.applicationWhitelist.length} onOpen={(application) => void openApplication(application)} onUninstall={setPendingUninstall} onIgnore={setPendingApplicationIgnore} onManageIgnored={() => openIgnoredManager('applications')} onAgentPrompt={(prompt, origin) => startAgentRun(prompt, { isolated: true, origin: { view: 'apps', ...origin } })} />}
+      {view === 'apps' && <ApplicationsPage applications={result?.applications ?? []} hasResult={Boolean(result)} loading={scanBusy || (!result && !scanError)} progress={progress} error={scanError} openingId={openingApplicationId} removingId={removingApplicationId} restoreTarget={restoreTarget?.view === 'apps' ? restoreTarget : null} onRestoreComplete={() => setRestoreTarget(null)} ignoredCount={settings.applicationWhitelist.length} onOpen={(application) => void openApplication(application)} onUninstall={setPendingUninstall} onIgnore={setPendingApplicationIgnore} onManageIgnored={() => openIgnoredManager('applications')} onAgentPrompt={(prompt, origin) => startAgentRun(prompt, { isolated: true, origin: { view: 'apps', ...origin } })} onScan={() => void scanNow()} />}
       {view === 'disk' && <DiskAnalysisPage result={diskUsage} progress={diskUsageProgress} busy={diskUsageBusy} error={diskUsageError} onScan={() => void scanDiskUsage()} onCancel={cancelDiskUsageScan} onReveal={revealDiskUsageNode} onAskAI={(node) => void askDiskUsageNode(node)} onRequestTrash={setPendingDiskUsageTrash} />}
       {view === 'history' && <HistoryPage runs={runs} maintenanceRuns={maintenanceRuns} onOpenRun={(run) => { setActiveRun(run); activeRunId.current = run.id; setSelectedPlanIds(new Set()); setView('agent') }} onDeleteRuns={setPendingHistoryDelete} onDeleteMaintenanceRuns={setPendingMaintenanceDelete} onRevealRecovery={revealMaintenanceRecovery} />}
       {view === 'settings' && <SettingsPage settings={settings} providers={providers} appVersion={appVersion} updateState={updateState} onUpdateSettings={updateSettings} onDiscoverModels={discoverProviderModels} onSaveProvider={saveProvider} onTestProvider={testProvider} onDeleteProvider={deleteProvider} onSetDefaultProvider={setDefaultProvider} onImportLocalAi={importLocalAiConfigurations} onImportCcSwitch={importCcSwitchProviders} onCheckUpdates={checkForUpdates} onManageIgnored={() => openIgnoredManager()} onToast={setToast} />}

@@ -1,3 +1,29 @@
+# Memento Agent 0.7.7 - 开发者产物与应用加载 / Developer Artifacts and Application Loading
+
+## 简体中文
+
+`0.7.7` 补齐了开发者项目构建产物清理，并让应用管理在扫描期间明确反馈状态。
+
+### 主要变化
+
+- **开发者项目产物：** 在常见项目目录中识别 `node_modules`、`target`、`build`、`dist`、`.build`、`.next`、`.turbo`、覆盖率和其他可重建产物，按项目显示大小和路径。
+- **安全边界：** 最近活动目录、包含嵌套 Git 仓库或部署密钥的产物不会进入默认清理；移动到废纸篓前会重新校验项目根目录、目录类型和修改时间。
+- **规则外线索：** 已注册目标的弱线索现在提供明确的“移到废纸篓”确认操作，同时仍保持规则外标签和 AI 解释入口。
+- **应用加载：** 首次扫描显示阶段信息与骨架动画；已有结果刷新时继续保留当前列表，并显示紧凑进度状态；失败时可直接重试。
+
+## English
+
+`0.7.7` adds developer project artifact cleanup and makes application inventory loading explicit.
+
+### Highlights
+
+- **Developer project artifacts:** Discover `node_modules`, `target`, `build`, `dist`, `.build`, `.next`, `.turbo`, coverage, and other rebuildable outputs under bounded project roots, with project and path context.
+- **Safety boundaries:** Recently active directories and outputs containing nested Git repositories or deployment key material are protected from default cleanup. The main process revalidates the project root, directory type, and modification time before moving an artifact to Trash.
+- **Outside-rule clues:** Weak clues with registered targets now expose an explicit confirmed Move to Trash action while retaining their outside-rule label and AI explanation entry.
+- **Application loading:** The first scan shows phase text and animated skeleton cards; later refreshes keep the current list visible and add compact progress feedback. Scan failures offer a direct retry.
+
+---
+
 # Memento Agent 0.7.6 - 更新安装退出修复 / Update Installation Exit Fix
 
 ## 简体中文

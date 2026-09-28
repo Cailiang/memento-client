@@ -41,6 +41,7 @@ export type ActionKind =
   | 'trash-launch-agent-config'
   | 'trash-service-software'
   | 'trash-service-directory'
+  | 'trash-project-artifact'
   | 'terminate-process'
   | 'terminate-process-force'
   | 'brew-cleanup'

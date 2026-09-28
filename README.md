@@ -10,8 +10,8 @@ Memento is a local desktop maintenance agent. It combines deterministic device i
 
 - **Agent:** describe a maintenance goal in plain language, inspect structured results, review a proposed plan, and verify the outcome.
 - **Overview:** inspect health, CPU, GPU, memory, battery, disk, network, and high-usage processes in one quiet live workspace. Disk availability follows macOS's native capacity estimate, including purgeable space, and is displayed in decimal GB. Sort processes by name, CPU, or memory, view larger CPU/memory Top 5 charts, ask the local Agent about a process and receive confirmable quit or force-quit actions, copy its name/PID, and quit only non-system processes with a revalidated action. The process list holds its current order while you interact with it so live refreshes do not move the action menu.
-- **Cleanup:** scan rebuildable data by system, application, browser, developer, log, and device categories; safe items are preselected while review items and outside-rule clues remain separate.
-- **Applications:** inspect installed applications and metadata, open or ignore an app, and move supported apps to Trash after confirmation.
+- **Cleanup:** scan rebuildable data by system, application, browser, developer, log, and device categories; safe items are preselected while review items remain opt-in. Outside-rule clues expose a separately confirmed move-to-Trash action when a registered target is available.
+- **Applications:** inspect installed applications and metadata, see a staged loading view while the inventory is scanned, open or ignore an app, and move supported apps to Trash after confirmation.
 - **Disk analysis:** browse storage hierarchically and use validated opaque node operations to reveal a directory, ask AI for an explanation, or move it to Trash.
 - **History:** audit every direct, Agent, disk-browser, terminal, and recovery operation in one local maintenance ledger; Agent conversations remain available on a separate tab.
 - **Settings:** manage model providers, automatic background updates, window behavior, ignored items, theme, and language.

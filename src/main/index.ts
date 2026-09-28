@@ -76,6 +76,7 @@ import {
   isAllowedStorageCleanupTarget
 } from './storage-cleanup'
 import { validateHiddenHomeArtifactCleanupTarget } from './home-hidden-cleanup'
+import { validateProjectArtifactCleanupTarget } from './project-artifacts'
 import { brewCleanupVersionTargets, isSafeBrewVersion } from './brew-cleanup'
 import { reconcileScanCapabilities } from './scan-capability-reconciliation'
 import {
@@ -255,6 +256,7 @@ function registeredActionRecoveryMode(action: RegisteredAction | undefined): 'no
   return action && (
     action.kind === 'trash' ||
     action.kind === 'trash-home-artifact' ||
+    action.kind === 'trash-project-artifact' ||
     action.kind === 'trash-disk-usage' ||
     action.kind === 'trash-launch-agent-config' ||
     action.kind === 'trash-service-software' ||
@@ -1003,6 +1005,23 @@ async function executeRegisteredAction(action: RegisteredAction): Promise<void> 
       throw new Error(mainText(
         '隐藏项目仍在原位置，请重新扫描',
         'The hidden item is still in its original location. Scan again.'
+      ))
+    }
+    return
+  }
+
+  if (action.kind === 'trash-project-artifact') {
+    const target = await validateProjectArtifactCleanupTarget(
+      action.target,
+      action.projectRoot,
+      action.expectedModifiedAtMs,
+      action.expectedKind
+    )
+    await shell.trashItem(target)
+    if (existsSync(target)) {
+      throw new Error(mainText(
+        '项目构建产物仍在原位置，请重新扫描',
+        'The project artifact is still in its original location. Scan again.'
       ))
     }
     return

@@ -100,6 +100,14 @@ try {
       if (pageName !== 'agent' && await page.locator('.page-heading').count()) {
         failures.push(`${viewportName}/${pageName}: redundant page heading is still rendered`)
       }
+      if (pageName === 'apps' && await page.locator('.app-loading-state').count()) {
+        if (!await page.locator('.app-loading-state[role="status"]').isVisible()) {
+          failures.push(`${viewportName}/apps: initial inventory loading state is not visible`)
+        }
+        if (await page.locator('.app-skeleton-card').count() < 4) {
+          failures.push(`${viewportName}/apps: application skeleton cards are missing during the initial scan`)
+        }
+      }
       if (pageName === 'overview') {
         if (await page.locator('.overview-card').count() !== 8) {
           failures.push(`${viewportName}/overview: expected eight live metric cards`)
@@ -521,6 +529,9 @@ try {
 
   await page.getByRole('tab', { name: /需要确认/ }).click()
   const reviewRow = page.locator('.cleanup-row').filter({ hasText: '.lingma' })
+  if (!await reviewRow.locator('.cleanup-single-action').isVisible()) {
+    failures.push('health: outside-rule clue does not expose its confirmed Trash action')
+  }
   await reviewRow.getByRole('button', { name: /让 AI 解释/ }).click()
   const returnButton = page.getByRole('button', { name: '返回存储空间' })
   await returnButton.waitFor()

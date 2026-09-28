@@ -8,6 +8,20 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.7.7 - 2026-09-28
+
+### English
+
+- Added bounded developer project artifact discovery for rebuildable folders such as `node_modules`, `target`, `build`, `dist`, `.build`, framework caches, test coverage, and project DerivedData. Project roots are inferred from common development folders and manifests; recent outputs and directories containing nested repositories or deployment key material remain protected from default selection.
+- Outside-rule clues with a registered target can now be explicitly moved to Trash after confirmation instead of being display-only. The main process revalidates the target, project boundary, type, modification time, and protected entries before moving it.
+- Added a staged Applications loading surface with animated skeleton cards and scan progress. Existing results remain visible during later refreshes, and scan failures provide a retry action.
+
+### 简体中文
+
+- 新增有边界的开发者项目产物扫描，识别 `node_modules`、`target`、`build`、`dist`、`.build`、框架缓存、测试覆盖率和项目 DerivedData 等可重建目录。项目根目录来自常见开发目录和项目清单；近期产物、包含嵌套仓库或部署密钥的目录会受保护，不会默认选择。
+- 有已注册目标的“规则外线索”现在可以在明确确认后移到废纸篓，不再只是展示。主进程执行前会重新校验目标、项目边界、类型、修改时间和受保护内容。
+- 应用管理新增分阶段加载界面、骨架卡片和扫描进度；后续刷新会保留已有列表，扫描失败时提供重试入口。
+
 ## 0.7.6 - 2026-09-28
 
 ### English

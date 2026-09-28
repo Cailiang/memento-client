@@ -55,6 +55,11 @@ import {
   resolveCleanupRules,
   type ResolvedCleanupRule
 } from './cleanup-rules'
+import {
+  discoverProjectArtifacts,
+  projectArtifactAgeDays,
+  type ProjectArtifact
+} from './project-artifacts'
 
 const execFileAsync = promisify(execFile)
 const HOME = os.homedir()
@@ -70,7 +75,7 @@ function t(language: AppLanguage, chinese: string, english: string): string {
 
 export type RegisteredAction =
   | {
-      kind: Exclude<ActionKind, 'trash-launch-agent-config' | 'trash-service-software' | 'trash-service-directory' | 'brew-cleanup' | 'delete-storage-group' | 'trash-home-artifact' | 'trash-disk-usage' | 'terminate-process' | 'terminate-process-force'>
+      kind: Exclude<ActionKind, 'trash-launch-agent-config' | 'trash-service-software' | 'trash-service-directory' | 'trash-project-artifact' | 'brew-cleanup' | 'delete-storage-group' | 'trash-home-artifact' | 'trash-disk-usage' | 'terminate-process' | 'terminate-process-force'>
       target: string
     }
   | {
@@ -86,6 +91,13 @@ export type RegisteredAction =
   | {
       kind: 'trash-home-artifact'
       target: string
+      expectedModifiedAtMs: number
+      expectedKind: 'directory'
+    }
+  | {
+      kind: 'trash-project-artifact'
+      target: string
+      projectRoot: string
       expectedModifiedAtMs: number
       expectedKind: 'directory'
     }
@@ -1301,6 +1313,81 @@ async function scanHiddenHomeArtifacts(
     })
 }
 
+async function scanProjectArtifacts(
+  actions: Map<string, RegisteredAction>,
+  revealTargets: Map<string, string>,
+  language: AppLanguage
+): Promise<ScanCandidate[]> {
+  const discovered = await discoverProjectArtifacts(HOME)
+  const measured = await mapLimit(discovered.slice(0, 180), 6, async (artifact) => {
+    try {
+      const sizeBytes = await getPathSize(artifact.target)
+      return sizeBytes >= 20 * 1024 * 1024 ? { artifact, sizeBytes } : null
+    } catch {
+      return null
+    }
+  })
+
+  return measured
+    .filter((item): item is NonNullable<typeof item> => item !== null)
+    .sort((left, right) => right.sizeBytes - left.sizeBytes)
+    .slice(0, 80)
+    .map(({ artifact, sizeBytes }) => registerCandidate(
+      actions,
+      {
+        section: 'storage',
+        cleanupCategory: 'developer',
+        name: artifact.artifactName,
+        subtitle: t(language, `${artifact.projectName} · ${artifact.label.zh}`, `${artifact.projectName} · ${artifact.label.en}`),
+        description: t(
+          language,
+          '项目中的可重建依赖、构建或测试产物。移到废纸篓后，开发工具会在需要时重新生成；项目源码和版本控制文件不会处理。',
+          'A rebuildable dependency, build, or test artifact inside a project. Moving it to the Trash lets the toolchain regenerate it later; source and version-control files are untouched.'
+        ),
+        sizeBytes,
+        ageDays: projectArtifactAgeDays(artifact),
+        risk: 'review',
+        status: t(language, '开发者产物', 'Developer artifact'),
+        location: displayPath(artifact.target),
+        evidence: [
+          t(language, `项目：${displayPath(artifact.projectRoot)}`, `Project: ${displayPath(artifact.projectRoot)}`),
+          t(language, `占用 ${formatBytesForEvidence(sizeBytes)}`, `Size: ${formatBytesForEvidence(sizeBytes)}`),
+          t(language, `最近修改于 ${projectArtifactAgeDays(artifact)} 天前`, `Last modified ${projectArtifactAgeDays(artifact)} days ago`)
+        ],
+        action: {
+          kind: 'trash-project-artifact',
+          label: t(language, '移到废纸篓', 'Move to Trash'),
+          consequence: t(
+            language,
+            '整个构建产物目录会移到废纸篓；下次构建或安装依赖时可能需要重新生成或下载。',
+            'The project artifact directory moves to the Trash. The next build or dependency install may need to regenerate or download it.'
+          ),
+          reversible: true,
+          estimatedBytes: sizeBytes
+        }
+      },
+      undefined,
+      [{
+        action: {
+          kind: 'trash-project-artifact',
+          label: t(language, '移到废纸篓', 'Move to Trash'),
+          consequence: t(language, '移到废纸篓后可从 Finder 恢复。', 'Move to Trash and restore it from Finder if needed.'),
+          reversible: true,
+          estimatedBytes: sizeBytes
+        },
+        registeredAction: {
+          kind: 'trash-project-artifact',
+          target: artifact.target,
+          projectRoot: artifact.projectRoot,
+          expectedModifiedAtMs: artifact.modifiedAtMs,
+          expectedKind: artifact.kind
+        }
+      }],
+      revealTargets,
+      artifact.target
+    ))
+}
+
 async function scanBrewVersions(
   actions: Map<string, RegisteredAction>,
   revealTargets: Map<string, string>,
@@ -2308,6 +2395,12 @@ export async function runFullScan(
       return []
     })
 
+  const projectArtifactsPromise = scanProjectArtifacts(actions, revealTargets, language)
+    .catch((error: Error) => {
+      addFailure('storage', 'scan.storage.failed', t(language, `项目构建产物扫描未完成：${error.message}`, `Project artifact scan did not complete: ${error.message}`))
+      return []
+    })
+
   const applicationsStarted = performance.now()
   const applicationsPromise = scanApplications(actions, revealTargets, language)
     .catch((error: Error) => {
@@ -2319,8 +2412,8 @@ export async function runFullScan(
       reportSectionComplete('applications')
     })
 
-  const storagePromise = Promise.all([storageBasePromise, applicationsPromise])
-    .then(async ([storage, applicationScan]) => {
+  const storagePromise = Promise.all([storageBasePromise, applicationsPromise, projectArtifactsPromise])
+    .then(async ([storage, applicationScan, projectArtifacts]) => {
       try {
         const hiddenHome = await scanHiddenHomeArtifacts(
           actions,
@@ -2328,7 +2421,7 @@ export async function runFullScan(
           applicationScan.applications,
           language
         )
-        return [...storage, ...hiddenHome].sort(
+        return [...storage, ...projectArtifacts, ...hiddenHome].sort(
           (left, right) => (right.sizeBytes ?? 0) - (left.sizeBytes ?? 0)
         )
       } catch (error) {

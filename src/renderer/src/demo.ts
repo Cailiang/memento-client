@@ -33,6 +33,11 @@ const APPLICATION_TRUST = {
   reasonCodes: ['registered-local-operation'] as const,
   estimateQuality: 'approximate' as const
 }
+const PROJECT_ARTIFACT_TRUST = {
+  confidence: 'strong' as const,
+  reasonCodes: ['registered-local-operation', 'measured-local-target'] as const,
+  estimateQuality: 'exact' as const
+}
 
 export function localizedDemoOverviewMetrics(): OverviewMetrics {
   return {
@@ -251,6 +256,28 @@ export const demoResult: ScanResult = {
         label: '永久清理',
         consequence: '缓存会被永久删除并立即释放空间，后续安装依赖时可能重新下载。',
         reversible: false
+      }
+    },
+    {
+      ...PROJECT_ARTIFACT_TRUST,
+      id: 'demo-project-node-modules',
+      section: 'storage',
+      cleanupCategory: 'developer',
+      name: 'node_modules',
+      subtitle: 'memento-client · Node.js 依赖目录',
+      location: '~/src/xdd/memento/memento-client/node_modules',
+      description: '项目中的可重建依赖目录。移到废纸篓后，npm install 会在需要时重新生成；项目源码不会处理。',
+      sizeBytes: 2.1 * GB,
+      ageDays: 9,
+      risk: 'review',
+      status: '开发者产物',
+      evidence: ['项目：~/src/xdd/memento/memento-client', '占用 2.1 GB', '最近修改于 9 天前'],
+      action: {
+        kind: 'trash-project-artifact',
+        label: '移到废纸篓',
+        consequence: '整个依赖目录会移到废纸篓；下次安装依赖时可能需要重新下载。',
+        reversible: true,
+        estimatedBytes: 2.1 * GB
       }
     },
     {
@@ -766,6 +793,13 @@ export function localizedDemoResult(language: AppLanguage): ScanResult {
       status: 'Reclaimable',
       evidence: ['Uses 4.6 GB', 'Last modified 37 days ago']
     },
+    'demo-project-node-modules': {
+      name: 'node_modules',
+      subtitle: 'memento-client · Node.js dependencies',
+      description: 'Rebuildable project dependencies. The source remains intact and npm can recreate this directory when needed.',
+      status: 'Developer artifact',
+      evidence: ['Project: ~/src/xdd/memento/memento-client', 'Uses 2.1 GB', 'Last modified 9 days ago']
+    },
     'demo-claude-cache': {
       name: 'Claude rebuildable caches',
       subtitle: '8 deterministic rule targets',
@@ -839,6 +873,7 @@ export function localizedDemoResult(language: AppLanguage): ScanResult {
   const actionCopy: Record<string, { label: string; consequence: string }> = {
     'demo-derived-data': { label: 'Clean permanently', consequence: 'The cache will be permanently deleted to release space immediately. Xcode recreates it during the next full build.' },
     'demo-npm': { label: 'Clean permanently', consequence: 'The cache will be permanently deleted to release space immediately. npm may download dependencies again later.' },
+    'demo-project-node-modules': { label: 'Move to Trash', consequence: 'The project dependency directory will move to the Trash. npm may download dependencies again later.' },
     'demo-claude-cache': { label: 'Clean listed caches', consequence: 'Only listed rebuildable cache folders are permanently removed. Claude may download content again.' },
     'demo-safari-cache': { label: 'Clean listed caches', consequence: 'Only Safari cache folders are removed. Browser profile data is preserved.' },
     'demo-sandbox-cache': { label: 'Clean permanently', consequence: 'Only this container cache folder is removed. Accounts, settings, and other container data are preserved.' },

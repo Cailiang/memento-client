@@ -4,12 +4,13 @@ import {
   ExternalLink,
   LockKeyhole,
   LoaderCircle,
+  RefreshCw,
   Search,
   Sparkles,
   Trash2
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { InstalledApplication } from '../../../shared/types'
+import type { InstalledApplication, ScanProgress } from '../../../shared/types'
 import { useI18n } from '../i18n'
 import type { PageRestoreTarget } from './HealthPage'
 import { formatBytes, relativeDate } from './utils'
@@ -79,6 +80,10 @@ export function ApplicationIcon({ application }: { application: Pick<InstalledAp
 
 export function ApplicationsPage({
   applications,
+  hasResult,
+  loading,
+  progress,
+  error,
   openingId,
   removingId,
   restoreTarget,
@@ -88,9 +93,14 @@ export function ApplicationsPage({
   onUninstall,
   onIgnore,
   onManageIgnored,
-  onAgentPrompt
+  onAgentPrompt,
+  onScan
 }: {
   applications: InstalledApplication[]
+  hasResult: boolean
+  loading: boolean
+  progress: ScanProgress | null
+  error: string | null
   openingId: string | null
   removingId: string | null
   restoreTarget: PageRestoreTarget | null
@@ -101,6 +111,7 @@ export function ApplicationsPage({
   onIgnore: (application: InstalledApplication) => void
   onManageIgnored: () => void
   onAgentPrompt: (prompt: string, origin: { itemId?: string; scrollTop: number }) => void
+  onScan: () => void
 }): React.JSX.Element {
   const { language, text } = useI18n()
   const [search, setSearch] = useState('')
@@ -113,6 +124,7 @@ export function ApplicationsPage({
     () => filterAndSortApplications(applications, search, filter, sort, language),
     [applications, filter, language, search, sort]
   )
+  const initialLoading = loading && !hasResult
 
   useEffect(() => {
     if (!restoreTarget || !pageRef.current) return
@@ -141,7 +153,9 @@ export function ApplicationsPage({
   return (
     <section ref={pageRef} className="page content-page is-active">
       <div className="page-command-bar">
-        <span className="page-command-summary">{text(`共 ${applications.length} 个应用，其中 ${manageable.length} 个可卸载，占用 ${formatBytes(totalBytes)}`, `${applications.length} applications, ${manageable.length} uninstallable, using ${formatBytes(totalBytes)}`)}</span>
+        <span className="page-command-summary">{initialLoading
+          ? <><LoaderCircle className="spinner" size={14} />{text('正在读取应用信息…', 'Reading application inventory…')}</>
+          : text(`共 ${applications.length} 个应用，其中 ${manageable.length} 个可卸载，占用 ${formatBytes(totalBytes)}`, `${applications.length} applications, ${manageable.length} uninstallable, using ${formatBytes(totalBytes)}`)}</span>
         <div className="page-command-actions">
           <button type="button" className="secondary-button" onClick={onManageIgnored}>
             <EyeOff size={16} />{text(`已忽略 ${ignoredCount} 项`, `${ignoredCount} ignored`)}
@@ -151,6 +165,16 @@ export function ApplicationsPage({
           </button>
         </div>
       </div>
+
+      {initialLoading ? (
+        <div className="app-loading-state" role="status" aria-live="polite">
+          <div className="app-loading-hero"><span className="app-loading-orb"><LoaderCircle className="spinner" size={20} /></span><div><strong>{text('正在扫描应用', 'Scanning applications')}</strong><p>{progress?.message ?? text('正在读取应用目录、版本和最近使用时间…', 'Reading application folders, versions, and recent usage…')}</p></div></div>
+          <div className="app-skeleton-grid" aria-hidden="true">{Array.from({ length: 6 }, (_, index) => <div className="app-skeleton-card" key={index}><i /><span /><small /><b /></div>)}</div>
+        </div>
+      ) : error && !hasResult ? (
+        <div className="app-loading-state app-loading-error" role="alert"><div className="app-loading-hero"><span className="app-loading-orb"><AppWindow size={20} /></span><div><strong>{text('应用扫描未完成', 'Application scan did not finish')}</strong><p>{error}</p></div></div><button type="button" className="secondary-button" onClick={onScan}><RefreshCw size={14} />{text('重新扫描', 'Scan again')}</button></div>
+      ) : <>
+      {loading && hasResult && <div className="app-scan-progress" role="status" aria-live="polite"><LoaderCircle className="spinner" size={14} /><span>{progress?.message ?? text('正在刷新应用列表…', 'Refreshing application inventory…')}</span></div>}
 
       <div className="toolbar">
         <label className="search-field">
@@ -211,6 +235,7 @@ export function ApplicationsPage({
       ) : (
         <div className="empty-filter is-visible"><div><strong>{text('没有匹配的应用', 'No matching applications')}</strong><p>{text('调整搜索或筛选条件。', 'Change the search or filter.')}</p></div></div>
       )}
+      </>}
     </section>
   )
 }

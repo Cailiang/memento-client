@@ -114,7 +114,7 @@ function CleanupRow({
       <div className="cleanup-row-actions">
         <button type="button" className="icon-button" onClick={() => onAgentPrompt(candidate)} title={text('让 AI 解释此项', 'Ask AI to explain')} aria-label={text(`让 AI 解释 ${candidate.name}`, `Ask AI to explain ${candidate.name}`)}><Sparkles size={15} /></button>
         <button type="button" className="icon-button" onClick={() => onIgnore(candidate)} title={text('忽略此项', 'Ignore item')} aria-label={text(`忽略 ${candidate.name}`, `Ignore ${candidate.name}`)}><EyeOff size={15} /></button>
-        {operation && !weak && <button type="button" className="icon-button cleanup-single-action" onClick={() => onDirectAction(candidate, operation)} title={operation.label} aria-label={`${operation.label}: ${candidate.name}`}><Trash2 size={15} /></button>}
+        {operation && <button type="button" className={`icon-button cleanup-single-action ${weak ? 'is-review' : ''}`} onClick={() => onDirectAction(candidate, operation)} title={operation.label} aria-label={`${operation.label}: ${candidate.name}`}><Trash2 size={15} /></button>}
       </div>
     </article>
   )
@@ -163,12 +163,12 @@ export function HealthPage({
   )
   const safeItems = useMemo(() => storage.filter(isSafeCleanup), [storage])
   const reviewItems = useMemo(() => storage.filter((item) => isActionableFinding(item) || isReviewClue(item)), [storage])
-  const reviewActionable = useMemo(() => reviewItems.filter(isActionableFinding), [reviewItems])
+  const reviewSelectable = useMemo(() => reviewItems.filter((item) => operations(item).length > 0), [reviewItems])
   const modeItems = storageMode === 'safe' ? safeItems : reviewItems
   const visibleItems = category === 'all'
     ? modeItems
     : modeItems.filter((item) => categoryForCandidate(item) === category)
-  const selectableItems = storageMode === 'safe' ? safeItems : reviewActionable
+  const selectableItems = storageMode === 'safe' ? safeItems : reviewSelectable
   const visibleSelectable = visibleItems.filter((item) => selectableItems.some((selectable) => selectable.id === item.id))
   const selectedItems = selectableItems.filter((item) => selectedIds.has(item.id))
   const selectedSelections = selectedItems.flatMap((candidate) => {
@@ -275,7 +275,7 @@ export function HealthPage({
           <small><ShieldCheck size={13} />{text(`${safeItems.length} 项通过内置规则和路径测量`, `${safeItems.length} items passed built-in rules and path measurement`)}</small>
         </div>
         <div className="cleanup-summary-stat"><span>{text('当前选择', 'Selected')}</span><strong>{formatBytes(selectedBytes)}</strong><small>{text(`${selectedItems.length} 项`, `${selectedItems.length} items`)}</small></div>
-        <div className="cleanup-summary-stat"><span>{text('需要确认', 'Review first')}</span><strong>{reviewItems.length}</strong><small>{text(`${reviewActionable.length} 项可操作 · ${reviewItems.length - reviewActionable.length} 条规则外线索`, `${reviewActionable.length} actionable · ${reviewItems.length - reviewActionable.length} outside-rule clues`)}</small></div>
+        <div className="cleanup-summary-stat"><span>{text('需要确认', 'Review first')}</span><strong>{reviewItems.length}</strong><small>{text(`${reviewSelectable.length} 项可操作 · ${reviewItems.length - reviewSelectable.length} 条仅供参考`, `${reviewSelectable.length} actionable · ${reviewItems.length - reviewSelectable.length} reference-only clues`)}</small></div>
       </div>
 
       <div className="cleanup-workspace">
