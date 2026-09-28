@@ -184,7 +184,8 @@ export function HealthPage({
   onSelectedIdsChange,
   onDirectTerminalFixes,
   onIgnore,
-  onManageIgnored
+  onManageIgnored,
+  standaloneTerminal = false
 }: {
   result: ScanResult | null
   settings: AppSettings
@@ -204,10 +205,11 @@ export function HealthPage({
   onDirectTerminalFixes: (findings: TerminalFinding[]) => void
   onIgnore: (candidate: ScanCandidate) => void
   onManageIgnored: (kind: 'storage' | 'services') => void
+  standaloneTerminal?: boolean
 }): React.JSX.Element {
   const { language, text } = useI18n()
   const pageRef = useRef<HTMLElement>(null)
-  const [category, setCategory] = useState<CleanupCategoryFilter>(restoreTarget?.category ?? 'all')
+  const [category, setCategory] = useState<CleanupCategoryFilter>(standaloneTerminal ? 'terminal' : restoreTarget?.category ?? 'all')
   const storage = useMemo(
     () => result?.candidates.filter((item) => item.section === 'storage') ?? [],
     [result]
@@ -250,7 +252,9 @@ export function HealthPage({
     id: CleanupCategoryFilter
     label: string
     icon: typeof HardDrive
-  }> = [
+  }> = standaloneTerminal ? [
+    { id: 'terminal', label: text('命令行启动优化', 'Terminal startup'), icon: SquareTerminal }
+  ] : [
     { id: 'all', label: text('全部项目', 'All items'), icon: ListFilter },
     { id: 'system', label: text('系统与临时文件', 'System and temporary'), icon: HardDrive },
     { id: 'applications', label: text('应用缓存', 'Application caches'), icon: Boxes },
@@ -258,8 +262,7 @@ export function HealthPage({
     { id: 'developer', label: text('开发者缓存', 'Developer caches'), icon: Code2 },
     { id: 'logs', label: text('日志与诊断', 'Logs and diagnostics'), icon: FileWarning },
     { id: 'devices', label: text('设备与模拟器', 'Devices and simulators'), icon: Smartphone },
-    { id: 'services', label: text('后台服务', 'Background services'), icon: RadioTower },
-    { id: 'terminal', label: text('命令行启动项', 'Terminal startup'), icon: SquareTerminal }
+    { id: 'services', label: text('后台服务', 'Background services'), icon: RadioTower }
   ]
 
   useEffect(() => {
@@ -330,13 +333,20 @@ export function HealthPage({
     <section ref={pageRef} className="page content-page cleanup-page is-active">
       <div className="page-command-bar cleanup-command-bar">
         <div>
-          <h1>{text('清理', 'Cleanup')}</h1>
+          <h1>{standaloneTerminal ? text('命令行启动优化', 'Terminal startup') : text('清理', 'Cleanup')}</h1>
           <span className="page-command-summary">{result
             ? text(
-                `最后扫描 ${formatDateTime(result.completedAt, language)} · ${exactRuleCount} 项确定性结果`,
-                `Last scanned ${formatDateTime(result.completedAt, language)} · ${exactRuleCount} deterministic findings`
+                standaloneTerminal
+                  ? `最后检查 ${formatDateTime(result.completedAt, language)} · ${terminalSelectable.length} 项可优化`
+                  : `最后扫描 ${formatDateTime(result.completedAt, language)} · ${exactRuleCount} 项确定性结果`,
+                standaloneTerminal
+                  ? `Last checked ${formatDateTime(result.completedAt, language)} · ${terminalSelectable.length} optimizations available`
+                  : `Last scanned ${formatDateTime(result.completedAt, language)} · ${exactRuleCount} deterministic findings`
               )
-            : text('运行本机规则扫描，查找可以稳定重建的缓存与临时文件', 'Run local rules to find caches and temporary files that can be reliably rebuilt')}</span>
+            : text(
+                standaloneTerminal ? '检查 shell 启动配置和 PATH，找出可以安全优化的启动项' : '运行本机规则扫描，查找可以稳定重建的缓存与临时文件',
+                standaloneTerminal ? 'Inspect shell startup configuration and PATH for safe optimizations' : 'Run local rules to find caches and temporary files that can be reliably rebuilt'
+              )}</span>
         </div>
         <button type="button" className="secondary-button cleanup-scan-button" onClick={onScan} disabled={scanBusy}>
           {scanBusy ? <LoaderCircle className="spinner" size={16} /> : <RefreshCw size={16} />}
@@ -353,17 +363,27 @@ export function HealthPage({
       )}
 
       <div className="cleanup-summary-band">
-        <div className="cleanup-reclaimable">
-          <span>{text('安全可释放', 'Safe to reclaim')}</span>
-          <strong>{formatBytes(trustedBytes)}</strong>
-          <small><ShieldCheck size={13} />{text(`${safeItems.length} 项通过内置规则和路径测量`, `${safeItems.length} items passed built-in rules and path measurement`)}</small>
-        </div>
-        <div className="cleanup-summary-stat"><span>{text('当前选择', 'Selected')}</span><strong>{formatBytes(selectedBytes)}</strong><small>{text(`${selectedCount} 项`, `${selectedCount} items`)}</small></div>
-        <div className="cleanup-summary-stat"><span>{text('需要确认', 'Review first')}</span><strong>{reviewItems.length}</strong><small>{text(`${reviewSelectable.length} 项可操作 · ${reviewItems.length - reviewSelectable.length} 条仅供参考`, `${reviewSelectable.length} actionable · ${reviewItems.length - reviewSelectable.length} reference-only clues`)}</small></div>
+        {standaloneTerminal ? <>
+          <div className="cleanup-reclaimable">
+            <span>{text('可优化启动项', 'Optimizable startup items')}</span>
+            <strong>{terminalSelectable.length}</strong>
+            <small><ShieldCheck size={13} />{text('修改前会自动备份 shell 配置', 'Shell configuration is backed up before changes')}</small>
+          </div>
+          <div className="cleanup-summary-stat"><span>{text('当前选择', 'Selected')}</span><strong>{selectedCount}</strong><small>{text('项启动优化', 'startup items')}</small></div>
+          <div className="cleanup-summary-stat"><span>{text('检查结果', 'Findings')}</span><strong>{terminalItems.length}</strong><small>{text(`${terminalSelectable.length} 项可执行`, `${terminalSelectable.length} actionable`)}</small></div>
+        </> : <>
+          <div className="cleanup-reclaimable">
+            <span>{text('安全可释放', 'Safe to reclaim')}</span>
+            <strong>{formatBytes(trustedBytes)}</strong>
+            <small><ShieldCheck size={13} />{text(`${safeItems.length} 项通过内置规则和路径测量`, `${safeItems.length} items passed built-in rules and path measurement`)}</small>
+          </div>
+          <div className="cleanup-summary-stat"><span>{text('当前选择', 'Selected')}</span><strong>{formatBytes(selectedBytes)}</strong><small>{text(`${selectedCount} 项`, `${selectedCount} items`)}</small></div>
+          <div className="cleanup-summary-stat"><span>{text('需要确认', 'Review first')}</span><strong>{reviewItems.length}</strong><small>{text(`${reviewSelectable.length} 项可操作 · ${reviewItems.length - reviewSelectable.length} 条仅供参考`, `${reviewSelectable.length} actionable · ${reviewItems.length - reviewSelectable.length} reference-only clues`)}</small></div>
+        </>}
       </div>
 
-      <div className="cleanup-workspace">
-        <aside className="cleanup-categories" aria-label={text('清理类别', 'Cleanup categories')}>
+      <div className={`cleanup-workspace ${standaloneTerminal ? 'is-standalone' : ''}`}>
+        {!standaloneTerminal && <aside className="cleanup-categories" aria-label={text('清理类别', 'Cleanup categories')}>
           {categories.map((item) => {
             const Icon = item.icon
             const categoryItems = item.id === 'services'
@@ -378,16 +398,16 @@ export function HealthPage({
               : categoryItems.reduce((sum, candidate) => sum + ('sizeBytes' in candidate ? candidate.sizeBytes ?? 0 : 0), 0)
             return <button key={item.id} type="button" className={category === item.id ? 'is-active' : ''} onClick={() => setCategory(item.id)} aria-current={category === item.id ? 'true' : undefined}><Icon size={16} /><span><strong>{item.label}</strong><small>{categoryItems.length ? `${categoryItems.length} · ${formatBytes(categoryBytes)}` : text('无项目', 'No items')}</small></span><ChevronRight size={14} /></button>
           })}
-        </aside>
+        </aside>}
 
         <div className="cleanup-results">
           <div className="cleanup-results-toolbar">
-            <div className="storage-mode-tabs" role="tablist" aria-label={text('清理可信等级', 'Cleanup trust level')}>
+            {!standaloneTerminal && <div className="storage-mode-tabs" role="tablist" aria-label={text('清理可信等级', 'Cleanup trust level')}>
               <button type="button" role="tab" aria-selected={storageMode === 'safe'} className={`storage-mode-tab ${storageMode === 'safe' ? 'is-active' : ''}`} onClick={() => onStorageModeChange('safe')}>{text('安全清理', 'Safe cleanup')} <span>{safeItems.length}</span></button>
               <button type="button" role="tab" aria-selected={storageMode === 'review'} className={`storage-mode-tab ${storageMode === 'review' ? 'is-active' : ''}`} onClick={() => onStorageModeChange('review')}>{text('需要确认', 'Review first')} <span>{reviewItems.length}</span></button>
-            </div>
+            </div>}
             <div className="cleanup-toolbar-actions">
-              {category !== 'terminal' && <button type="button" className="quiet-button" onClick={() => onManageIgnored(category === 'services' ? 'services' : 'storage')}><EyeOff size={14} />{category === 'services' ? text(`已忽略 ${settings.serviceWhitelist.length}`, `${settings.serviceWhitelist.length} ignored`) : text(`已忽略 ${settings.storageWhitelist.length}`, `${settings.storageWhitelist.length} ignored`)}</button>}
+              {!standaloneTerminal && category !== 'terminal' && <button type="button" className="quiet-button" onClick={() => onManageIgnored(category === 'services' ? 'services' : 'storage')}><EyeOff size={14} />{category === 'services' ? text(`已忽略 ${settings.serviceWhitelist.length}`, `${settings.serviceWhitelist.length} ignored`) : text(`已忽略 ${settings.storageWhitelist.length}`, `${settings.storageWhitelist.length} ignored`)}</button>}
               {category === 'terminal'
                 ? terminalSelectable.length > 0 && <button type="button" className="quiet-button" onClick={toggleVisibleTerminal}>{allTerminalSelected ? text('取消全选', 'Deselect all') : text('全选当前类别', 'Select category')}</button>
                 : visibleSelectable.length > 0 && <button type="button" className="quiet-button" onClick={toggleVisible}>{allVisibleSelected ? text('取消全选', 'Deselect all') : text('全选当前类别', 'Select category')}</button>}

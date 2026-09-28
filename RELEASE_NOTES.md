@@ -1,3 +1,51 @@
+# Memento Agent 0.7.10 - 进程图标、终端模块与清理进度 / Process Logos, Terminal Module, and Cleanup Progress
+
+## 简体中文
+
+`0.7.10` 让进程、命令行启动优化和清理执行结果更容易理解和处理。
+
+### 主要变化
+
+- **进程图标：** 首页高占用进程会匹配已安装应用 Bundle，并按需加载对应 Logo。
+- **独立终端模块：** “命令行启动优化”现在和“应用管理”“磁盘分析”处于同一级导航；清理页专注于存储和后台服务。
+- **清理进度动画：** 执行批量清理时逐项展示等待、处理中、完成或失败状态，持续反馈当前进度。
+- **失败处理：** 失败行会显示具体错误原因，完成后可以只重试失败的操作，不需要重新勾选整批项目。
+
+## English
+
+`0.7.10` makes process identity, terminal startup optimization, and cleanup results easier to understand and act on.
+
+### Highlights
+
+- **Process logos:** Overview process rows match sampled commands to installed application bundles and load their logos on demand.
+- **Standalone terminal module:** Terminal startup optimization now sits beside Applications and Disk analysis in primary navigation; Cleanup focuses on storage and background services.
+- **Animated cleanup progress:** Batch cleanup shows each item moving through waiting, working, completed, or failed states while progress advances.
+- **Failure handling:** Failed rows keep their concrete error messages and can be retried as a smaller batch without selecting everything again.
+
+---
+
+# Memento Agent 0.7.9 - 依赖安全修复 / Dependency Security Fix
+
+## 简体中文
+
+`0.7.9` 修复了随应用发布的 `electron-updater` 依赖链中的 `js-yaml@4.3.0` 高危公告。
+
+### 主要变化
+
+- **依赖安全：** 将 `electron-updater` 和 Electron Builder 使用的 `js-yaml` 4.x 间接依赖固定到 `4.3.2`，覆盖受影响的 4.3.0/4.3.1 版本。
+- **发布校验：** 运行时 `npm audit --omit=dev` 已通过，发布依赖树不再报告该高危问题。
+
+## English
+
+`0.7.9` fixes the high-severity `js-yaml@4.3.0` advisory in the shipped `electron-updater` dependency chain.
+
+### Highlights
+
+- **Dependency security:** Pin the `js-yaml` 4.x transitive dependency used by `electron-updater` and Electron Builder to `4.3.2`, covering the affected 4.3.0/4.3.1 releases.
+- **Release verification:** `npm audit --omit=dev` passes, and the shipped dependency tree no longer reports this high-severity issue.
+
+---
+
 # Memento Agent 0.7.8 - 清理菜单与选择状态 / Cleanup Navigation and Selection State
 
 ## 简体中文

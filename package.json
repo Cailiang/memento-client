@@ -1,6 +1,6 @@
 {
   "name": "memento",
-  "version": "0.7.8",
+  "version": "0.7.10",
   "private": true,
   "author": {
     "name": "Cailiang",
@@ -56,6 +56,14 @@
     "typescript": "^5.7.2",
     "vite": "^7.3.6",
     "vitest": "^3.2.7"
+  },
+  "overrides": {
+    "electron-updater": {
+      "js-yaml": "4.3.2"
+    },
+    "electron-builder": {
+      "js-yaml": "4.3.2"
+    }
   },
   "engines": {
     "node": ">=22.13.0"

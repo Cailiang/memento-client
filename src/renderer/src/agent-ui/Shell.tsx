@@ -9,19 +9,21 @@ import {
   RefreshCw,
   Settings2,
   Sparkles,
+  SquareTerminal,
   Trash2
 } from 'lucide-react'
 import type { AgentProvider } from '../../../shared/agent-types'
 import type { AppUpdateState } from '../../../shared/types'
 import { useI18n } from '../i18n'
 
-export type AgentViewKey = 'overview' | 'health' | 'apps' | 'disk' | 'agent' | 'history' | 'settings'
+export type AgentViewKey = 'overview' | 'health' | 'apps' | 'disk' | 'terminal' | 'agent' | 'history' | 'settings'
 
 export function Shell({
   activeView,
   provider,
   healthCount,
   applicationCount,
+  terminalCount,
   appVersion,
   updateState,
   hostname,
@@ -34,6 +36,7 @@ export function Shell({
   provider: AgentProvider | null
   healthCount: number
   applicationCount: number
+  terminalCount: number
   appVersion: string
   updateState: AppUpdateState | null
   hostname: string
@@ -52,7 +55,8 @@ export function Shell({
     { id: 'overview', label: ['概览', 'Overview'], icon: LayoutDashboard },
     { id: 'health', label: ['清理', 'Cleanup'], icon: Trash2, count: healthCount },
     { id: 'apps', label: ['应用管理', 'Applications'], icon: AppWindow, count: applicationCount },
-    { id: 'disk', label: ['磁盘分析', 'Disk analysis'], icon: HardDrive }
+    { id: 'disk', label: ['磁盘分析', 'Disk analysis'], icon: HardDrive },
+    { id: 'terminal', label: ['命令行启动优化', 'Terminal startup'], icon: SquareTerminal, count: terminalCount }
   ]
   const utilities: Array<{
     id: Extract<AgentViewKey, 'agent' | 'history' | 'settings'>

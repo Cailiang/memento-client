@@ -10,6 +10,7 @@ const pages = [
   ['health', '清理'],
   ['apps', '应用管理'],
   ['disk', '磁盘分析'],
+  ['terminal', '命令行启动优化'],
   ['agent', 'AI 助手'],
   ['history', '操作记录'],
   ['settings', '设置']
@@ -118,6 +119,9 @@ try {
         if (!await page.locator('.overview-process-row').first().isVisible()) {
           failures.push(`${viewportName}/overview: process table is missing`)
         }
+        if (await page.locator('.overview-process-row .process-logo').count() < 1) {
+          failures.push(`${viewportName}/overview: process logos are missing`)
+        }
         if (await page.locator('.overview-process-chart').count() !== 2) {
           failures.push(`${viewportName}/overview: CPU and memory Top 5 charts are missing`)
         }
@@ -156,8 +160,8 @@ try {
           await page.locator('.nav-button[title="概览"]').click()
           await page.waitForTimeout(220)
         }
-        if (await page.locator('.nav-list .nav-button').count() !== 4) {
-          failures.push(`${viewportName}/overview: primary navigation is not limited to four product modules`)
+        if (await page.locator('.nav-list .nav-button').count() !== 5) {
+          failures.push(`${viewportName}/overview: primary navigation does not expose five product modules`)
         }
         if (viewport.width <= 520) {
           const mobileOverviewLayout = await page.evaluate(() => {
@@ -346,8 +350,8 @@ try {
   const healthReviewPage = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   await healthReviewPage.goto(baseUrl, { waitUntil: 'networkidle' })
   await navigate(healthReviewPage, '清理')
-  if (await healthReviewPage.locator('.cleanup-categories button').count() !== 9) {
-    failures.push('cleanup-categories: expected nine stable cleanup categories')
+  if (await healthReviewPage.locator('.cleanup-categories button').count() !== 8) {
+    failures.push('cleanup-categories: expected eight storage and service categories')
   }
   await healthReviewPage.getByRole('button', { name: /浏览器缓存/ }).click()
   if (!await healthReviewPage.locator('.cleanup-row').filter({ hasText: 'Safari' }).count()) {
@@ -359,6 +363,17 @@ try {
     failures.push('cleanup-review: outside-rule clues are not visibly isolated')
   }
   await healthReviewPage.close()
+
+  const terminalPage = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+  await terminalPage.goto(baseUrl, { waitUntil: 'networkidle' })
+  await navigate(terminalPage, '命令行启动优化')
+  if (!await terminalPage.locator('.terminal-cleanup-row').count()) {
+    failures.push('terminal: startup findings are not visible in the primary module')
+  }
+  if (await terminalPage.locator('.cleanup-categories').count()) {
+    failures.push('terminal: startup optimization still renders inside cleanup categories')
+  }
+  await terminalPage.close()
 
   const diskPage = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   await diskPage.goto(baseUrl, { waitUntil: 'networkidle' })
@@ -489,16 +504,12 @@ try {
       !await page.getByRole('tab', { name: /需要确认/ }).isVisible()) {
     failures.push('cleanup: trust-level switcher is missing')
   }
-  if (await page.locator('.cleanup-categories button').count() !== 9) {
-    failures.push('cleanup: stable category navigation is incomplete')
+  if (await page.locator('.cleanup-categories button').count() !== 8) {
+    failures.push('cleanup: stable storage and service category navigation is incomplete')
   }
   await page.getByRole('button', { name: /后台服务/ }).click()
   if (!await page.locator('.cleanup-row').filter({ hasText: 'postgresql' }).count()) {
     failures.push('cleanup-categories: background services are not visible')
-  }
-  await page.getByRole('button', { name: /命令行启动项/ }).click()
-  if (!await page.locator('.terminal-cleanup-row').count()) {
-    failures.push('cleanup-categories: terminal startup findings are not visible')
   }
   await page.getByRole('button', { name: /全部项目/ }).click()
   const batchButton = page.getByRole('button', { name: /清理所选项目/ })

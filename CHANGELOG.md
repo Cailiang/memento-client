@@ -8,6 +8,34 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.7.10 - 2026-09-28
+
+### English
+
+- Added matching application logos to Overview process rows when a sampled command belongs to an installed app bundle.
+- Promoted Terminal startup optimization to a first-class primary module alongside Applications and Disk analysis; Cleanup now keeps only storage and background-service categories.
+- Reworked cleanup execution feedback into an animated per-item progress surface. Completed and failed items remain visible with their messages, and failed registered operations can be retried as a smaller batch.
+- Updated the Renderer, product documentation, and four-viewport UI smoke coverage for the new navigation and execution states.
+
+### 简体中文
+
+- 首页进程列表现在会在采样命令属于已安装应用时展示对应应用图标。
+- 将命令行启动优化提升为与应用管理、磁盘分析同一级的主模块；清理页保留存储和后台服务分类。
+- 清理执行反馈改为逐项动画进度，完成和失败项目都会保留并显示具体消息；失败的已注册操作可以单独重试。
+- 同步更新渲染层、产品文档和四视口 UI 冒烟覆盖。
+
+## 0.7.9 - 2026-09-28
+
+### English
+
+- Fixed the high-severity `js-yaml` advisory in the shipped `electron-updater` dependency chain by pinning its 4.x transitive dependency to `4.3.2`; the same safe patch is applied to Electron Builder's packaging tree.
+- Added a runtime audit check to the release verification for this dependency update; the shipped dependency audit is clean.
+
+### 简体中文
+
+- 修复随应用发布的 `electron-updater` 依赖链中的 `js-yaml` 高危公告，将 4.x 间接依赖固定到安全版本 `4.3.2`；Electron Builder 的打包依赖树也同步使用该补丁版本。
+- 为本次依赖更新补充运行时审计验证，应用实际发布依赖的审计结果已清零。
+
 ## 0.7.8 - 2026-09-28
 
 ### English

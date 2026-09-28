@@ -22,9 +22,10 @@ import {
   Zap
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import type { OverviewHealthIssue, OverviewMetrics } from '../../../shared/types'
+import type { InstalledApplication, OverviewHealthIssue, OverviewMetrics } from '../../../shared/types'
 import { useI18n } from '../i18n'
 import { formatBytes, formatStorageBytes } from './utils'
+import { ApplicationIcon } from './ApplicationsPage'
 
 const HISTORY_LIMIT = 28
 
@@ -132,6 +133,16 @@ function formatUptime(seconds: number, language: 'zh-CN' | 'en-US'): string {
   return language === 'en-US' ? `${minutes}m` : `${minutes} 分钟`
 }
 
+function applicationForProcess(
+  process: OverviewMetrics['processes'][number],
+  applications: readonly InstalledApplication[]
+): InstalledApplication | null {
+  const command = process.command.trim()
+  return applications.find((application) => (
+    command === application.location || command.startsWith(`${application.location}/`)
+  )) ?? null
+}
+
 function healthIssueLabel(issue: OverviewHealthIssue, language: 'zh-CN' | 'en-US'): string {
   const labels: Record<OverviewHealthIssue, [string, string]> = {
     'cpu-high': ['CPU 持续高负载', 'High CPU load'],
@@ -165,7 +176,8 @@ export function OverviewPage({
   onAskProcess,
   onCopyProcessName,
   onCopyProcessPid,
-  onTerminateProcess
+  onTerminateProcess,
+  applications
 }: {
   metrics: OverviewMetrics | null
   busy: boolean
@@ -177,6 +189,7 @@ export function OverviewPage({
   onCopyProcessName: (name: string) => void
   onCopyProcessPid: (pid: number) => void
   onTerminateProcess: (process: OverviewMetrics['processes'][number], force: boolean) => void
+  applications: readonly InstalledApplication[]
 }): React.JSX.Element {
   const { language, text } = useI18n()
   const [query, setQuery] = useState('')
@@ -374,7 +387,7 @@ export function OverviewPage({
         <div className="overview-process-list">
           {processes.length ? processes.map((process) => (
             <div className="overview-process-row" key={process.pid}>
-              <span className="overview-process-name"><i><Activity size={13} /></i><strong>{process.name}</strong><small>{process.command} · {process.isSystem ? text('系统进程', 'System process') : text('用户进程', 'User process')}</small></span>
+              <span className="overview-process-name"><span className="process-logo">{applicationForProcess(process, applications) ? <ApplicationIcon application={applicationForProcess(process, applications)!} /> : <span className="process-logo-fallback"><Activity size={13} /></span>}</span><strong>{process.name}</strong><small>{process.command} · {process.isSystem ? text('系统进程', 'System process') : text('用户进程', 'User process')}</small></span>
               <span>{process.pid}</span>
               <span className={process.cpuPercent >= 80 ? 'is-hot' : ''}><i className="process-meter"><b style={{ width: `${Math.min(100, process.cpuPercent)}%` }} /></i><strong>{process.cpuPercent.toFixed(1)}%</strong></span>
               <span><strong>{formatBytes(process.memoryBytes)}</strong><small>{process.memoryPercent.toFixed(1)}%</small></span>

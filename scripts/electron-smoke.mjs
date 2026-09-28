@@ -55,8 +55,8 @@ try {
   await page.locator('.nav-button[title="清理"]').click()
   await page.locator('.cleanup-summary-band').waitFor({ timeout: 45_000 })
   await page.locator('.cleanup-row').first().waitFor({ timeout: 45_000 })
-  if (await page.locator('.cleanup-categories button').count() !== 9) {
-    throw new Error('cleanup category registry did not render nine product categories')
+  if (await page.locator('.cleanup-categories button').count() !== 8) {
+    throw new Error('cleanup category registry did not render eight storage and service categories')
   }
   const cleanupRows = await page.locator('.cleanup-row').count()
   const selectedCleanupRows = await page.locator('.cleanup-row input[type="checkbox"]:checked').count()
@@ -64,6 +64,12 @@ try {
     throw new Error(`deterministic cleanup selection did not render: ${JSON.stringify({ cleanupRows, selectedCleanupRows })}`)
   }
   await page.screenshot({ path: '/tmp/memento-electron-cleanup.png' })
+
+  await page.locator('.nav-button[title="命令行启动优化"]').click()
+  await page.locator('.terminal-cleanup-row').first().waitFor({ timeout: 15_000 })
+  if (await page.locator('.cleanup-categories').count()) {
+    throw new Error('terminal startup optimization is still nested inside Cleanup')
+  }
 
   await page.locator('.nav-button[title="应用管理"]').click()
   await page.locator('.app-card').first().waitFor({ timeout: 30_000 })

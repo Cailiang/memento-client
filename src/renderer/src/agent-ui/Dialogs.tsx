@@ -9,6 +9,7 @@ import {
   LoaderCircle,
   Play,
   RadioTower,
+  RefreshCw,
   Search,
   ShieldCheck,
   Trash2,
@@ -90,6 +91,7 @@ export interface DirectActionRequest {
   consequence: string
   reversible: boolean
   estimatedBytes: number
+  itemLabels?: Array<{ id: string; label: string }>
 }
 
 export type ExecutionPhase = 'executing' | 'verifying' | 'completed' | 'failed'
@@ -134,7 +136,9 @@ export function ExecutionProgressDialog({
   itemCount,
   completedCount,
   detail,
-  onClose
+  onClose,
+  items = [],
+  onRetry
 }: {
   phase: ExecutionPhase
   verificationMode: 'local' | 'scan'
@@ -143,10 +147,23 @@ export function ExecutionProgressDialog({
   completedCount: number
   detail: string
   onClose: () => void
+  items?: Array<{ id: string; label: string; status: 'pending' | 'running' | 'completed' | 'failed'; message?: string }>
+  onRetry?: () => void
 }): React.JSX.Element {
   const { text } = useI18n()
+  const [animatedProgress, setAnimatedProgress] = useState(progress)
+  const [activeIndex, setActiveIndex] = useState(0)
   const finished = phase === 'completed' || phase === 'failed'
-  const progressValue = Math.max(0, Math.min(100, Math.round(progress)))
+  useEffect(() => {
+    setAnimatedProgress(progress)
+    if (phase !== 'executing') return
+    const interval = window.setInterval(() => {
+      setAnimatedProgress((current) => Math.min(88, current + 1.6))
+      setActiveIndex((current) => items.length ? (current + 1) % items.length : 0)
+    }, 180)
+    return () => window.clearInterval(interval)
+  }, [items.length, phase, progress])
+  const progressValue = Math.max(0, Math.min(100, Math.round(phase === 'executing' ? animatedProgress : progress)))
   const title = phase === 'executing'
     ? text('正在执行已确认的操作', 'Running confirmed actions')
     : phase === 'verifying'
@@ -231,7 +248,20 @@ export function ExecutionProgressDialog({
             )
           })}
         </ol>
-        {finished && <div className="execution-result"><span>{phase === 'completed' ? <CheckCircle2 size={16} /> : <CircleAlert size={16} />}</span><strong>{completedCount} / {itemCount}</strong><small>{text('项操作完成', 'actions completed')}</small></div>}
+        {items.length > 0 && <div className="execution-items" aria-label={text('逐项处理结果', 'Item results')}>
+          {items.map((item, index) => {
+            const displayStatus = phase === 'executing' && item.status === 'pending'
+              ? index === activeIndex ? 'running' : 'pending'
+              : item.status
+            return <div className={`execution-item is-${displayStatus}`} key={item.id}>
+              <span className="execution-item-icon">{displayStatus === 'completed' ? <CheckCircle2 size={14} /> : displayStatus === 'failed' ? <CircleAlert size={14} /> : displayStatus === 'running' ? <LoaderCircle className="spinner" size={14} /> : <span />}</span>
+              <span className="execution-item-copy"><strong>{item.label}</strong>{displayStatus === 'failed' && item.message && <small>{item.message}</small>}</span>
+              <small>{displayStatus === 'completed' ? text('完成', 'Done') : displayStatus === 'failed' ? text('失败', 'Failed') : displayStatus === 'running' ? text('处理中', 'Working') : text('等待', 'Waiting')}</small>
+            </div>
+          })}
+        </div>}
+        {finished && <div className={`execution-result ${phase === 'failed' ? 'is-failed' : ''}`}><span>{phase === 'completed' ? <CheckCircle2 size={16} /> : <CircleAlert size={16} />}</span><strong>{completedCount} / {itemCount}</strong><small>{phase === 'completed' ? text('项操作完成', 'actions completed') : text('项操作完成，失败项可重试', 'completed; failed items can be retried')}</small></div>}
+        {phase === 'failed' && onRetry && <button type="button" className="primary-button execution-retry-button" onClick={onRetry}><RefreshCw size={14} />{text('只重试失败项', 'Retry failed items')}</button>}
       </div>
     </DialogFrame>
   )
