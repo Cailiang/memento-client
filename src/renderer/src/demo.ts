@@ -63,6 +63,7 @@ export function localizedDemoOverviewMetrics(): OverviewMetrics {
       totalBytes: 500 * GB,
       usedBytes: 425 * GB,
       freeBytes: 75 * GB,
+      availableBytes: 75 * GB,
       usedPercent: 85
     },
     network: {

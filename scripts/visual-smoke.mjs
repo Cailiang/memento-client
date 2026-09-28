@@ -104,6 +104,9 @@ try {
         if (await page.locator('.overview-card').count() !== 8) {
           failures.push(`${viewportName}/overview: expected eight live metric cards`)
         }
+        if (!await page.getByText('含 macOS 可清除空间', { exact: true }).isVisible()) {
+          failures.push(`${viewportName}/overview: disk card does not explain macOS purgeable capacity`)
+        }
         if (!await page.locator('.overview-process-row').first().isVisible()) {
           failures.push(`${viewportName}/overview: process table is missing`)
         }

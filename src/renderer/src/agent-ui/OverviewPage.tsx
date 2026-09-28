@@ -24,7 +24,7 @@ import {
 import { useEffect, useMemo, useState } from 'react'
 import type { OverviewHealthIssue, OverviewMetrics } from '../../../shared/types'
 import { useI18n } from '../i18n'
-import { formatBytes } from './utils'
+import { formatBytes, formatStorageBytes } from './utils'
 
 const HISTORY_LIMIT = 28
 
@@ -324,10 +324,10 @@ export function OverviewPage({
         </article>
 
         <article className="overview-card">
-          <header><span><HardDrive size={15} />{text('磁盘', 'Disk')}</span><small>{formatBytes(metrics.disk.totalBytes)}</small></header>
-          <div className="overview-metric-value"><strong>{formatBytes(metrics.disk.freeBytes)}</strong><em>{text('可用', 'free')}</em></div>
+          <header><span><HardDrive size={15} />{text('磁盘', 'Disk')}</span><small>{formatStorageBytes(metrics.disk.totalBytes)}</small></header>
+          <div className="overview-metric-value"><strong>{formatStorageBytes(metrics.disk.availableBytes)}</strong><em>{text('可用', 'available')}</em></div>
           <div className="overview-progress"><i style={{ width: `${metrics.disk.usedPercent}%` }} /></div>
-          <footer><span>{text('已用', 'Used')} {formatBytes(metrics.disk.usedBytes)} · {Math.round(metrics.disk.usedPercent)}%</span></footer>
+          <footer><span>{text('含 macOS 可清除空间', 'Includes macOS purgeable space')}</span><span>{text('已用', 'Used')} {formatStorageBytes(metrics.disk.usedBytes)} · {Math.round(metrics.disk.usedPercent)}%</span></footer>
         </article>
 
         <article className="overview-card">

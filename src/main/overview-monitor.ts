@@ -7,11 +7,25 @@ import type {
   OverviewMetrics,
   OverviewProcess
 } from '../shared/types'
-import { parseDiskFree } from './parsers'
+import { parseDiskFree, parseMacVolumeCapacity } from './parsers'
 
 const execFileAsync = promisify(execFile)
 const DEFAULT_INTERFACE_CACHE_MS = 30_000
 const BATTERY_DETAILS_CACHE_MS = 5 * 60_000
+const MAC_VOLUME_CAPACITY_SCRIPT = `ObjC.import('Foundation');
+var url = $.NSURL.fileURLWithPath('/');
+var keys = ['NSURLVolumeTotalCapacityKey', 'NSURLVolumeAvailableCapacityKey', 'NSURLVolumeAvailableCapacityForImportantUsageKey'];
+var values = {};
+keys.forEach(function (name) {
+  var value = Ref();
+  var error = Ref();
+  if (url.getResourceValueForKeyError(value, $(name), error)) values[name] = ObjC.deepUnwrap(value[0]);
+});
+console.log(JSON.stringify({
+  totalBytes: values.NSURLVolumeTotalCapacityKey,
+  freeBytes: values.NSURLVolumeAvailableCapacityKey,
+  availableBytes: values.NSURLVolumeAvailableCapacityForImportantUsageKey
+}));`
 
 interface CpuTick {
   idle: number
@@ -64,10 +78,16 @@ async function optionalCommand(
   code: string,
   command: string,
   args: string[],
-  timeout?: number
+  timeout?: number,
+  output: 'stdout' | 'stderr' = 'stdout'
 ): Promise<string> {
   try {
-    return await run(command, args, timeout)
+    const result = await execFileAsync(command, args, {
+      timeout,
+      maxBuffer: 2 * 1024 * 1024,
+      env: { ...process.env, LC_ALL: 'C' }
+    })
+    return output === 'stderr' ? result.stderr : result.stdout
   } catch {
     diagnostics.push(code)
     return ''
@@ -310,8 +330,11 @@ export class OverviewMonitor {
     const cpuUsage = calculateCpuUsage(this.previousCpu, currentCpu)
     this.previousCpu = currentCpu
     const memoryTotal = os.totalmem()
-    const [diskOutput, memoryOutput, interfaceName, networkOutput, batteryOutput, batteryDetails, gpuOutput, thermalOutput, processOutput] = await Promise.all([
+    const [diskOutput, diskCapacityOutput, memoryOutput, interfaceName, networkOutput, batteryOutput, batteryDetails, gpuOutput, thermalOutput, processOutput] = await Promise.all([
       optionalCommand(diagnostics, 'overview.disk.unavailable', '/bin/df', ['-k', '/']),
+      process.platform === 'darwin'
+        ? optionalCommand(diagnostics, 'overview.disk.capacity-unavailable', '/usr/bin/osascript', ['-l', 'JavaScript', '-e', MAC_VOLUME_CAPACITY_SCRIPT], undefined, 'stderr')
+        : Promise.resolve(''),
       optionalCommand(diagnostics, 'overview.memory.unavailable', '/usr/bin/vm_stat', []),
       this.collectDefaultInterface(diagnostics, now),
       optionalCommand(diagnostics, 'overview.network.counters-unavailable', '/usr/sbin/netstat', ['-ibn']),
@@ -323,16 +346,21 @@ export class OverviewMonitor {
     ])
 
     if (!this.hardware) this.hardware = await this.collectHardware(diagnostics)
-    let disk = { totalBytes: 0, usedBytes: 0, freeBytes: 0, usedPercent: 0 }
+    let disk = { totalBytes: 0, usedBytes: 0, freeBytes: 0, availableBytes: 0, usedPercent: 0 }
     try {
       const parsed = parseDiskFree(diskOutput)
       if (parsed.totalBytes <= 0) throw new Error('Disk capacity is unavailable')
-      const usedBytes = Math.max(0, parsed.totalBytes - parsed.freeBytes)
+      const nativeCapacity = parseMacVolumeCapacity(diskCapacityOutput)
+      const totalBytes = nativeCapacity?.totalBytes || parsed.totalBytes
+      const freeBytes = nativeCapacity?.freeBytes || parsed.freeBytes
+      const availableBytes = nativeCapacity?.availableBytes || parsed.freeBytes
+      const usedBytes = Math.max(0, totalBytes - availableBytes)
       disk = {
-        totalBytes: parsed.totalBytes,
+        totalBytes,
         usedBytes,
-        freeBytes: parsed.freeBytes,
-        usedPercent: parsed.totalBytes ? round(usedBytes / parsed.totalBytes * 100) : 0
+        freeBytes,
+        availableBytes,
+        usedPercent: totalBytes ? round(usedBytes / totalBytes * 100) : 0
       }
     } catch {
       if (!diagnostics.includes('overview.disk.unavailable')) diagnostics.push('overview.disk.invalid')

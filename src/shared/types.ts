@@ -219,6 +219,7 @@ export interface OverviewMetrics {
     totalBytes: number
     usedBytes: number
     freeBytes: number
+    availableBytes: number
     usedPercent: number
   }
   network: {

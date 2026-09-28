@@ -9,6 +9,14 @@ export function formatBytes(bytes: number): string {
   return `${value >= 10 || exponent === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[exponent]}`
 }
 
+export function formatStorageBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1000)), units.length - 1)
+  const value = bytes / 1000 ** exponent
+  return `${value.toFixed(exponent === 0 ? 0 : 2)} ${units[exponent]}`
+}
+
 export function relativeDate(value: string | null, language: AppLanguage): string {
   if (!value) return language === 'zh-CN' ? '无使用记录' : 'No usage record'
   const date = new Date(value)

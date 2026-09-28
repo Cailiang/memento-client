@@ -1,3 +1,27 @@
+# Memento Agent 0.7.5 - macOS 磁盘容量一致性 / macOS Disk Capacity Alignment
+
+## 简体中文
+
+`0.7.5` 让概览中的磁盘可用空间尽量跟随 macOS 系统口径。
+
+### 主要变化
+
+- **系统容量口径：** 使用 macOS 原生宗卷容量估算，包含系统可按需释放的可清除空间。
+- **显示格式：** 磁盘容量改用十进制 GB，并明确标注包含 macOS 可清除空间。
+- **回归覆盖：** 增加容量解析器、文档和四视口 UI 冒烟断言。
+
+## English
+
+`0.7.5` brings Overview disk availability closer to the macOS system view.
+
+### Highlights
+
+- **System capacity:** Read macOS native volume capacity estimates, including space macOS can purge when needed.
+- **Display format:** Use decimal GB for disk capacity and explain that purgeable space is included.
+- **Regression coverage:** Add capacity parser, documentation, and four-viewport UI smoke coverage.
+
+---
+
 # Memento Agent 0.7.4 - Agent 进程操作 / Agent Process Actions
 
 ## 简体中文

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   parseDiskFree,
+  parseMacVolumeCapacity,
   parseDuKilobytes,
   parseLaunchctlEntries,
   parseLaunchctlLabels,
@@ -17,6 +18,15 @@ describe('macOS command parsers', () => {
       totalBytes: 482797652 * 1024,
       freeBytes: 198557320 * 1024
     })
+  })
+
+  it('reads macOS system available capacity including purgeable space', () => {
+    expect(parseMacVolumeCapacity('{"totalBytes":500,"freeBytes":20,"availableBytes":30}')).toEqual({
+      totalBytes: 500,
+      freeBytes: 20,
+      availableBytes: 30
+    })
+    expect(parseMacVolumeCapacity('not json')).toBeNull()
   })
 
   it('reads du output containing a path with spaces', () => {

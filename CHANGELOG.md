@@ -8,6 +8,18 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.7.5 - 2026-09-28
+
+### English
+
+- Aligned Overview disk availability with macOS's native volume capacity estimate, including purgeable space, with decimal GB formatting and an explicit explanation in the disk card.
+- Added parser, Renderer, documentation, and four-viewport UI coverage for the macOS capacity reading.
+
+### 简体中文
+
+- 概览磁盘可用空间改为使用 macOS 原生宗卷容量估算，包含可清除空间，并按十进制 GB 显示；磁盘卡片明确说明统计口径。
+- 新增 macOS 容量解析器、渲染层、文档和四视口 UI 覆盖。
+
 ## 0.7.4 - 2026-09-23
 
 ### English
