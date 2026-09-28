@@ -34,7 +34,8 @@ import type {
   OverviewProcess,
   ScanCandidate,
   ScanProgress,
-  ScanResult
+  ScanResult,
+  TerminalFinding
 } from '../../shared/types'
 import { AgentPage } from './agent-ui/AgentPage'
 import { ApplicationsPage } from './agent-ui/ApplicationsPage'
@@ -52,7 +53,7 @@ import {
   IgnoredItemsDialog,
   UninstallDialog
 } from './agent-ui/Dialogs'
-import { HealthPage, type CleanupSelection, type HealthAgentOrigin, type HealthTab, type PageRestoreTarget, type StorageMode } from './agent-ui/HealthPage'
+import { HealthPage, type CleanupCategoryFilter, type CleanupSelection, type HealthAgentOrigin, type HealthTab, type PageRestoreTarget, type StorageMode } from './agent-ui/HealthPage'
 import { HistoryPage } from './agent-ui/HistoryPage'
 import { OverviewPage } from './agent-ui/OverviewPage'
 import { SettingsPage } from './agent-ui/SettingsPage'
@@ -354,7 +355,7 @@ function demoPlanItemFromPresentation(
 
 type AgentOrigin =
   | { view: 'overview' }
-  | { view: 'health'; tab: HealthTab; itemId?: string; scrollTop: number }
+  | { view: 'health'; tab: HealthTab; category?: CleanupCategoryFilter; itemId?: string; scrollTop: number }
   | { view: 'apps'; itemId?: string; scrollTop: number }
   | { view: 'disk' }
 
@@ -409,6 +410,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
   const [runStatusMessage, setRunStatusMessage] = useState('')
   const [selectedPlanIds, setSelectedPlanIds] = useState<Set<string>>(new Set())
   const [storageMode, setStorageMode] = useState<StorageMode>('safe')
+  const [cleanupSelectedIds, setCleanupSelectedIds] = useState<Set<string>>(new Set())
   const [diskUsage, setDiskUsage] = useState<DiskUsageScanResult | null>(null)
   const [diskUsageProgress, setDiskUsageProgress] = useState<DiskUsageProgress | null>(null)
   const [diskUsageBusy, setDiskUsageBusy] = useState(false)
@@ -514,6 +516,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       const next = window.memento ? await window.memento.scan(language) : localizedDemoResult(language)
       resultRef.current = next
       setResult(next)
+      setCleanupSelectedIds(new Set(next.candidates.filter(isSafeCleanup).map((candidate) => candidate.id)))
       return next
     } catch (error) {
       const message = error instanceof Error
@@ -968,7 +971,9 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
         itemIds
       })
       setActiveRun(executed.run)
+      resultRef.current = executed.scan
       setResult(executed.scan)
+      setCleanupSelectedIds(new Set(executed.scan.candidates.filter(isSafeCleanup).map((candidate) => candidate.id)))
       setRuns((current) => [executed.run, ...current.filter((run) => run.id !== executed.run.id)])
       const selectedResults = executed.run.results.filter((item) => itemIds.includes(item.id))
       setExecutionState({
@@ -1025,17 +1030,38 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       return
     }
     const reversible = selections.every(({ operation }) => operation.reversible)
+    const verificationMode = selections.every(({ candidate }) => candidate.section === 'storage') ? 'local' : 'scan'
     setPendingDirectAction({
       id: selections[0].operation.id,
       ids: selections.map(({ operation }) => operation.id),
       candidateIds: selections.map(({ candidate }) => candidate.id),
       kind: 'action',
-      verificationMode: 'local',
+      verificationMode,
       subject: appText(`${selections.length} 项清理规则`, `${selections.length} cleanup items`),
       label: appText(`清理所选 ${selections.length} 项`, `Clean ${selections.length} selected items`),
       consequence: appText('只执行当前扫描注册的确定性清理操作；执行前主进程会再次校验每个目标。', 'Only deterministic cleanup actions registered by the current scan will run. The main process validates every target again before execution.'),
       reversible,
       estimatedBytes: selections.reduce((sum, { candidate, operation }) => sum + (operation.estimatedBytes ?? candidate.sizeBytes ?? 0), 0)
+    })
+  }
+
+  const requestDirectTerminalFixes = (findings: TerminalFinding[]): void => {
+    const fixes = findings.map((finding) => finding.fix).filter((fix): fix is NonNullable<typeof fix> => Boolean(fix))
+    if (!fixes.length) return
+    if (scanBusy) {
+      setToast(appText('请等待当前扫描完成后再操作', 'Wait for the current scan to finish before running an action.'))
+      return
+    }
+    setPendingDirectAction({
+      id: fixes[0].id,
+      ids: fixes.map((fix) => fix.id),
+      kind: 'terminal-fix',
+      verificationMode: 'scan',
+      subject: appText(`${fixes.length} 项命令行启动优化`, `${fixes.length} terminal startup optimizations`),
+      label: appText(`优化所选 ${fixes.length} 项`, `Optimize ${fixes.length} selected items`),
+      consequence: appText('修改前会自动备份 shell 配置，完成后会重新扫描验证。', 'Shell configuration is backed up before editing, followed by a fresh verification scan.'),
+      reversible: true,
+      estimatedBytes: 0
     })
   }
 
@@ -1105,12 +1131,15 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
               : reconciled
           }
         })
+        setCleanupSelectedIds((current) => new Set([...current].filter((id) => !completedCandidateIds.has(id))))
       } else {
         setScanBusy(true)
         const verified = window.memento
           ? await window.memento.scan(settings.language)
           : await new Promise<ScanResult>((resolve) => window.setTimeout(() => resolve(localizedDemoResult(settings.language)), 520))
+        resultRef.current = verified
         setResult(verified)
+        setCleanupSelectedIds(new Set(verified.candidates.filter(isSafeCleanup).map((candidate) => candidate.id)))
       }
       const failure = results.find((item) => !item.ok)
       setExecutionState({
@@ -1172,6 +1201,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     }
     setRestoreTarget({
       view: agentOrigin.view,
+      category: agentOrigin.view === 'health' ? agentOrigin.category : undefined,
       itemId: agentOrigin.itemId,
       scrollTop: agentOrigin.scrollTop,
       token: Date.now()
@@ -1733,6 +1763,9 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
         onAgentPrompt={(prompt, origin: HealthAgentOrigin) => startAgentRun(prompt, { isolated: true, origin: { view: 'health', ...origin } })}
         onDirectAction={requestDirectAction}
         onDirectActions={requestDirectActions}
+        selectedIds={cleanupSelectedIds}
+        onSelectedIdsChange={setCleanupSelectedIds}
+        onDirectTerminalFixes={requestDirectTerminalFixes}
         onIgnore={setPendingIgnore}
         onManageIgnored={openIgnoredManager}
       />}

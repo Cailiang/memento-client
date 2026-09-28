@@ -11,11 +11,14 @@ import {
   HardDrive,
   ListFilter,
   LoaderCircle,
+  RadioTower,
   RefreshCw,
   ShieldCheck,
   Smartphone,
   Sparkles,
-  Trash2
+  SquareTerminal,
+  Trash2,
+  Wrench
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { AppSettings } from '../../../shared/app-settings'
@@ -24,7 +27,8 @@ import type {
   CleanupCategory,
   ScanCandidate,
   ScanProgress,
-  ScanResult
+  ScanResult,
+  TerminalFinding
 } from '../../../shared/types'
 import {
   isActionableFinding,
@@ -36,16 +40,18 @@ import { formatBytes, formatDateTime } from './utils'
 
 export type HealthTab = 'storage' | 'services' | 'terminal'
 export type StorageMode = 'safe' | 'review'
-type CleanupCategoryFilter = CleanupCategory | 'all'
+export type CleanupCategoryFilter = CleanupCategory | 'all' | 'services' | 'terminal'
 
 export interface HealthAgentOrigin {
   tab: HealthTab
+  category?: CleanupCategoryFilter
   itemId?: string
   scrollTop: number
 }
 
 export interface PageRestoreTarget {
   token: number
+  category?: CleanupCategoryFilter
   itemId?: string
   scrollTop: number
 }
@@ -120,6 +126,46 @@ function CleanupRow({
   )
 }
 
+function TerminalCleanupRow({
+  finding,
+  selected,
+  onToggle,
+  onAgentPrompt,
+  onDirectAction
+}: {
+  finding: TerminalFinding
+  selected: boolean
+  onToggle: () => void
+  onAgentPrompt: (finding: TerminalFinding) => void
+  onDirectAction: (finding: TerminalFinding) => void
+}): React.JSX.Element {
+  const { text } = useI18n()
+  const actionable = Boolean(finding.fix)
+  const status = finding.fix
+    ? finding.severity === 'slow' ? text('建议优化', 'Optimization suggested') : text('可优化', 'Optimizable')
+    : finding.severity === 'good' ? text('正常', 'Healthy') : text('仅供分析', 'Analysis only')
+
+  return (
+    <article className={`cleanup-row terminal-cleanup-row ${selected ? 'is-selected' : ''}`} data-focus-id={finding.id} tabIndex={-1}>
+      <label className={`cleanup-check ${!actionable ? 'is-disabled' : ''}`}>
+        <input type="checkbox" checked={selected} disabled={!actionable} onChange={onToggle} aria-label={text(`选择 ${finding.title}`, `Select ${finding.title}`)} />
+        <span>{selected && <Check size={13} />}</span>
+      </label>
+      <span className="cleanup-item-icon"><SquareTerminal size={17} /></span>
+      <div className="cleanup-item-copy">
+        <div className="cleanup-item-title"><strong>{finding.title}</strong><span className={`cleanup-trust ${finding.fix ? 'review' : 'is-clue'}`}>{status}</span></div>
+        <p>{finding.detail}</p>
+        {finding.source && <span className="candidate-location terminal-finding-source"><SquareTerminal size={12} /><span>{finding.source}</span></span>}
+      </div>
+      <div className="cleanup-item-size"><strong>--</strong><small>{finding.recommendation ?? text('命令行启动诊断', 'Terminal startup diagnostic')}</small></div>
+      <div className="cleanup-row-actions">
+        <button type="button" className="icon-button" onClick={() => onAgentPrompt(finding)} title={text('让 AI 解释此项', 'Ask AI to explain')} aria-label={text(`让 AI 解释 ${finding.title}`, `Ask AI to explain ${finding.title}`)}><Sparkles size={15} /></button>
+        {finding.fix && <button type="button" className="icon-button cleanup-single-action is-review" onClick={() => onDirectAction(finding)} title={finding.fix.label} aria-label={`${finding.fix.label}: ${finding.title}`}><Wrench size={15} /></button>}
+      </div>
+    </article>
+  )
+}
+
 export function HealthPage({
   result,
   settings,
@@ -134,6 +180,9 @@ export function HealthPage({
   onAgentPrompt,
   onDirectAction,
   onDirectActions,
+  selectedIds,
+  onSelectedIdsChange,
+  onDirectTerminalFixes,
   onIgnore,
   onManageIgnored
 }: {
@@ -150,35 +199,52 @@ export function HealthPage({
   onAgentPrompt: (prompt: string, origin: HealthAgentOrigin) => void
   onDirectAction: (candidate: ScanCandidate, operation: CandidateOperation) => void
   onDirectActions: (selections: CleanupSelection[]) => void
+  selectedIds: ReadonlySet<string>
+  onSelectedIdsChange: (ids: Set<string>) => void
+  onDirectTerminalFixes: (findings: TerminalFinding[]) => void
   onIgnore: (candidate: ScanCandidate) => void
-  onManageIgnored: (kind: 'storage') => void
+  onManageIgnored: (kind: 'storage' | 'services') => void
 }): React.JSX.Element {
   const { language, text } = useI18n()
   const pageRef = useRef<HTMLElement>(null)
-  const [category, setCategory] = useState<CleanupCategoryFilter>('all')
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [category, setCategory] = useState<CleanupCategoryFilter>(restoreTarget?.category ?? 'all')
   const storage = useMemo(
     () => result?.candidates.filter((item) => item.section === 'storage') ?? [],
     [result]
   )
+  const serviceItems = useMemo(
+    () => result?.candidates.filter((item) => item.section === 'services') ?? [],
+    [result]
+  )
+  const terminalItems = result?.terminal.findings ?? []
+  const allCandidateItems = useMemo(() => [...storage, ...serviceItems], [serviceItems, storage])
   const safeItems = useMemo(() => storage.filter(isSafeCleanup), [storage])
-  const reviewItems = useMemo(() => storage.filter((item) => isActionableFinding(item) || isReviewClue(item)), [storage])
+  const reviewItems = useMemo(() => allCandidateItems.filter((item) => isActionableFinding(item) || isReviewClue(item)), [allCandidateItems])
   const reviewSelectable = useMemo(() => reviewItems.filter((item) => operations(item).length > 0), [reviewItems])
   const modeItems = storageMode === 'safe' ? safeItems : reviewItems
   const visibleItems = category === 'all'
     ? modeItems
-    : modeItems.filter((item) => categoryForCandidate(item) === category)
-  const selectableItems = storageMode === 'safe' ? safeItems : reviewSelectable
+    : category === 'services'
+      ? serviceItems
+      : category === 'terminal'
+        ? []
+        : modeItems.filter((item) => categoryForCandidate(item) === category)
+  const serviceSelectable = serviceItems.filter((item) => operations(item).length > 0)
+  const selectableItems = storageMode === 'safe' ? [...safeItems, ...serviceSelectable] : reviewSelectable
   const visibleSelectable = visibleItems.filter((item) => selectableItems.some((selectable) => selectable.id === item.id))
-  const selectedItems = selectableItems.filter((item) => selectedIds.has(item.id))
+  const selectedItems = [...new Map(selectableItems.map((item) => [item.id, item])).values()].filter((item) => selectedIds.has(item.id))
   const selectedSelections = selectedItems.flatMap((candidate) => {
     const operation = operations(candidate)[0]
     return operation ? [{ candidate, operation }] : []
   })
+  const terminalSelectable = terminalItems.filter((finding) => Boolean(finding.fix))
+  const selectedTerminalFindings = terminalSelectable.filter((finding) => selectedIds.has(finding.id))
   const selectedBytes = selectedItems.reduce((sum, item) => sum + (item.sizeBytes ?? 0), 0)
   const trustedBytes = safeItems.reduce((sum, item) => sum + (item.sizeBytes ?? 0), 0)
   const allVisibleSelected = visibleSelectable.length > 0 && visibleSelectable.every((item) => selectedIds.has(item.id))
-  const exactRuleCount = storage.filter((item) => item.confidence !== 'weak').length
+  const allTerminalSelected = terminalSelectable.length > 0 && terminalSelectable.every((finding) => selectedIds.has(finding.id))
+  const selectedCount = category === 'terminal' ? selectedTerminalFindings.length : selectedItems.length
+  const exactRuleCount = allCandidateItems.filter((item) => item.confidence !== 'weak').length
 
   const categories: Array<{
     id: CleanupCategoryFilter
@@ -191,12 +257,10 @@ export function HealthPage({
     { id: 'browsers', label: text('浏览器缓存', 'Browser caches'), icon: Globe2 },
     { id: 'developer', label: text('开发者缓存', 'Developer caches'), icon: Code2 },
     { id: 'logs', label: text('日志与诊断', 'Logs and diagnostics'), icon: FileWarning },
-    { id: 'devices', label: text('设备与模拟器', 'Devices and simulators'), icon: Smartphone }
+    { id: 'devices', label: text('设备与模拟器', 'Devices and simulators'), icon: Smartphone },
+    { id: 'services', label: text('后台服务', 'Background services'), icon: RadioTower },
+    { id: 'terminal', label: text('命令行启动项', 'Terminal startup'), icon: SquareTerminal }
   ]
-
-  useEffect(() => {
-    setSelectedIds(new Set(safeItems.map((item) => item.id)))
-  }, [result?.scanId])
 
   useEffect(() => {
     if (!restoreTarget || !pageRef.current) return
@@ -217,28 +281,48 @@ export function HealthPage({
     return () => window.cancelAnimationFrame(frame)
   }, [onRestoreComplete, restoreTarget])
 
-  const toggleCandidate = (id: string): void => setSelectedIds((current) => {
-    const next = new Set(current)
+  const toggleCandidate = (id: string): void => {
+    const next = new Set(selectedIds)
     if (next.has(id)) next.delete(id)
     else next.add(id)
-    return next
-  })
+    onSelectedIdsChange(next)
+  }
 
-  const toggleVisible = (): void => setSelectedIds((current) => {
-    const next = new Set(current)
+  const toggleVisible = (): void => {
+    const next = new Set(selectedIds)
     for (const item of visibleSelectable) {
       if (allVisibleSelected) next.delete(item.id)
       else next.add(item.id)
     }
-    return next
-  })
+    onSelectedIdsChange(next)
+  }
+
+  const toggleVisibleTerminal = (): void => {
+    const next = new Set(selectedIds)
+    for (const finding of terminalSelectable) {
+      if (allTerminalSelected) next.delete(finding.id)
+      else next.add(finding.id)
+    }
+    onSelectedIdsChange(next)
+  }
 
   const askAgent = (candidate: ScanCandidate): void => onAgentPrompt(text(
     `解释清理项“${candidate.name}”。说明它由哪个应用或系统组件生成、规则为什么只匹配当前路径、清理后会重新生成什么；区分确定事实与推断，不要直接执行。`,
     `Explain the cleanup item "${candidate.name}". Identify the app or system component that creates it, why the rule matches only this path, and what will be rebuilt after cleanup. Separate verified facts from inference and do not execute it.`
   ), {
     tab: 'storage',
+    category,
     itemId: candidate.id,
+    scrollTop: pageRef.current?.scrollTop ?? 0
+  })
+
+  const askTerminalAgent = (finding: TerminalFinding): void => onAgentPrompt(text(
+    `解释命令行启动项“${finding.title}”。说明它如何影响终端启动、哪些内容是确定事实、哪些只是推断，不要直接修改配置。`,
+    `Explain the terminal startup finding "${finding.title}". Describe how it affects shell startup, separate verified facts from inference, and do not modify the configuration.`
+  ), {
+    tab: 'terminal',
+    category: 'terminal',
+    itemId: finding.id,
     scrollTop: pageRef.current?.scrollTop ?? 0
   })
 
@@ -274,7 +358,7 @@ export function HealthPage({
           <strong>{formatBytes(trustedBytes)}</strong>
           <small><ShieldCheck size={13} />{text(`${safeItems.length} 项通过内置规则和路径测量`, `${safeItems.length} items passed built-in rules and path measurement`)}</small>
         </div>
-        <div className="cleanup-summary-stat"><span>{text('当前选择', 'Selected')}</span><strong>{formatBytes(selectedBytes)}</strong><small>{text(`${selectedItems.length} 项`, `${selectedItems.length} items`)}</small></div>
+        <div className="cleanup-summary-stat"><span>{text('当前选择', 'Selected')}</span><strong>{formatBytes(selectedBytes)}</strong><small>{text(`${selectedCount} 项`, `${selectedCount} items`)}</small></div>
         <div className="cleanup-summary-stat"><span>{text('需要确认', 'Review first')}</span><strong>{reviewItems.length}</strong><small>{text(`${reviewSelectable.length} 项可操作 · ${reviewItems.length - reviewSelectable.length} 条仅供参考`, `${reviewSelectable.length} actionable · ${reviewItems.length - reviewSelectable.length} reference-only clues`)}</small></div>
       </div>
 
@@ -282,8 +366,16 @@ export function HealthPage({
         <aside className="cleanup-categories" aria-label={text('清理类别', 'Cleanup categories')}>
           {categories.map((item) => {
             const Icon = item.icon
-            const categoryItems = item.id === 'all' ? modeItems : modeItems.filter((candidate) => categoryForCandidate(candidate) === item.id)
-            const categoryBytes = categoryItems.reduce((sum, candidate) => sum + (candidate.sizeBytes ?? 0), 0)
+            const categoryItems = item.id === 'services'
+              ? serviceItems
+              : item.id === 'terminal'
+                ? terminalItems
+                : item.id === 'all'
+                  ? modeItems
+                  : modeItems.filter((candidate) => categoryForCandidate(candidate) === item.id)
+            const categoryBytes = item.id === 'terminal'
+              ? 0
+              : categoryItems.reduce((sum, candidate) => sum + ('sizeBytes' in candidate ? candidate.sizeBytes ?? 0 : 0), 0)
             return <button key={item.id} type="button" className={category === item.id ? 'is-active' : ''} onClick={() => setCategory(item.id)} aria-current={category === item.id ? 'true' : undefined}><Icon size={16} /><span><strong>{item.label}</strong><small>{categoryItems.length ? `${categoryItems.length} · ${formatBytes(categoryBytes)}` : text('无项目', 'No items')}</small></span><ChevronRight size={14} /></button>
           })}
         </aside>
@@ -295,13 +387,24 @@ export function HealthPage({
               <button type="button" role="tab" aria-selected={storageMode === 'review'} className={`storage-mode-tab ${storageMode === 'review' ? 'is-active' : ''}`} onClick={() => onStorageModeChange('review')}>{text('需要确认', 'Review first')} <span>{reviewItems.length}</span></button>
             </div>
             <div className="cleanup-toolbar-actions">
-              <button type="button" className="quiet-button" onClick={() => onManageIgnored('storage')}><EyeOff size={14} />{text(`已忽略 ${settings.storageWhitelist.length}`, `${settings.storageWhitelist.length} ignored`)}</button>
-              {visibleSelectable.length > 0 && <button type="button" className="quiet-button" onClick={toggleVisible}>{allVisibleSelected ? text('取消全选', 'Deselect all') : text('全选当前类别', 'Select category')}</button>}
+              {category !== 'terminal' && <button type="button" className="quiet-button" onClick={() => onManageIgnored(category === 'services' ? 'services' : 'storage')}><EyeOff size={14} />{category === 'services' ? text(`已忽略 ${settings.serviceWhitelist.length}`, `${settings.serviceWhitelist.length} ignored`) : text(`已忽略 ${settings.storageWhitelist.length}`, `${settings.storageWhitelist.length} ignored`)}</button>}
+              {category === 'terminal'
+                ? terminalSelectable.length > 0 && <button type="button" className="quiet-button" onClick={toggleVisibleTerminal}>{allTerminalSelected ? text('取消全选', 'Deselect all') : text('全选当前类别', 'Select category')}</button>
+                : visibleSelectable.length > 0 && <button type="button" className="quiet-button" onClick={toggleVisible}>{allVisibleSelected ? text('取消全选', 'Deselect all') : text('全选当前类别', 'Select category')}</button>}
             </div>
           </div>
 
           <div className="cleanup-list">
-            {visibleItems.length ? visibleItems.map((candidate) => (
+            {category === 'terminal' ? terminalItems.length ? terminalItems.map((finding) => (
+              <TerminalCleanupRow
+                key={finding.id}
+                finding={finding}
+                selected={selectedIds.has(finding.id)}
+                onToggle={() => toggleCandidate(finding.id)}
+                onAgentPrompt={askTerminalAgent}
+                onDirectAction={(item) => onDirectTerminalFixes([item])}
+              />
+            )) : <div className="cleanup-empty"><ShieldCheck size={24} /><strong>{text('没有命令行启动项诊断', 'No terminal startup findings')}</strong><span>{text('重新扫描后，会按照当前 shell 配置和 PATH 结果展示。', 'Scan again to inspect the current shell configuration and PATH.')}</span></div> : visibleItems.length ? visibleItems.map((candidate) => (
               <CleanupRow
                 key={candidate.id}
                 candidate={candidate}
@@ -313,14 +416,14 @@ export function HealthPage({
                 onIgnore={onIgnore}
                 onReveal={onRevealCandidate}
               />
-            )) : <div className="cleanup-empty"><ShieldCheck size={24} /><strong>{storageMode === 'safe' ? text('当前类别没有可安全清理的项目', 'No safe cleanup items in this category') : text('当前类别没有需要确认的项目', 'No review items in this category')}</strong><span>{text('重新扫描后，结果会按照内置规则自动归类。', 'Results are categorized by built-in rules after each scan.')}</span></div>}
+            )) : <div className="cleanup-empty"><ShieldCheck size={24} /><strong>{category === 'services' ? text('没有检测到后台服务', 'No background services found') : storageMode === 'safe' ? text('当前类别没有可安全清理的项目', 'No safe cleanup items in this category') : text('当前类别没有需要确认的项目', 'No review items in this category')}</strong><span>{text('重新扫描后，结果会按照内置规则自动归类。', 'Results are categorized by built-in rules after each scan.')}</span></div>}
           </div>
         </div>
       </div>
 
       <footer className="cleanup-selection-bar">
-        <div><strong>{selectedItems.length ? text(`已选择 ${selectedItems.length} 项`, `${selectedItems.length} selected`) : text('未选择清理项', 'No cleanup items selected')}</strong><span>{selectedItems.length ? text(`预计释放 ${formatBytes(selectedBytes)}`, `Estimated ${formatBytes(selectedBytes)}`) : text('勾选经过验证的项目后再执行', 'Select verified items before cleanup')}</span></div>
-        <button type="button" className="primary-button" disabled={!selectedSelections.length || scanBusy} onClick={() => onDirectActions(selectedSelections)}><Trash2 size={16} />{storageMode === 'safe' ? text('清理所选项目', 'Clean selected') : text('确认并清理', 'Review and clean')}</button>
+        <div><strong>{selectedCount ? text(`已选择 ${selectedCount} 项`, `${selectedCount} selected`) : text('未选择清理项', 'No cleanup items selected')}</strong><span>{selectedCount ? text(`预计释放 ${formatBytes(selectedBytes)}`, `Estimated ${formatBytes(selectedBytes)}`) : text('勾选经过验证的项目后再执行', 'Select verified items before cleanup')}</span></div>
+        <button type="button" className="primary-button" disabled={!(category === 'terminal' ? selectedTerminalFindings.length : selectedSelections.length) || scanBusy} onClick={() => category === 'terminal' ? onDirectTerminalFixes(selectedTerminalFindings) : onDirectActions(selectedSelections)}>{category === 'terminal' ? <Wrench size={16} /> : <Trash2 size={16} />}{category === 'terminal' ? text('优化所选启动项', 'Optimize selected') : storageMode === 'safe' ? text('清理所选项目', 'Clean selected') : text('确认并清理', 'Review and clean')}</button>
       </footer>
     </section>
   )

@@ -1,3 +1,27 @@
+# Memento Agent 0.7.8 - 清理菜单与选择状态 / Cleanup Navigation and Selection State
+
+## 简体中文
+
+`0.7.8` 修复了清理页进入 AI 后勾选状态丢失的问题，并补齐后台服务和命令行启动项的菜单入口。
+
+### 主要变化
+
+- **选择状态：** 从清理项目进入 AI 解释后返回，原有勾选继续保留；返回时也恢复来源类别。
+- **后台服务：** 清理菜单新增后台服务分类，可以查看扫描到的服务、启动项和对应操作。
+- **命令行启动项：** 清理菜单新增命令行启动项分类，可以查看 shell 启动诊断，并直接执行带备份的可撤销修复。
+
+## English
+
+`0.7.8` keeps Cleanup selections across isolated AI explanations and adds visible menus for background services and terminal startup findings.
+
+### Highlights
+
+- **Selection state:** Returning from an item explanation preserves the checked Cleanup items and restores the source category.
+- **Background services:** Cleanup now has a dedicated menu for scanned services, launch agents, and their registered operations.
+- **Terminal startup:** Cleanup now exposes shell startup diagnostics and directly runs reversible, backed-up configuration fixes.
+
+---
+
 # Memento Agent 0.7.7 - 开发者产物与应用加载 / Developer Artifacts and Application Loading
 
 ## 简体中文

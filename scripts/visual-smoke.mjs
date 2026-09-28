@@ -346,8 +346,8 @@ try {
   const healthReviewPage = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   await healthReviewPage.goto(baseUrl, { waitUntil: 'networkidle' })
   await navigate(healthReviewPage, '清理')
-  if (await healthReviewPage.locator('.cleanup-categories button').count() !== 7) {
-    failures.push('cleanup-categories: expected seven stable cleanup categories')
+  if (await healthReviewPage.locator('.cleanup-categories button').count() !== 9) {
+    failures.push('cleanup-categories: expected nine stable cleanup categories')
   }
   await healthReviewPage.getByRole('button', { name: /浏览器缓存/ }).click()
   if (!await healthReviewPage.locator('.cleanup-row').filter({ hasText: 'Safari' }).count()) {
@@ -489,9 +489,18 @@ try {
       !await page.getByRole('tab', { name: /需要确认/ }).isVisible()) {
     failures.push('cleanup: trust-level switcher is missing')
   }
-  if (await page.locator('.cleanup-categories button').count() !== 7) {
+  if (await page.locator('.cleanup-categories button').count() !== 9) {
     failures.push('cleanup: stable category navigation is incomplete')
   }
+  await page.getByRole('button', { name: /后台服务/ }).click()
+  if (!await page.locator('.cleanup-row').filter({ hasText: 'postgresql' }).count()) {
+    failures.push('cleanup-categories: background services are not visible')
+  }
+  await page.getByRole('button', { name: /命令行启动项/ }).click()
+  if (!await page.locator('.terminal-cleanup-row').count()) {
+    failures.push('cleanup-categories: terminal startup findings are not visible')
+  }
+  await page.getByRole('button', { name: /全部项目/ }).click()
   const batchButton = page.getByRole('button', { name: /清理所选项目/ })
   await batchButton.click()
   const batchDialog = page.getByRole('dialog', { name: /确认清理 \d+ 项/ })
@@ -532,6 +541,8 @@ try {
   if (!await reviewRow.locator('.cleanup-single-action').isVisible()) {
     failures.push('health: outside-rule clue does not expose its confirmed Trash action')
   }
+  const reviewCheckbox = reviewRow.locator('input[type="checkbox"]')
+  await reviewCheckbox.check()
   await reviewRow.getByRole('button', { name: /让 AI 解释/ }).click()
   const returnButton = page.getByRole('button', { name: '返回存储空间' })
   await returnButton.waitFor()
@@ -542,6 +553,9 @@ try {
   await returnButton.click()
   if (await page.getByRole('tab', { name: /需要确认/ }).getAttribute('aria-selected') !== 'true') {
     failures.push('agent-return: source cleanup trust level was not restored')
+  }
+  if (!await page.locator('.cleanup-row').filter({ hasText: '.lingma' }).locator('input[type="checkbox"]').isChecked()) {
+    failures.push('agent-return: cleanup selection was cleared while asking AI')
   }
   await page.waitForFunction(() => Boolean(document.activeElement?.getAttribute('data-focus-id')))
   await page.waitForTimeout(1_000)

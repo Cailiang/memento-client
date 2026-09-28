@@ -8,6 +8,20 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.7.8 - 2026-09-28
+
+### English
+
+- Preserved Cleanup selections when opening an isolated AI explanation and returning to the source category.
+- Added dedicated Cleanup menu categories for background services and terminal startup findings, including registered service actions and reversible shell configuration fixes.
+- Added smoke coverage for selection restoration and service/terminal category visibility.
+
+### 简体中文
+
+- 进入独立 AI 解释并返回清理页时，保留原先已经勾选的清理项目。
+- 清理菜单新增“后台服务”和“命令行启动项”，分别展示已注册的服务操作和可撤销的 shell 配置修复。
+- 新增勾选状态恢复以及后台服务、命令行启动项菜单可见性的烟雾测试。
+
 ## 0.7.7 - 2026-09-28
 
 ### English

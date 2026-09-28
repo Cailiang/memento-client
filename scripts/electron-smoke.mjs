@@ -55,8 +55,8 @@ try {
   await page.locator('.nav-button[title="清理"]').click()
   await page.locator('.cleanup-summary-band').waitFor({ timeout: 45_000 })
   await page.locator('.cleanup-row').first().waitFor({ timeout: 45_000 })
-  if (await page.locator('.cleanup-categories button').count() !== 7) {
-    throw new Error('cleanup category registry did not render seven product categories')
+  if (await page.locator('.cleanup-categories button').count() !== 9) {
+    throw new Error('cleanup category registry did not render nine product categories')
   }
   const cleanupRows = await page.locator('.cleanup-row').count()
   const selectedCleanupRows = await page.locator('.cleanup-row input[type="checkbox"]:checked').count()
