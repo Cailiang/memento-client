@@ -119,6 +119,10 @@ try {
         if (!await page.locator('.overview-process-row').first().isVisible()) {
           failures.push(`${viewportName}/overview: process table is missing`)
         }
+        const processFontSizes = await page.locator('.overview-process-row .overview-process-name strong').evaluateAll((nodes) => nodes.map((node) => Number.parseFloat(getComputedStyle(node).fontSize)))
+        if (processFontSizes.length && Math.min(...processFontSizes) < 12) {
+          failures.push(`${viewportName}/overview: process names are still too small ${JSON.stringify(processFontSizes)}`)
+        }
         const applicationCard = page.locator('.overview-application-card')
         if (!await applicationCard.isVisible() || (await applicationCard.locator('.overview-application-total strong').textContent())?.trim() === '0') {
           failures.push(`${viewportName}/overview: application analysis did not initialize with the overview scan`)
@@ -370,8 +374,15 @@ try {
   const terminalPage = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   await terminalPage.goto(baseUrl, { waitUntil: 'networkidle' })
   await navigate(terminalPage, '命令行启动优化')
-  if (!await terminalPage.locator('.terminal-cleanup-row').count()) {
+  if (!await terminalPage.locator('.terminal-cleanup-row').count() && !await terminalPage.locator('.cleanup-empty').count()) {
     failures.push('terminal: startup findings are not visible in the primary module')
+  }
+  if (await terminalPage.getByText('可查看配置', { exact: true }).count()) {
+    failures.push('terminal: reference-only configuration findings are still shown')
+  }
+  const terminalRows = terminalPage.locator('.terminal-cleanup-row')
+  if (await terminalRows.count() !== await terminalRows.locator('input:not(:disabled)').count()) {
+    failures.push('terminal: non-actionable startup findings still expose disabled selections')
   }
   if (await terminalPage.locator('.cleanup-categories').count()) {
     failures.push('terminal: startup optimization still renders inside cleanup categories')

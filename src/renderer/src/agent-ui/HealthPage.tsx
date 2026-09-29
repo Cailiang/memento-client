@@ -224,6 +224,7 @@ export function HealthPage({
     [result]
   )
   const terminalItems = result?.terminal.findings ?? []
+  const terminalSelectable = terminalItems.filter((finding) => Boolean(finding.fix))
   const allCandidateItems = useMemo(() => [...storage, ...serviceItems], [serviceItems, storage])
   const safeItems = useMemo(() => storage.filter(isSafeCleanup), [storage])
   const reviewItems = useMemo(() => allCandidateItems.filter((item) => isActionableFinding(item) || isReviewClue(item)), [allCandidateItems])
@@ -244,7 +245,6 @@ export function HealthPage({
     const operation = operations(candidate)[0]
     return operation ? [{ candidate, operation }] : []
   })
-  const terminalSelectable = terminalItems.filter((finding) => Boolean(finding.fix))
   const selectedTerminalFindings = terminalSelectable.filter((finding) => selectedIds.has(finding.id))
   const selectedBytes = selectedItems.reduce((sum, item) => sum + (item.sizeBytes ?? 0), 0)
   const trustedBytes = safeItems.reduce((sum, item) => sum + (item.sizeBytes ?? 0), 0)
@@ -375,7 +375,7 @@ export function HealthPage({
             <small><ShieldCheck size={13} />{text('修改前会自动备份 shell 配置', 'Shell configuration is backed up before changes')}</small>
           </div>
           <div className="cleanup-summary-stat"><span>{text('当前选择', 'Selected')}</span><strong>{selectedCount}</strong><small>{text('项启动优化', 'startup items')}</small></div>
-          <div className="cleanup-summary-stat"><span>{text('检查结果', 'Findings')}</span><strong>{terminalItems.length}</strong><small>{text(`${terminalSelectable.length} 项可执行`, `${terminalSelectable.length} actionable`)}</small></div>
+          <div className="cleanup-summary-stat"><span>{text('可优化项目', 'Optimizable')}</span><strong>{terminalSelectable.length}</strong><small>{text('仅展示可直接处理的启动项', 'Only directly actionable startup items are shown')}</small></div>
         </> : <>
           <div className="cleanup-reclaimable">
             <span>{text('安全可释放', 'Safe to reclaim')}</span>
@@ -394,7 +394,7 @@ export function HealthPage({
             const categoryItems = item.id === 'services'
               ? serviceItems
               : item.id === 'terminal'
-                ? terminalItems
+                ? terminalSelectable
                 : item.id === 'all'
                   ? modeItems
                   : modeItems.filter((candidate) => categoryForCandidate(candidate) === item.id)
@@ -420,7 +420,7 @@ export function HealthPage({
           </div>
 
           <div className="cleanup-list">
-            {category === 'terminal' ? terminalItems.length ? terminalItems.map((finding) => (
+            {category === 'terminal' ? terminalSelectable.length ? terminalSelectable.map((finding) => (
               <TerminalCleanupRow
                 key={finding.id}
                 finding={finding}
@@ -430,7 +430,7 @@ export function HealthPage({
                 onDirectAction={(item) => onDirectTerminalFixes([item])}
                 onReveal={onRevealTerminalFinding}
               />
-            )) : <div className="cleanup-empty"><ShieldCheck size={24} /><strong>{text('没有命令行启动项诊断', 'No terminal startup findings')}</strong><span>{text('重新扫描后，会按照当前 shell 配置和 PATH 结果展示。', 'Scan again to inspect the current shell configuration and PATH.')}</span></div> : visibleItems.length ? visibleItems.map((candidate) => (
+            )) : <div className="cleanup-empty"><ShieldCheck size={24} /><strong>{text('没有可优化的命令行启动项', 'No optimizable terminal startup items')}</strong><span>{text('当前扫描只发现了无需修改的诊断，已从列表中隐藏。', 'The scan found diagnostics that do not need changes; they are hidden from this list.')}</span></div> : visibleItems.length ? visibleItems.map((candidate) => (
               <CleanupRow
                 key={candidate.id}
                 candidate={candidate}

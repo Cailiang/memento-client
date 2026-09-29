@@ -278,6 +278,10 @@ README 明确 Windows/Linux 仅用于桌面壳可移植性验证，但 Release �
 | 批量清理 | 主要依赖 Agent 计划 | 原生命令预览和多选 | 增加无 AI 的统一选择托盘 |
 | 应用卸载 | 应用本体为主，部分服务场景能带数据 | 完整残留预览较成熟 | 建立精确证据驱动的卸载清单 |
 | 磁盘分析 | GUI 分栏、Ask AI、移到废纸篓 | Go TUI、缓存、Spotlight、JSON | 保留 GUI，补缓存、首屏和大文件索引 |
+
+### 应用更新实现边界
+
+Mole 公开仓库是免费 CLI；其中的 `mo update` 只负责更新 Mole 自身。Mole for Mac 原生应用是单独发布的闭源产品，公开仓库没有它的软件管理器实现可直接复用。Memento 因此按可验证来源执行更新：Homebrew Cask 和 Mac App Store 走各自的包管理器命令；Sparkle appcast 有 HTTPS 安装包时，在替换前校验 Bundle ID、签名团队和严格代码签名；只有无法安全取得安装包时，才打开应用自带更新器。Sparkle 的外部命令行接口也保留为兼容路径，参考 [Sparkle CLI 文档](https://sparkle-project.org/documentation/sparkle-cli/)。
 | 实时状态 | 仅扫描期指标与服务异常 | 完整实时状态 TUI | 暂不正面追赶，只保留可行动异常 |
 | 系统优化 | 终端修复、少量服务/清理动作 | 21 类维护任务目录 | 不追求数量，仅做能复检的高价值动作 |
 | 自动化 | 内部 typed IPC | JSON、NDJSON、CLI | 先提供脱敏诊断导出，后评估只读 CLI |

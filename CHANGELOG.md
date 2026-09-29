@@ -8,6 +8,22 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.7.15 - 2026-09-29
+
+### English
+
+- Added direct application updates for Homebrew Casks, Mac App Store apps, and Sparkle appcasts. Sparkle archives are downloaded over HTTPS, checked against the current bundle identity and signing team, verified with strict codesign validation, and installed atomically when the appcast provides a package URL.
+- Hid terminal startup diagnostics that have no registered fix from the actionable optimization list, so reference-only findings no longer look selectable.
+- Increased process-list typography and row spacing in Overview for easier reading.
+- Updated the updater, Renderer, documentation, and UI smoke coverage together.
+
+### 简体中文
+
+- 应用管理支持直接更新 Homebrew Cask、Mac App Store 和 Sparkle appcast 应用。Sparkle 更新包通过 HTTPS 下载，并校验 Bundle ID、签名团队和严格代码签名后再原子替换应用。
+- 命令行启动优化只展示有已注册修复操作的项目；仅供查看的诊断不会再出现在可操作列表中。
+- 调大概览页进程列表字号并增加行间距，提升可读性。
+- 同步更新更新器、渲染层、文档和 UI 冒烟覆盖。
+
 ## 0.7.14 - 2026-09-29
 
 ### English

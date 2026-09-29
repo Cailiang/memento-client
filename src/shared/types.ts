@@ -116,6 +116,7 @@ export interface InstalledApplication {
   latestVersion?: string | null
   updateSource?: ApplicationUpdateSource
   updateToken?: string
+  updateUrl?: string
   protectedReason?: string
   action?: CandidateOperation
 }

@@ -247,7 +247,7 @@ export function ApplicationsPage({
                   <Sparkles size={14} />{text('问 Agent', 'Ask Agent')}
                 </button>
                 {application.updateAvailable && <button type="button" className="secondary-button app-update-action" onClick={() => onUpdate(application)} disabled={updatingId === application.id || removingId === application.id} title={text(`更新 ${application.name}`, `Update ${application.name}`)}>
-                  {updatingId === application.id ? <LoaderCircle className="spinner" size={14} /> : <ArrowUpCircle size={14} />}{application.updateSource === 'sparkle' ? text('打开更新', 'Open updater') : text('更新', 'Update')}
+                  {updatingId === application.id ? <LoaderCircle className="spinner" size={14} /> : <ArrowUpCircle size={14} />}{text('更新', 'Update')}
                 </button>}
                 {application.action ? (
                   <button type="button" className="icon-button uninstall-app" onClick={() => onUninstall(application)} disabled={removingId === application.id} title={text(`卸载 ${application.name}`, `Uninstall ${application.name}`)} aria-label={text(`卸载 ${application.name}`, `Uninstall ${application.name}`)}>

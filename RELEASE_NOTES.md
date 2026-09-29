@@ -1,3 +1,27 @@
+# Memento Agent 0.7.15 - 应用内更新与进程列表可读性 / In-App Updates and Process Readability
+
+## 简体中文
+
+`0.7.15` 让应用管理可以在 Memento 内执行更多更新，并收紧命令行启动优化列表的可操作边界。
+
+### 主要变化
+
+- **应用更新：** Homebrew Cask 和 Mac App Store 继续使用各自的命令行更新源；Sparkle appcast 提供下载包时，Memento 会通过 HTTPS 下载、校验 Bundle ID、签名团队和严格代码签名，再替换应用。无法安全取得安装包时仍使用应用自带更新器。
+- **命令行启动：** 没有注册修复操作的“可查看配置”诊断不再出现在优化列表中。
+- **进程列表：** 概览页进程名称、资源数值、筛选器和操作菜单字号调大，行高同步增加。
+
+## English
+
+`0.7.15` brings more application updates into Memento and keeps reference-only terminal diagnostics out of the actionable list.
+
+### Highlights
+
+- **Application updates:** Homebrew Cask and Mac App Store updates keep their package-manager paths. When a Sparkle appcast includes a package URL, Memento downloads it over HTTPS, verifies bundle identity, signing team, and strict code signing, then replaces the bundle. If a safe package is unavailable, the app's own updater remains available.
+- **Terminal startup:** Findings without a registered fix, including reference-only configuration diagnostics, are hidden from the optimization list.
+- **Process list:** Overview uses larger process names, resource values, filters, action-menu text, and row spacing.
+
+---
+
 # Memento Agent 0.7.14 - 应用活跃时间 / Application Activity Dates
 
 ## 简体中文

@@ -1572,6 +1572,7 @@ interface ApplicationUpdate {
   source: 'homebrew-cask' | 'mac-app-store' | 'sparkle'
   token: string
   latestVersion: string | null
+  downloadUrl?: string
 }
 
 const APPLICATION_ROOTS = [
@@ -1694,14 +1695,57 @@ async function discoverMacAppStoreUpdates(): Promise<Map<string, ApplicationUpda
   }
 }
 
-export function sparkleVersionFromFeed(xml: string): string | null {
-  const items = [...xml.matchAll(/<item\b[\s\S]*?<\/item>/gi)]
-  const versions = items.flatMap((item) => {
+function decodeXmlEntities(value: string): string {
+  return value
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+}
+
+function sparkleAttribute(tag: string, name: string): string | null {
+  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const match = tag.match(new RegExp(`${escapedName}\\s*=\\s*["']([^"']+)["']`, 'i'))
+  return match?.[1] ? decodeXmlEntities(match[1].trim()) : null
+}
+
+function sparkleElement(block: string, name: string): string | null {
+  const match = block.match(new RegExp(`<${name}\\b[^>]*>([^<]+)<\\/${name}>`, 'i'))
+  return match?.[1] ? decodeXmlEntities(match[1].trim()) : null
+}
+
+function supportedSparkleDownloadUrl(value: string | null): string | undefined {
+  if (!value) return undefined
+  try {
+    const parsed = new URL(value)
+    const extension = path.extname(parsed.pathname).toLowerCase()
+    return parsed.protocol === 'https:' && ['.dmg', '.zip', '.tar', '.gz', '.tgz', '.xz'].includes(extension)
+      ? value
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
+export function sparkleUpdateItemsFromFeed(xml: string): Array<{ version: string; downloadUrl: string | null }> {
+  return [...xml.matchAll(/<item\b[\s\S]*?<\/item>/gi)].flatMap((item) => {
     const block = item[0]
-    const match = block.match(/sparkle:(?:shortVersionString|version)\s*=\s*["']([^"']+)["']/i) ??
-      block.match(/<sparkle:(?:shortVersionString|version)>([^<]+)<\/sparkle:/i)
-    return match?.[1]?.trim() ? [match[1].trim()] : []
+    const itemTag = block.match(/<item\b[^>]*>/i)?.[0] ?? ''
+    const enclosure = block.match(/<enclosure\b[^>]*>/i)?.[0] ?? ''
+    const version = sparkleAttribute(enclosure, 'sparkle:version') ??
+      sparkleElement(block, 'sparkle:version') ??
+      sparkleAttribute(enclosure, 'sparkle:shortVersionString') ??
+      sparkleElement(block, 'sparkle:shortVersionString') ??
+      sparkleAttribute(itemTag, 'sparkle:version') ??
+      sparkleAttribute(itemTag, 'sparkle:shortVersionString')
+    if (!version) return []
+    return [{ version, downloadUrl: sparkleAttribute(enclosure, 'url') }]
   })
+}
+
+export function sparkleVersionFromFeed(xml: string): string | null {
+  const versions = sparkleUpdateItemsFromFeed(xml).map((item) => item.version)
   return versions.sort((left, right) => {
     const leftParts = updateVersionParts(left)
     const rightParts = updateVersionParts(right)
@@ -1719,9 +1763,21 @@ async function discoverSparkleUpdate(application: ApplicationMetadata): Promise<
   try {
     const response = await fetch(feedUrl, { signal: AbortSignal.timeout(5_000), headers: { accept: 'application/rss+xml, application/xml, text/xml' } })
     if (!response.ok) return null
-    const latestVersion = sparkleVersionFromFeed(await response.text())
-    if (!latestVersion || !isVersionNewer(latestVersion, application.version)) return null
-    return { source: 'sparkle', token: feedUrl, latestVersion }
+    const items = sparkleUpdateItemsFromFeed(await response.text())
+      .filter((item) => isVersionNewer(item.version, application.version))
+      .sort((left, right) => {
+        if (isVersionNewer(left.version, right.version)) return -1
+        if (isVersionNewer(right.version, left.version)) return 1
+        return 0
+      })
+    const latest = items[0]
+    if (!latest) return null
+    return {
+      source: 'sparkle',
+      token: feedUrl,
+      latestVersion: latest.version,
+      downloadUrl: supportedSparkleDownloadUrl(latest.downloadUrl)
+    }
   } catch {
     return null
   }
@@ -1980,6 +2036,7 @@ async function scanApplications(
       latestVersion: update?.latestVersion ?? null,
       updateSource: update?.source,
       updateToken: update?.token,
+      updateUrl: update?.downloadUrl,
       protectedReason: scope === 'system'
         ? t(language, 'macOS 系统应用', 'macOS system application')
         : undefined,
@@ -1995,6 +2052,7 @@ async function scanApplications(
     application.latestVersion = sparkleUpdate.latestVersion
     application.updateSource = sparkleUpdate.source
     application.updateToken = sparkleUpdate.token
+    application.updateUrl = sparkleUpdate.downloadUrl
   })
   const inventoryByPath = new Map(
     inventory.map((application) => [application.location, application])

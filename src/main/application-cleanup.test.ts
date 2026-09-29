@@ -9,6 +9,7 @@ import {
   isApplicationUnused,
   parseApplicationLastUsedDate,
   plistApplicationName,
+  sparkleUpdateItemsFromFeed,
   sparkleVersionFromFeed
 } from './scanner'
 
@@ -79,5 +80,14 @@ describe('application cleanup threshold', () => {
       <item><sparkle:version>4.2.0</sparkle:version></item>
       <item sparkle:shortVersionString="4.4.0"></item>
     </channel></rss>`)).toBe('4.4.0')
+  })
+
+  it('extracts Sparkle package URLs from enclosure metadata', () => {
+    expect(sparkleUpdateItemsFromFeed(`<rss><channel><item>
+      <enclosure url="https://updates.example.test/Memento%204.5.0.dmg" sparkle:shortVersionString="4.5.0" />
+    </item></channel></rss>`)).toEqual([{
+      version: '4.5.0',
+      downloadUrl: 'https://updates.example.test/Memento%204.5.0.dmg'
+    }])
   })
 })

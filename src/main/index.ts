@@ -62,6 +62,7 @@ import {
   trashDestination
 } from './application-trash'
 import { runFullScan, type RegisteredAction } from './scanner'
+import { installSparkleUpdate, runSparkleUpdater, sparkleUpdaterCommand } from './application-updater'
 import { isSystemProcess, OverviewMonitor } from './overview-monitor'
 import { inferFindingTrust } from '../shared/finding-trust'
 import { applyScanWhitelist } from './scan-whitelist'
@@ -1671,6 +1672,15 @@ app.whenReady().then(async () => {
     }
     if (!target || !existsSync(target)) {
       throw new Error(mainText('应用已经不存在，请重新扫描', 'The application no longer exists. Scan again.'))
+    }
+    if (application.updateUrl) {
+      await installSparkleUpdate({ target, downloadUrl: application.updateUrl, expectedVersion: application.latestVersion })
+      return
+    }
+    const sparkle = sparkleUpdaterCommand(target)
+    if (sparkle) {
+      await runSparkleUpdater(target, sparkle)
+      return
     }
     await openSparkleUpdater(target)
   })

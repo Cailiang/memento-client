@@ -72,7 +72,7 @@ try {
   await page.screenshot({ path: '/tmp/memento-electron-cleanup.png' })
 
   await page.locator('.nav-button[title="命令行启动优化"]').click()
-  await page.locator('.terminal-cleanup-row').first().waitFor({ timeout: 15_000 })
+  await page.waitForFunction(() => Boolean(document.querySelector('.terminal-cleanup-row, .cleanup-empty')), null, { timeout: 15_000 })
   if (await page.locator('.cleanup-categories').count()) {
     throw new Error('terminal startup optimization is still nested inside Cleanup')
   }
