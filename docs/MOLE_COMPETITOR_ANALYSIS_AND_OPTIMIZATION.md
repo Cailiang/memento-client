@@ -234,6 +234,10 @@ macOS 包使用 Developer ID 签名、公证和票据装订，并具备自动更
 
 任务记录主要围绕 Agent Run 和 Tool Call。直接存储清理、磁盘移到废纸篓、应用卸载和服务操作也应进入统一操作账本，否则最需要审计的动作反而散落在会话之外。
 
+#### P1：应用最后活跃时间需要明确数据边界
+
+Mole's uninstall index reads `mdls -name kMDItemLastUsedDate -raw <app>` for each bundle. When Spotlight returns `(null)` or an invalid date, its cache finalization uses the discovered `.app` directory mtime as the display epoch, then formats that epoch into day/week/month/year units. This is why Electron apps without a LaunchServices usage record can still show values such as “7 months ago” or “2 years ago”. Memento now follows the same primary/fallback order in `scanner.ts`, validates the date range, and renders the same compact units in the application cards. The fallback is explicitly an install/update activity estimate rather than a claim that macOS recorded a launch event.
+
 #### P1：应用管理不等于完整卸载
 
 应用页主要把 `.app` 本体移到废纸篓；用户对“卸载”的预期通常还包括精确 Bundle ID 对应的启动项、Helper、偏好、缓存和残留。服务页已有部分精确关联能力，但没有汇总成一个一致的卸载预览。
@@ -732,6 +736,7 @@ Memento 最值得保留的也不是“接入了多少模型”，而是确定性
 - [README 与产品命令](https://github.com/tw93/Mole/blob/ad82a47b157c289a0feb52a414d4515a83ea7aaf/README.md)
 - [项目方向与安全开发合同](https://github.com/tw93/Mole/blob/ad82a47b157c289a0feb52a414d4515a83ea7aaf/AGENTS.md)
 - [集中式文件操作](https://github.com/tw93/Mole/blob/ad82a47b157c289a0feb52a414d4515a83ea7aaf/lib/core/file_ops.sh)
+- [应用卸载索引与最后使用时间](https://github.com/tw93/Mole/blob/ad82a47b157c289a0feb52a414d4515a83ea7aaf/bin/uninstall.sh)
 - [磁盘扫描器](https://github.com/tw93/Mole/blob/ad82a47b157c289a0feb52a414d4515a83ea7aaf/cmd/analyze/scanner.go)
 - [磁盘缓存策略](https://github.com/tw93/Mole/blob/ad82a47b157c289a0feb52a414d4515a83ea7aaf/cmd/analyze/cache.go)
 - [状态 NDJSON 输出](https://github.com/tw93/Mole/blob/ad82a47b157c289a0feb52a414d4515a83ea7aaf/cmd/status/watch.go)

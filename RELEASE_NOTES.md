@@ -1,3 +1,27 @@
+# Memento Agent 0.7.14 - 应用活跃时间 / Application Activity Dates
+
+## 简体中文
+
+`0.7.14` 修复应用管理中大量应用显示“无使用记录”的问题。
+
+### 主要变化
+
+- **活跃时间：** 优先使用 Spotlight 的 `kMDItemLastUsedDate`；Spotlight 没有数据时，使用 `.app` 包目录修改时间作为 Mole 兼容的活动估算。
+- **时间显示：** 应用卡片按天、周、月和年显示相对时间，例如“7 个月前”和“2 年前”。
+- **数据边界：** 丢弃无效、2001 年以前和未来异常时间；兜底时间表示安装或更新活动，不宣称是精确启动记录。
+
+## English
+
+`0.7.14` fixes application cards that reported “No usage record” for many apps.
+
+### Highlights
+
+- **Activity dates:** Read Spotlight `kMDItemLastUsedDate` first, then use the `.app` bundle mtime as Mole-compatible activity estimate when Spotlight has no value.
+- **Humanized ages:** Show application ages in day, week, month, and year units, such as “7 months ago” and “2 years ago”.
+- **Validation:** Reject invalid, pre-2001, and future dates; bundle mtime is documented as installation/update activity evidence rather than an exact launch record.
+
+---
+
 # Memento Agent 0.7.13 - 应用分析进度与卡片交互 / Application Scan Progress and Card Interaction
 
 ## 简体中文

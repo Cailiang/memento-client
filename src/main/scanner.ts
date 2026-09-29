@@ -65,6 +65,8 @@ import {
 const execFileAsync = promisify(execFile)
 const HOME = os.homedir()
 const DAY_MS = 86_400_000
+const APPLICATION_ACTIVITY_EPOCH_FLOOR_MS = 978_307_200_000
+const APPLICATION_ACTIVITY_FUTURE_GRACE_MS = DAY_MS
 export const APPLICATION_UNUSED_DAYS = 90
 const LONG_RUNNING_SERVICE_SECONDS = 30 * 24 * 60 * 60
 const HIGH_SERVICE_CPU_PERCENT = 20
@@ -234,6 +236,32 @@ function ageInDays(date: Date): number {
 export function isApplicationUnused(lastUsedAt: Date | null, now = Date.now()): boolean {
   if (!lastUsedAt) return false
   return Math.max(0, Math.floor((now - lastUsedAt.getTime()) / DAY_MS)) >= APPLICATION_UNUSED_DAYS
+}
+
+function validApplicationActivityDate(value: Date | null, now = Date.now()): Date | null {
+  if (!value) return null
+  const timestamp = value.getTime()
+  if (!Number.isFinite(timestamp)) return null
+  if (timestamp < APPLICATION_ACTIVITY_EPOCH_FLOOR_MS) return null
+  if (timestamp > now + APPLICATION_ACTIVITY_FUTURE_GRACE_MS) return null
+  return value
+}
+
+export function parseApplicationLastUsedDate(
+  metadataValue: string | null,
+  fallback: Date | null = null,
+  now = Date.now()
+): Date | null {
+  const metadataDate = metadataValue ? validApplicationActivityDate(new Date(metadataValue), now) : null
+  return metadataDate ?? validApplicationActivityDate(fallback, now)
+}
+
+async function applicationBundleModifiedAt(target: string): Promise<Date | null> {
+  try {
+    return (await fs.stat(target)).mtime
+  } catch {
+    return null
+  }
 }
 
 function displayPath(target: string): string {
@@ -1826,6 +1854,7 @@ async function findApplications(root: string, depth = 2): Promise<string[]> {
 async function inspectApplication(target: string, language: AppLanguage): Promise<ApplicationMetadata | null> {
   const namePromise = resolveApplicationName(target, language)
   const infoPromise = readPlist(path.join(target, 'Contents', 'Info.plist'))
+  const bundleModifiedAtPromise = applicationBundleModifiedAt(target)
   try {
     const { stdout } = await run('/usr/bin/mdls', [
       '-name',
@@ -1844,6 +1873,7 @@ async function inspectApplication(target: string, language: AppLanguage): Promis
       parseMetadataValue(stdout, 'kMDItemFSSize')
     const dateValue = parseMetadataValue(stdout, 'kMDItemLastUsedDate')
     const info = await infoPromise
+    const bundleModifiedAt = await bundleModifiedAtPromise
     return {
       target,
       name: await namePromise,
@@ -1852,11 +1882,12 @@ async function inspectApplication(target: string, language: AppLanguage): Promis
       version: parseMetadataValue(stdout, 'kMDItemVersion') ??
         (typeof info?.CFBundleShortVersionString === 'string' ? info.CFBundleShortVersionString : t(language, '未知版本', 'Unknown version')),
       sizeBytes: Number.parseInt(sizeValue ?? '0', 10) || 0,
-      lastUsedAt: dateValue ? new Date(dateValue) : null,
+      lastUsedAt: parseApplicationLastUsedDate(dateValue, bundleModifiedAt),
       ...applicationPlistCapabilities(info)
     }
   } catch {
     const info = await infoPromise
+    const bundleModifiedAt = await bundleModifiedAtPromise
     if (info) {
       return {
         target,
@@ -1866,7 +1897,7 @@ async function inspectApplication(target: string, language: AppLanguage): Promis
           ? info.CFBundleShortVersionString
           : t(language, '未知版本', 'Unknown version'),
         sizeBytes: await getPathSize(target),
-        lastUsedAt: null,
+        lastUsedAt: parseApplicationLastUsedDate(null, bundleModifiedAt),
         ...applicationPlistCapabilities(info)
       }
     }
@@ -1876,7 +1907,7 @@ async function inspectApplication(target: string, language: AppLanguage): Promis
       bundleId: null,
       version: t(language, '未知版本', 'Unknown version'),
       sizeBytes: 0,
-      lastUsedAt: null,
+      lastUsedAt: parseApplicationLastUsedDate(null, bundleModifiedAt),
       ...applicationPlistCapabilities(null)
     }
   }

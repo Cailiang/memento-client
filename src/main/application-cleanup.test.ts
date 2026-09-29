@@ -7,6 +7,7 @@ import {
   applicationNamePlistPaths,
   applicationScope,
   isApplicationUnused,
+  parseApplicationLastUsedDate,
   plistApplicationName,
   sparkleVersionFromFeed
 } from './scanner'
@@ -22,6 +23,18 @@ describe('application cleanup threshold', () => {
   it('keeps recent applications and unknown usage out of cleanup suggestions', () => {
     expect(isApplicationUnused(new Date('2026-04-28T00:00:00Z'), now)).toBe(false)
     expect(isApplicationUnused(null, now)).toBe(false)
+  })
+
+  it('uses Spotlight last-used metadata first and the app bundle mtime as Mole-compatible fallback', () => {
+    const now = new Date('2026-09-29T00:00:00Z').getTime()
+    const fallback = new Date('2026-02-01T00:00:00Z')
+    expect(parseApplicationLastUsedDate('2026-08-20 12:00:00 +0000', fallback, now)?.toISOString())
+      .toBe('2026-08-20T12:00:00.000Z')
+    expect(parseApplicationLastUsedDate(null, fallback, now)).toBe(fallback)
+    expect(parseApplicationLastUsedDate('(null)', fallback, now)).toBe(fallback)
+    expect(parseApplicationLastUsedDate('not-a-date', fallback, now)).toBe(fallback)
+    expect(parseApplicationLastUsedDate('2000-01-01 00:00:00 +0000', fallback, now)).toBe(fallback)
+    expect(parseApplicationLastUsedDate('2027-01-01 00:00:00 +0000', fallback, now)).toBe(fallback)
   })
 
   it('classifies user, shared, and protected system application roots', () => {

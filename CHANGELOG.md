@@ -8,6 +8,20 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.7.14 - 2026-09-29
+
+### English
+
+- Matched Mole's application activity strategy: read Spotlight `kMDItemLastUsedDate` first, then use the `.app` bundle modification time when Spotlight has no usage record.
+- Added date validation and humanized application ages into day, week, month, and year units so older apps show values such as “7 months ago” or “2 years ago”.
+- Documented that bundle mtime is an activity estimate tied to installation or update changes, not an exact launch event.
+
+### 简体中文
+
+- 对齐 Mole 的应用活跃时间策略：优先读取 Spotlight 的 `kMDItemLastUsedDate`，没有使用记录时使用 `.app` 包目录的修改时间兜底。
+- 增加日期有效性校验，并将应用时间显示为天、周、月、年前，让旧应用可以显示“7 个月前”“2 年前”。
+- 在本地 Agent 文档中说明包目录修改时间是安装或更新活动的估算值，不代表精确的启动事件。
+
 ## 0.7.13 - 2026-09-29
 
 ### English

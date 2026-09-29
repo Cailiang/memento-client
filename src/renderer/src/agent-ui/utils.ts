@@ -25,11 +25,18 @@ export function relativeDate(value: string | null, language: AppLanguage): strin
   if (language === 'zh-CN') {
     if (days === 0) return '今天'
     if (days === 1) return '昨天'
-    return `${days} 天前`
+    if (days < 7) return `${days} 天前`
+    if (days < 30) return `${Math.floor(days / 7)} 周前`
+    if (days < 365) return `${Math.floor(days / 30)} 个月前`
+    return `${Math.floor(days / 365)} 年前`
   }
   if (days === 0) return 'Today'
   if (days === 1) return 'Yesterday'
-  return `${days} days ago`
+  if (days < 7) return `${days} days ago`
+  if (days < 30) return `${Math.floor(days / 7)} ${Math.floor(days / 7) === 1 ? 'week' : 'weeks'} ago`
+  if (days < 365) return `${Math.floor(days / 30)} ${Math.floor(days / 30) === 1 ? 'month' : 'months'} ago`
+  const years = Math.floor(days / 365)
+  return `${years} ${years === 1 ? 'year' : 'years'} ago`
 }
 
 export function formatDateTime(value: string, language: AppLanguage): string {

@@ -582,6 +582,13 @@ try {
   await page.locator('input[aria-label="搜索应用名称"]').fill('Visual Studio Code')
   const applicationCard = page.locator('.app-card').first()
   await applicationCard.waitFor()
+  const applicationUsageLabels = await page.locator('.app-meta strong').allTextContents()
+  if (!applicationUsageLabels.some((label) => !['无使用记录', 'No usage record'].includes(label.trim()))) {
+    failures.push('applications: no humanized last-used activity date is visible')
+  }
+  if (!applicationUsageLabels.some((label) => /天前|周前|个月前|年前|days ago|weeks ago|months ago|years ago/.test(label))) {
+    failures.push('applications: last-used dates are not rendered with compact relative units')
+  }
   if (!await applicationCard.locator('.app-update-action').count()) {
     failures.push('applications: available update button is missing')
   }
