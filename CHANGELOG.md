@@ -8,6 +8,24 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.7.11 - 2026-09-29
+
+### English
+
+- Reworked Overview cards: replaced Performance with Application analysis, added click-throughs to Applications, Disk analysis, and macOS Battery/Network settings, and made CPU/Memory cards jump to the sorted process list.
+- Replaced the high-usage process block with a larger process list sourced from up to 100 live processes, with User/System filters and distinct visual markers.
+- Added Homebrew Cask update detection and per-application update actions where a safe package-manager source is available.
+- Terminal startup diagnostics can now open the related shell configuration even when no automatic edit is safe.
+- Updated Renderer, main-process IPC, documentation, and UI smoke coverage for these interactions.
+
+### 简体中文
+
+- 重做概览卡片：用“应用分析”替换“性能状态”，增加应用管理、磁盘分析和 macOS 电池/网络设置入口；CPU、内存卡片会跳到对应排序的进程列表。
+- 用更完整的进程列表替换“高占用进程”板块，最多展示 100 个实时进程，支持用户/系统筛选，并用不同颜色标识。
+- 增加 Homebrew Cask 更新检测；存在安全包管理来源的应用会显示更新按钮。
+- 命令行启动诊断即使没有安全的自动修改，也可以打开相关 shell 配置文件查看和处理。
+- 同步更新渲染层、主进程 IPC、文档和 UI 冒烟覆盖。
+
 ## 0.7.10 - 2026-09-28
 
 ### English

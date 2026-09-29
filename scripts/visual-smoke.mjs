@@ -122,15 +122,11 @@ try {
         if (await page.locator('.overview-process-row .process-logo').count() < 1) {
           failures.push(`${viewportName}/overview: process logos are missing`)
         }
-        if (await page.locator('.overview-process-chart').count() !== 2) {
-          failures.push(`${viewportName}/overview: CPU and memory Top 5 charts are missing`)
+        if (await page.locator('.overview-process-chart').count()) {
+          failures.push(`${viewportName}/overview: removed high-usage process charts are still rendered`)
         }
-        if (await page.locator('.process-pie small').count()) {
-          failures.push(`${viewportName}/overview: pie chart still renders the TOP label inside the chart`)
-        }
-        const pieSize = await page.locator('.process-pie').first().evaluate((element) => element.getBoundingClientRect().width)
-        if (pieSize < 90) {
-          failures.push(`${viewportName}/overview: process pie chart is too small (${pieSize})`)
+        if (await page.locator('.process-scope-filter button').count() !== 3) {
+          failures.push(`${viewportName}/overview: system and user process filters are missing`)
         }
         if (await page.locator('.overview-process-head button').count() < 3) {
           failures.push(`${viewportName}/overview: process sort controls are incomplete`)
@@ -258,7 +254,7 @@ try {
   if (!await firstRunPage.getByText('尚未配置模型', { exact: true }).isVisible()) {
     failures.push('first-run: no-provider state is missing')
   }
-  for (const label of ['健康度', 'CPU', 'GPU', '内存', '电池', '磁盘', '网络', '性能状态']) {
+  for (const label of ['健康度', 'CPU', 'GPU', '内存', '电池', '磁盘', '网络', '应用分析']) {
     if (!await firstRunPage.locator('.overview-card header').getByText(label, { exact: true }).first().isVisible()) {
       failures.push(`overview: ${label} metric is missing`)
     }
@@ -579,6 +575,9 @@ try {
   await page.locator('input[aria-label="搜索应用名称"]').fill('Visual Studio Code')
   const applicationCard = page.locator('.app-card').first()
   await applicationCard.waitFor()
+  if (!await applicationCard.locator('.app-update-action').count()) {
+    failures.push('applications: available update button is missing')
+  }
   await applicationCard.locator('.uninstall-app').click()
   await page.locator('[role="dialog"] .danger-button').click()
   await page.locator('.uninstall-progress').waitFor()

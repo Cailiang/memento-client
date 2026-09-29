@@ -227,7 +227,7 @@ export function isSystemProcess(user: string | null, command: string): boolean {
   return normalizedUser === 'root' || /^\/(?:system\/|usr\/(?:bin|sbin|libexec|lib)\/|bin\/|sbin\/|private\/var\/db\/)/i.test(normalizedCommand)
 }
 
-export function parseProcesses(output: string, limit = 12): OverviewProcess[] {
+export function parseProcesses(output: string, limit = 100): OverviewProcess[] {
   const processes: OverviewProcess[] = []
   for (const line of output.split('\n')) {
     const fields = line.trim().split(/\s+/)

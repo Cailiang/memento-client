@@ -1,3 +1,31 @@
+# Memento Agent 0.7.11 - 概览分析与进程筛选 / Overview Analysis and Process Filters
+
+## 简体中文
+
+`0.7.11` 让概览页面成为可操作的设备入口，并补齐应用更新和终端诊断操作。
+
+### 主要变化
+
+- **应用分析：** 概览显示已安装、不常用和可更新应用数量，点击进入应用管理。
+- **卡片入口：** CPU/内存卡片跳到对应降序进程列表，磁盘卡片打开磁盘分析，电池和网络卡片打开 macOS 系统设置。
+- **进程列表：** 移除“高占用进程”板块，扩展实时采样数量，支持用户/系统筛选和颜色区分。
+- **应用更新：** 应用管理增加检查更新和更新按钮；Homebrew Cask 应用在检测到安全更新来源时可直接更新。
+- **终端诊断：** 没有自动修复的诊断也可以直接打开相关 shell 配置文件查看。
+
+## English
+
+`0.7.11` turns Overview into an actionable device workspace and adds application update and terminal diagnostic actions.
+
+### Highlights
+
+- **Application analysis:** Overview shows installed, unused, and updateable application counts and opens Applications.
+- **Card navigation:** CPU and Memory cards jump to descending process lists, Disk opens Disk analysis, and Battery/Network open macOS System Settings.
+- **Process list:** The high-usage process block is replaced by a larger live sample with User/System filters and distinct colors.
+- **Application updates:** Applications adds Check updates and per-app Update actions when Homebrew Cask provides a safe update source.
+- **Terminal diagnostics:** Findings without safe automatic edits can still open their related shell configuration file.
+
+---
+
 # Memento Agent 0.7.10 - 进程图标、终端模块与清理进度 / Process Logos, Terminal Module, and Cleanup Progress
 
 ## 简体中文

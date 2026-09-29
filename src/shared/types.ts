@@ -111,6 +111,10 @@ export interface InstalledApplication {
   executable?: string | null
   urlSchemes?: string[]
   unused: boolean
+  updateAvailable?: boolean
+  latestVersion?: string | null
+  updateSource?: 'homebrew-cask'
+  updateToken?: string
   protectedReason?: string
   action?: CandidateOperation
 }
@@ -376,6 +380,9 @@ export interface MementoApi extends MementoAgentApi, MementoSettingsApi {
   onDiskUsageNodeRemoved: (callback: (id: string) => void) => () => void
   getApplicationIcon: (id: string) => Promise<string | null>
   openApplication: (id: string) => Promise<void>
+  updateApplication: (id: string) => Promise<void>
+  openSystemSettings: (section: 'battery' | 'network') => Promise<void>
+  revealTerminalFinding: (id: string) => Promise<void>
   runActions: (ids: string[]) => Promise<ActionResult[]>
   runTerminalFixes: (ids: string[]) => Promise<TerminalFixRunResult>
   undoTerminalFixes: () => Promise<ActionResult[]>

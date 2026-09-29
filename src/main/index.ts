@@ -128,6 +128,22 @@ function mainText(chinese: string, english: string): string {
   return appSettings.language === 'en-US' ? english : chinese
 }
 
+function homebrewExecutable(): string | null {
+  return ['/opt/homebrew/bin/brew', '/usr/local/bin/brew', '/home/linuxbrew/.linuxbrew/bin/brew']
+    .find((candidate) => existsSync(candidate)) ?? null
+}
+
+function terminalFindingConfigTarget(source: string | undefined): string {
+  const sourcePath = source?.match(/^(~\/[^:]+|\/[^:]+)(?::\d+)?$/)?.[1]
+  const target = sourcePath?.startsWith('~/')
+    ? path.join(os.homedir(), sourcePath.slice(2))
+    : sourcePath
+  const allowed = new Set(['.zshenv', '.zprofile', '.zshrc', '.zlogin'])
+  if (target && path.dirname(target) === os.homedir() && allowed.has(path.basename(target)) && existsSync(target)) return target
+  const fallback = path.join(os.homedir(), '.zshrc')
+  return existsSync(fallback) ? fallback : os.homedir()
+}
+
 function validateOverviewProcessName(name: unknown): string {
   if (typeof name !== 'string' || !name.trim() || name.length > 256) {
     throw new Error(mainText('进程名称无效', 'The process name is invalid.'))
@@ -1516,6 +1532,38 @@ app.whenReady().then(async () => {
       throw new Error(mainText(`无法打开应用：${error}`, `Could not open the application: ${error}`))
     }
   })
+  ipcMain.handle('memento:update-application', async (_event, id: string) => {
+    if (typeof id !== 'string' || id.length > 100) {
+      throw new Error(mainText('应用入口无效，请重新扫描', 'The application is invalid. Scan again.'))
+    }
+    const application = currentScanResult?.applications.find((item) => item.id === id)
+    const brew = homebrewExecutable()
+    const token = application?.updateToken
+    if (!application?.updateAvailable || application.updateSource !== 'homebrew-cask' || !token || !brew) {
+      throw new Error(mainText('这个应用没有可执行的更新来源，请先重新扫描', 'This application has no executable update source. Scan again first.'))
+    }
+    if (!/^[A-Za-z0-9@._+/-]+$/.test(token)) {
+      throw new Error(mainText('更新来源无效，已停止操作', 'The update source is invalid, so the operation was stopped.'))
+    }
+    await execFileAsync(brew, ['upgrade', '--cask', token], {
+      timeout: 10 * 60_000,
+      maxBuffer: 4 * 1024 * 1024,
+      env: { ...process.env, HOMEBREW_NO_AUTO_UPDATE: '1', LC_ALL: 'C' }
+    })
+  })
+  ipcMain.handle('memento:open-system-settings', async (_event, section: string) => {
+    const urls: Record<string, string> = {
+      battery: 'x-apple.systempreferences:com.apple.Battery-Settings.extension',
+      network: 'x-apple.systempreferences:com.apple.Network-Settings.extension'
+    }
+    const target = urls[section]
+    if (!target) throw new Error(mainText('系统设置入口无效', 'The System Settings section is invalid.'))
+    try {
+      await shell.openExternal(target)
+    } catch {
+      await execFileAsync('/usr/bin/open', ['-a', 'System Settings'])
+    }
+  })
   ipcMain.handle('memento:settings:get', () => appSettings)
   ipcMain.handle('memento:settings:update', (_event, input: UpdateAppSettingsInput) => {
     const previousLanguage = appSettings.language
@@ -1746,6 +1794,15 @@ app.whenReady().then(async () => {
     }
     const error = await shell.openPath(target)
     if (error) throw new Error(error)
+  })
+
+  ipcMain.handle('memento:reveal-terminal-finding', async (_event, id: string) => {
+    if (typeof id !== 'string' || id.length > 100) {
+      throw new Error(mainText('终端诊断入口无效，请重新扫描', 'The terminal diagnostic is invalid. Scan again.'))
+    }
+    const finding = currentScanResult?.terminal.findings.find((item) => item.id === id)
+    if (!finding) throw new Error(mainText('终端诊断已过期，请重新扫描', 'This terminal diagnostic has expired. Scan again.'))
+    shell.showItemInFolder(terminalFindingConfigTarget(finding.source))
   })
 
   ipcMain.handle('memento:run-terminal-fixes', async (_event, ids: string[]) => {

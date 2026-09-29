@@ -438,6 +438,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
   const [ignoredManagerKind, setIgnoredManagerKind] = useState<'storage' | 'services' | 'applications'>('storage')
   const [restoreBusyValue, setRestoreBusyValue] = useState<string | null>(null)
   const [openingApplicationId, setOpeningApplicationId] = useState<string | null>(null)
+  const [updatingApplicationId, setUpdatingApplicationId] = useState<string | null>(null)
   const [addingOperationId, setAddingOperationId] = useState<string | null>(null)
   const [pendingHistoryDelete, setPendingHistoryDelete] = useState<AgentRunRecord[] | null>(null)
   const [pendingMaintenanceDelete, setPendingMaintenanceDelete] = useState<MaintenanceRunRecord[] | null>(null)
@@ -1414,6 +1415,36 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     }
   }
 
+  const updateApplication = async (application: InstalledApplication): Promise<void> => {
+    setUpdatingApplicationId(application.id)
+    try {
+      if (window.memento) await window.memento.updateApplication(application.id)
+      await scanNow()
+      setToast(appText(`${application.name} 已更新`, `${application.name} was updated.`))
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : appText('应用更新失败', 'Application update failed.'))
+    } finally {
+      setUpdatingApplicationId(null)
+    }
+  }
+
+  const openSystemSettings = async (section: 'battery' | 'network'): Promise<void> => {
+    try {
+      if (window.memento) await window.memento.openSystemSettings(section)
+      else setView('settings')
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : appText('无法打开系统设置', 'Could not open System Settings.'))
+    }
+  }
+
+  const revealTerminalFinding = async (finding: TerminalFinding): Promise<void> => {
+    try {
+      if (window.memento) await window.memento.revealTerminalFinding(finding.id)
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : appText('无法打开终端配置', 'Could not open the terminal configuration.'))
+    }
+  }
+
   const deleteHistoryRun = async (): Promise<void> => {
     if (!pendingHistoryDelete) return
     const selectedRuns = pendingHistoryDelete
@@ -1810,7 +1841,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       onNavigate={setView}
       onInstallUpdate={installUpdate}
     >
-      {view === 'overview' && <OverviewPage metrics={overviewMetrics} applications={result?.applications ?? []} busy={overviewBusy} paused={overviewPaused} error={overviewError} onRefresh={() => void refreshOverview(true)} onPausedChange={setOverviewPaused} onAskProcess={(process) => void askOverviewProcess(process)} onCopyProcessName={(name) => void copyOverviewProcessName(name)} onCopyProcessPid={(pid) => void copyOverviewProcessPid(pid)} onTerminateProcess={(process, force) => void terminateOverviewProcess(process, force)} />}
+      {view === 'overview' && <OverviewPage metrics={overviewMetrics} applications={result?.applications ?? []} busy={overviewBusy} paused={overviewPaused} error={overviewError} onRefresh={() => void refreshOverview(true)} onPausedChange={setOverviewPaused} onAskProcess={(process) => void askOverviewProcess(process)} onCopyProcessName={(name) => void copyOverviewProcessName(name)} onCopyProcessPid={(pid) => void copyOverviewProcessPid(pid)} onTerminateProcess={(process, force) => void terminateOverviewProcess(process, force)} onOpenApplications={() => setView('apps')} onOpenDisk={() => setView('disk')} onOpenSystemSettings={(section) => void openSystemSettings(section)} />}
       {view === 'agent' && <AgentPage scan={result} run={activeRun} conversationRuns={conversationRuns} workspaceRuns={workspaceRuns} statusMessage={runStatusMessage} selectedPlanIds={selectedPlanIds} providerConfigured={Boolean(defaultProvider)} addingOperationId={addingOperationId} openingApplicationId={openingApplicationId} returnLabel={agentOriginLabel} onSubmit={startAgentRun} onSelectWorkspaceRun={selectWorkspaceRun} onCloseWorkspaceRun={closeWorkspaceRun} onNewTask={() => { setActiveRun(null); activeRunId.current = null; setSelectedPlanIds(new Set()); setRunStatusMessage(''); setAgentOrigin(null) }} onOpenHistory={() => setView('history')} onOpenSettings={() => setView('settings')} onReturn={returnToAgentOrigin} onOpenApplication={openAgentApplication} onAddPlanItem={(id) => void addAgentPlanItem(id)} onTogglePlanItem={(id) => setSelectedPlanIds((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next })} onExecutePlan={() => void executePlan()} onDiscardPlan={discardPlan} />}
       {view === 'health' && <HealthPage
         result={result}
@@ -1829,6 +1860,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
         selectedIds={cleanupSelectedIds}
         onSelectedIdsChange={setCleanupSelectedIds}
         onDirectTerminalFixes={requestDirectTerminalFixes}
+        onRevealTerminalFinding={(finding) => void revealTerminalFinding(finding)}
         onIgnore={setPendingIgnore}
         onManageIgnored={openIgnoredManager}
       />}
@@ -1850,10 +1882,11 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
         selectedIds={cleanupSelectedIds}
         onSelectedIdsChange={setCleanupSelectedIds}
         onDirectTerminalFixes={requestDirectTerminalFixes}
+        onRevealTerminalFinding={(finding) => void revealTerminalFinding(finding)}
         onIgnore={setPendingIgnore}
         onManageIgnored={openIgnoredManager}
       />}
-      {view === 'apps' && <ApplicationsPage applications={result?.applications ?? []} hasResult={Boolean(result)} loading={scanBusy || (!result && !scanError)} progress={progress} error={scanError} openingId={openingApplicationId} removingId={removingApplicationId} restoreTarget={restoreTarget?.view === 'apps' ? restoreTarget : null} onRestoreComplete={() => setRestoreTarget(null)} ignoredCount={settings.applicationWhitelist.length} onOpen={(application) => void openApplication(application)} onUninstall={setPendingUninstall} onIgnore={setPendingApplicationIgnore} onManageIgnored={() => openIgnoredManager('applications')} onAgentPrompt={(prompt, origin) => startAgentRun(prompt, { isolated: true, origin: { view: 'apps', ...origin } })} onScan={() => void scanNow()} />}
+      {view === 'apps' && <ApplicationsPage applications={result?.applications ?? []} hasResult={Boolean(result)} loading={scanBusy || (!result && !scanError)} progress={progress} error={scanError} openingId={openingApplicationId} removingId={removingApplicationId} updatingId={updatingApplicationId} restoreTarget={restoreTarget?.view === 'apps' ? restoreTarget : null} onRestoreComplete={() => setRestoreTarget(null)} ignoredCount={settings.applicationWhitelist.length} onOpen={(application) => void openApplication(application)} onUpdate={(application) => void updateApplication(application)} onUninstall={setPendingUninstall} onIgnore={setPendingApplicationIgnore} onManageIgnored={() => openIgnoredManager('applications')} onAgentPrompt={(prompt, origin) => startAgentRun(prompt, { isolated: true, origin: { view: 'apps', ...origin } })} onScan={() => void scanNow()} />}
       {view === 'disk' && <DiskAnalysisPage result={diskUsage} progress={diskUsageProgress} busy={diskUsageBusy} error={diskUsageError} onScan={() => void scanDiskUsage()} onCancel={cancelDiskUsageScan} onReveal={revealDiskUsageNode} onAskAI={(node) => void askDiskUsageNode(node)} onRequestTrash={setPendingDiskUsageTrash} />}
       {view === 'history' && <HistoryPage runs={runs} maintenanceRuns={maintenanceRuns} onOpenRun={(run) => { setActiveRun(run); activeRunId.current = run.id; setSelectedPlanIds(new Set()); setView('agent') }} onDeleteRuns={setPendingHistoryDelete} onDeleteMaintenanceRuns={setPendingMaintenanceDelete} onRevealRecovery={revealMaintenanceRecovery} />}
       {view === 'settings' && <SettingsPage settings={settings} providers={providers} appVersion={appVersion} updateState={updateState} onUpdateSettings={updateSettings} onDiscoverModels={discoverProviderModels} onSaveProvider={saveProvider} onTestProvider={testProvider} onDeleteProvider={deleteProvider} onSetDefaultProvider={setDefaultProvider} onImportLocalAi={importLocalAiConfigurations} onImportCcSwitch={importCcSwitchProviders} onCheckUpdates={checkForUpdates} onManageIgnored={() => openIgnoredManager()} onToast={setToast} />}

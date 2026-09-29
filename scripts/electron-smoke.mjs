@@ -25,6 +25,9 @@ try {
     window.memento.copyOverviewProcessName &&
     window.memento.copyOverviewProcessPid &&
     window.memento.terminateOverviewProcess &&
+    window.memento.updateApplication &&
+    window.memento.openSystemSettings &&
+    window.memento.revealTerminalFinding &&
     window.memento.listMaintenanceRuns &&
     window.memento.deleteMaintenanceRuns &&
     window.memento.revealMaintenanceRecovery

@@ -56,6 +56,8 @@ describe('overview monitor parsing', () => {
       pid: 7,
       isSystem: true
     })])
+    const broadSample = Array.from({ length: 105 }, (_, index) => ` ${index + 100} ${105 - index}.0 0.1 1024 /Applications/App-${index}.app/Contents/MacOS/App-${index}`).join('\n')
+    expect(parseProcesses(broadSample)).toHaveLength(100)
   })
 
   it('counts reclaimable macOS pages as available memory', () => {

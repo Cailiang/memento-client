@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
 import { promises as fs } from 'node:fs'
+import { existsSync } from 'node:fs'
 import type { Dirent, Stats } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -1532,11 +1533,53 @@ interface ApplicationScan {
   applications: InstalledApplication[]
 }
 
+interface HomebrewCaskUpdate {
+  token: string
+  name: string
+  latestVersion: string | null
+}
+
 const APPLICATION_ROOTS = [
   '/Applications',
   path.join(HOME, 'Applications'),
   '/System/Applications'
 ]
+
+function applicationUpdateTokens(application: Pick<ApplicationMetadata, 'name' | 'target' | 'bundleId'>): string[] {
+  return [application.name, path.basename(application.target, '.app'), application.bundleId ?? '']
+    .map((value) => value.toLocaleLowerCase().replace(/[^a-z0-9]+/g, ''))
+    .filter(Boolean)
+}
+
+function caskUpdateTokens(update: HomebrewCaskUpdate): string[] {
+  return [update.name, update.token]
+    .map((value) => value.toLocaleLowerCase().replace(/[^a-z0-9]+/g, ''))
+    .filter(Boolean)
+}
+
+async function discoverHomebrewCaskUpdates(): Promise<HomebrewCaskUpdate[]> {
+  const brew = ['/opt/homebrew/bin/brew', '/usr/local/bin/brew', '/home/linuxbrew/.linuxbrew/bin/brew']
+    .find((candidate) => existsSync(candidate))
+  if (!brew) return []
+  try {
+    const { stdout } = await run(brew, ['outdated', '--cask', '--json=v2'], 10_000)
+    const payload = JSON.parse(stdout) as { casks?: unknown }
+    if (!Array.isArray(payload.casks)) return []
+    return payload.casks.flatMap((value) => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return []
+      const item = value as Record<string, unknown>
+      const token = typeof item.token === 'string' ? item.token.trim() : ''
+      const name = typeof item.name === 'string' ? item.name.trim() : token
+      if (!token || !name) return []
+      const latestVersion = [item.version, item.latest_version, item.current_version]
+        .find((candidate): candidate is string => typeof candidate === 'string' && candidate.trim().length > 0)
+        ?.trim() ?? null
+      return [{ token, name, latestVersion }]
+    })
+  } catch {
+    return []
+  }
+}
 
 export function plistApplicationName(info: Record<string, unknown>): string | null {
   for (const key of ['CFBundleDisplayName', 'CFBundleName']) {
@@ -1702,7 +1745,10 @@ async function scanApplications(
 ): Promise<ApplicationScan> {
   const discovered = await Promise.all(APPLICATION_ROOTS.map((root) => findApplications(root)))
   const appPaths = discovered.flat()
-  const inspected = await mapLimit([...new Set(appPaths)], 8, (target) => inspectApplication(target, language))
+  const [inspected, homebrewUpdates] = await Promise.all([
+    mapLimit([...new Set(appPaths)], 8, (target) => inspectApplication(target, language)),
+    discoverHomebrewCaskUpdates()
+  ])
   const applications = inspected.filter((item): item is ApplicationMetadata => item !== null)
   const inventoryApplications = applications.filter(
     (application) => application.bundleId !== 'com.fcl.memento'
@@ -1727,6 +1773,11 @@ async function scanApplications(
         }
     if (action) actions.set(action.id, { kind: 'trash', target: application.target })
     revealTargets.set(id, application.target)
+    const update = homebrewUpdates.find((candidate) => {
+      const applicationTokens = applicationUpdateTokens(application)
+      const updateTokens = caskUpdateTokens(candidate)
+      return applicationTokens.some((token) => updateTokens.includes(token))
+    })
     return {
       id,
       name: application.name,
@@ -1742,6 +1793,10 @@ async function scanApplications(
       executable: application.executable,
       urlSchemes: application.urlSchemes,
       unused: isApplicationUnused(application.lastUsedAt),
+      updateAvailable: Boolean(update),
+      latestVersion: update?.latestVersion ?? null,
+      updateSource: update ? 'homebrew-cask' : undefined,
+      updateToken: update?.token,
       protectedReason: scope === 'system'
         ? t(language, 'macOS 系统应用', 'macOS system application')
         : undefined,

@@ -578,6 +578,8 @@ export const demoResult: ScanResult = {
       id: 'demo-inventory-vscode',
       name: 'Visual Studio Code',
       version: '1.102.2',
+      updateAvailable: true,
+      latestVersion: '1.103.0',
       bundleId: 'com.microsoft.VSCode',
       location: '/Applications/Visual Studio Code.app',
       sizeBytes: 548 * MB,

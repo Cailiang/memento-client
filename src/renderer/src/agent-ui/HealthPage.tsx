@@ -131,19 +131,21 @@ function TerminalCleanupRow({
   selected,
   onToggle,
   onAgentPrompt,
-  onDirectAction
+  onDirectAction,
+  onReveal
 }: {
   finding: TerminalFinding
   selected: boolean
   onToggle: () => void
   onAgentPrompt: (finding: TerminalFinding) => void
   onDirectAction: (finding: TerminalFinding) => void
+  onReveal: (finding: TerminalFinding) => void
 }): React.JSX.Element {
   const { text } = useI18n()
   const actionable = Boolean(finding.fix)
   const status = finding.fix
     ? finding.severity === 'slow' ? text('建议优化', 'Optimization suggested') : text('可优化', 'Optimizable')
-    : finding.severity === 'good' ? text('正常', 'Healthy') : text('仅供分析', 'Analysis only')
+    : finding.severity === 'good' ? text('正常', 'Healthy') : text('可查看配置', 'Config available')
 
   return (
     <article className={`cleanup-row terminal-cleanup-row ${selected ? 'is-selected' : ''}`} data-focus-id={finding.id} tabIndex={-1}>
@@ -160,6 +162,7 @@ function TerminalCleanupRow({
       <div className="cleanup-item-size"><strong>--</strong><small>{finding.recommendation ?? text('命令行启动诊断', 'Terminal startup diagnostic')}</small></div>
       <div className="cleanup-row-actions">
         <button type="button" className="icon-button" onClick={() => onAgentPrompt(finding)} title={text('让 AI 解释此项', 'Ask AI to explain')} aria-label={text(`让 AI 解释 ${finding.title}`, `Ask AI to explain ${finding.title}`)}><Sparkles size={15} /></button>
+        <button type="button" className="icon-button" onClick={() => onReveal(finding)} title={text('查看配置文件', 'View config file')} aria-label={text(`查看 ${finding.title} 的配置`, `View configuration for ${finding.title}`)}><FolderOpen size={15} /></button>
         {finding.fix && <button type="button" className="icon-button cleanup-single-action is-review" onClick={() => onDirectAction(finding)} title={finding.fix.label} aria-label={`${finding.fix.label}: ${finding.title}`}><Wrench size={15} /></button>}
       </div>
     </article>
@@ -183,6 +186,7 @@ export function HealthPage({
   selectedIds,
   onSelectedIdsChange,
   onDirectTerminalFixes,
+  onRevealTerminalFinding,
   onIgnore,
   onManageIgnored,
   standaloneTerminal = false
@@ -203,6 +207,7 @@ export function HealthPage({
   selectedIds: ReadonlySet<string>
   onSelectedIdsChange: (ids: Set<string>) => void
   onDirectTerminalFixes: (findings: TerminalFinding[]) => void
+  onRevealTerminalFinding: (finding: TerminalFinding) => void
   onIgnore: (candidate: ScanCandidate) => void
   onManageIgnored: (kind: 'storage' | 'services') => void
   standaloneTerminal?: boolean
@@ -423,6 +428,7 @@ export function HealthPage({
                 onToggle={() => toggleCandidate(finding.id)}
                 onAgentPrompt={askTerminalAgent}
                 onDirectAction={(item) => onDirectTerminalFixes([item])}
+                onReveal={onRevealTerminalFinding}
               />
             )) : <div className="cleanup-empty"><ShieldCheck size={24} /><strong>{text('没有命令行启动项诊断', 'No terminal startup findings')}</strong><span>{text('重新扫描后，会按照当前 shell 配置和 PATH 结果展示。', 'Scan again to inspect the current shell configuration and PATH.')}</span></div> : visibleItems.length ? visibleItems.map((candidate) => (
               <CleanupRow

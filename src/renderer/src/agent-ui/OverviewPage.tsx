@@ -1,5 +1,6 @@
 import {
   Activity,
+  AppWindow,
   ArrowDownUp,
   BatteryCharging,
   BatteryFull,
@@ -18,10 +19,9 @@ import {
   RefreshCw,
   Search,
   Skull,
-  ThermometerSun,
   Zap
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { InstalledApplication, OverviewHealthIssue, OverviewMetrics } from '../../../shared/types'
 import { useI18n } from '../i18n'
 import { formatBytes, formatStorageBytes } from './utils'
@@ -61,52 +61,6 @@ function BarHistory({ values }: { values: number[] }): React.JSX.Element {
   return <div className="overview-bars" aria-hidden="true">{safeValues.map((value, index) => <i key={index} style={{ height: `${Math.max(8, Math.min(100, value))}%` }} />)}</div>
 }
 
-const PROCESS_PIE_COLORS = [
-  'var(--accent)',
-  'var(--warning)',
-  'var(--success)',
-  'var(--danger)',
-  'var(--text-secondary)'
-]
-
-function ProcessPie({
-  title,
-  processes,
-  metric,
-  formatValue
-}: {
-  title: string
-  processes: OverviewMetrics['processes']
-  metric: 'cpuPercent' | 'memoryBytes'
-  formatValue: (value: number) => string
-}): React.JSX.Element {
-  const top = [...processes]
-    .sort((left, right) => right[metric] - left[metric])
-    .slice(0, 5)
-  const total = top.reduce((sum, process) => sum + Math.max(0, process[metric]), 0)
-  const safeTotal = total || 1
-  let cursor = 0
-  const segments = top.map((process, index) => {
-    const share = Math.max(0, process[metric]) / safeTotal * 100
-    const start = cursor
-    cursor += share
-    return `${PROCESS_PIE_COLORS[index]} ${start.toFixed(2)}% ${cursor.toFixed(2)}%`
-  })
-  if (!segments.length) segments.push('var(--surface-strong) 0 100%')
-  return (
-    <article className="overview-process-chart">
-      <header><strong>{title}</strong><span>Top 5</span></header>
-      <div className="overview-process-chart-body">
-        <div className="process-pie" role="img" aria-label={title} style={{ background: `conic-gradient(${segments.join(', ')})` }}><span>{top.length || 0}</span></div>
-        <ol className="process-pie-legend">
-          {top.map((process, index) => <li key={process.pid}><i style={{ background: PROCESS_PIE_COLORS[index] }} /><span title={process.name}>{process.name}</span><strong>{formatValue(process[metric])}</strong></li>)}
-          {!top.length && <li className="process-pie-empty">--</li>}
-        </ol>
-      </div>
-    </article>
-  )
-}
-
 function HealthGauge({ value }: { value: number }): React.JSX.Element {
   const radius = 30
   const circumference = Math.PI * radius
@@ -122,15 +76,6 @@ function formatRate(bytes: number): string {
   if (bytes < 1024) return `${Math.round(bytes)} B/s`
   if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} KB/s`
   return `${(bytes / 1024 ** 2).toFixed(1)} MB/s`
-}
-
-function formatUptime(seconds: number, language: 'zh-CN' | 'en-US'): string {
-  const days = Math.floor(seconds / 86_400)
-  const hours = Math.floor(seconds % 86_400 / 3_600)
-  const minutes = Math.floor(seconds % 3_600 / 60)
-  if (days) return language === 'en-US' ? `${days}d ${hours}h` : `${days} 天 ${hours} 小时`
-  if (hours) return language === 'en-US' ? `${hours}h ${minutes}m` : `${hours} 小时 ${minutes} 分钟`
-  return language === 'en-US' ? `${minutes}m` : `${minutes} 分钟`
 }
 
 function applicationForProcess(
@@ -177,7 +122,10 @@ export function OverviewPage({
   onCopyProcessName,
   onCopyProcessPid,
   onTerminateProcess,
-  applications
+  applications,
+  onOpenApplications,
+  onOpenDisk,
+  onOpenSystemSettings
 }: {
   metrics: OverviewMetrics | null
   busy: boolean
@@ -190,11 +138,15 @@ export function OverviewPage({
   onCopyProcessPid: (pid: number) => void
   onTerminateProcess: (process: OverviewMetrics['processes'][number], force: boolean) => void
   applications: readonly InstalledApplication[]
+  onOpenApplications: () => void
+  onOpenDisk: () => void
+  onOpenSystemSettings: (section: 'battery' | 'network') => void
 }): React.JSX.Element {
   const { language, text } = useI18n()
   const [query, setQuery] = useState('')
   const [processSort, setProcessSort] = useState<'name' | 'cpu' | 'memory'>('cpu')
   const [processSortDirection, setProcessSortDirection] = useState<'asc' | 'desc'>('desc')
+  const [processScope, setProcessScope] = useState<'all' | 'user' | 'system'>('all')
   const [openProcessMenu, setOpenProcessMenu] = useState<number | null>(null)
   const [processInteractionActive, setProcessInteractionActive] = useState(false)
   const [heldProcesses, setHeldProcesses] = useState<OverviewMetrics['processes']>([])
@@ -203,6 +155,7 @@ export function OverviewPage({
   const [memoryHistory, setMemoryHistory] = useState<number[]>([])
   const [networkReceivedHistory, setNetworkReceivedHistory] = useState<number[]>([])
   const [networkSentHistory, setNetworkSentHistory] = useState<number[]>([])
+  const processPanelRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
     if (!metrics) return
@@ -220,6 +173,7 @@ export function OverviewPage({
   const processes = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase()
     return [...(processInteractionActive ? heldProcesses : metrics?.processes ?? [])]
+      .filter((process) => processScope === 'all' || (processScope === 'system' ? process.isSystem : !process.isSystem))
       .filter((process) => !normalized || `${process.name} ${process.command} ${process.pid}`.toLocaleLowerCase().includes(normalized))
       .sort((left, right) => {
         const result = processSort === 'name'
@@ -229,7 +183,7 @@ export function OverviewPage({
             : right.memoryBytes - left.memoryBytes
         return processSortDirection === 'asc' ? -result : result
       })
-  }, [heldProcesses, language, metrics?.processes, processInteractionActive, processSort, processSortDirection, query])
+  }, [heldProcesses, language, metrics?.processes, processInteractionActive, processScope, processSort, processSortDirection, query])
 
   const beginProcessInteraction = (): void => {
     setHeldProcesses(metrics?.processes ?? [])
@@ -253,6 +207,19 @@ export function OverviewPage({
     }
     setProcessSort(sort)
     setProcessSortDirection(sort === 'name' ? 'asc' : 'desc')
+  }
+
+  const focusProcessList = (sort: 'cpu' | 'memory'): void => {
+    setProcessSort(sort)
+    setProcessSortDirection('desc')
+    setProcessScope('all')
+    window.requestAnimationFrame(() => processPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }
+
+  const activateCard = (event: React.KeyboardEvent<HTMLElement>, action: () => void): void => {
+    if (event.key !== 'Enter' && event.key !== ' ') return
+    event.preventDefault()
+    action()
   }
 
   const confirmTerminate = (process: OverviewMetrics['processes'][number], force: boolean): void => {
@@ -287,6 +254,8 @@ export function OverviewPage({
     : (metrics.battery.percent ?? 0) >= 95 ? BatteryFull : BatteryMedium
   const BatteryIcon = batteryIcon
   const maxNetwork = Math.max(...networkReceivedHistory, ...networkSentHistory, 1024)
+  const unusedApplications = applications.filter((application) => application.unused).length
+  const updateableApplications = applications.filter((application) => application.updateAvailable).length
 
   return (
     <section className="page content-page overview-page is-active">
@@ -308,11 +277,11 @@ export function OverviewPage({
           <footer><span>{metrics.hardware.cpuModel.replace(/\s+CPU.*$/, '')}</span><span>{formatBytes(metrics.memory.totalBytes)}</span><span>macOS {metrics.osVersion}</span></footer>
         </article>
 
-        <article className="overview-card">
+        <article className="overview-card overview-card-link" role="button" tabIndex={0} onClick={() => focusProcessList('cpu')} onKeyDown={(event) => activateCard(event, () => focusProcessList('cpu'))} title={text('查看 CPU 占用最高的进程', 'View processes sorted by CPU usage')}>
           <header><span><Cpu size={15} />CPU</span><small>{metrics.hardware.logicalCores} {text('线程', 'threads')}</small></header>
           <div className="overview-metric-value"><strong>{Math.round(metrics.cpu.usagePercent)}</strong><em>%</em></div>
           <BarHistory values={cpuHistory} />
-          <footer><span>{text('负载', 'Load')} {metrics.cpu.loadAverage.map((value) => value.toFixed(2)).join(' / ')}</span></footer>
+          <footer><span>{text('负载', 'Load')} {metrics.cpu.loadAverage.map((value) => value.toFixed(2)).join(' / ')}</span><span className="overview-card-link-label">{text('查看进程', 'View processes')}</span></footer>
         </article>
 
         <article className="overview-card">
@@ -322,44 +291,48 @@ export function OverviewPage({
           <footer><span>{metrics.gpu.name ?? text('macOS 未公开当前利用率', 'Utilization is not exposed by macOS')}</span></footer>
         </article>
 
-        <article className="overview-card">
+        <article className="overview-card overview-card-link" role="button" tabIndex={0} onClick={() => focusProcessList('memory')} onKeyDown={(event) => activateCard(event, () => focusProcessList('memory'))} title={text('查看内存占用最高的进程', 'View processes sorted by memory usage')}>
           <header><span><MemoryStick size={15} />{text('内存', 'Memory')}</span><small>{text('可用', 'Available')} {formatBytes(metrics.memory.availableBytes)}</small></header>
           <div className="overview-metric-value"><strong>{Math.round(metrics.memory.usedPercent)}</strong><em>%</em></div>
           <Sparkline values={memoryHistory} />
-          <footer><span>{formatBytes(metrics.memory.usedBytes)} / {formatBytes(metrics.memory.totalBytes)}</span></footer>
+          <footer><span>{formatBytes(metrics.memory.usedBytes)} / {formatBytes(metrics.memory.totalBytes)}</span><span className="overview-card-link-label">{text('查看进程', 'View processes')}</span></footer>
         </article>
 
-        <article className="overview-card">
+        <article className="overview-card overview-card-link" role="button" tabIndex={0} onClick={() => onOpenSystemSettings('battery')} onKeyDown={(event) => activateCard(event, () => onOpenSystemSettings('battery'))} title={text('打开系统电池设置', 'Open battery settings')}>
           <header><span><BatteryIcon size={15} />{text('电池', 'Battery')}</span><small>{metrics.battery.available ? (metrics.battery.powerSource === 'ac' ? text('电源供电', 'AC power') : text('电池供电', 'On battery')) : text('未检测到', 'Not detected')}</small></header>
           <div className="overview-metric-value"><strong>{metrics.battery.percent ?? '--'}</strong>{metrics.battery.percent !== null && <em>%</em>}</div>
           <div className="overview-progress"><i style={{ width: `${metrics.battery.percent ?? 0}%` }} /></div>
-          <footer><span>{metrics.battery.healthPercent !== null ? text(`健康度 ${Math.round(metrics.battery.healthPercent)}%`, `Health ${Math.round(metrics.battery.healthPercent)}%`) : text('健康度不可用', 'Health unavailable')}</span>{metrics.battery.cycleCount !== null && <span>{metrics.battery.cycleCount} {text('次循环', 'cycles')}</span>}</footer>
+          <footer><span>{metrics.battery.healthPercent !== null ? text(`健康度 ${Math.round(metrics.battery.healthPercent)}%`, `Health ${Math.round(metrics.battery.healthPercent)}%`) : text('健康度不可用', 'Health unavailable')}</span><span className="overview-card-link-label">{text('系统设置', 'System Settings')}</span></footer>
         </article>
 
-        <article className="overview-card">
+        <article className="overview-card overview-card-link" role="button" tabIndex={0} onClick={onOpenDisk} onKeyDown={(event) => activateCard(event, onOpenDisk)} title={text('打开磁盘分析', 'Open disk analysis')}>
           <header><span><HardDrive size={15} />{text('磁盘', 'Disk')}</span><small>{formatStorageBytes(metrics.disk.totalBytes)}</small></header>
           <div className="overview-metric-value"><strong>{formatStorageBytes(metrics.disk.availableBytes)}</strong><em>{text('可用', 'available')}</em></div>
           <div className="overview-progress"><i style={{ width: `${metrics.disk.usedPercent}%` }} /></div>
-          <footer><span>{text('含 macOS 可清除空间', 'Includes macOS purgeable space')}</span><span>{text('已用', 'Used')} {formatStorageBytes(metrics.disk.usedBytes)} · {Math.round(metrics.disk.usedPercent)}%</span></footer>
+          <footer><span>{text('含 macOS 可清除空间', 'Includes macOS purgeable space')}</span><span className="overview-card-link-label">{text('打开分析', 'Open analysis')}</span></footer>
         </article>
 
-        <article className="overview-card">
+        <article className="overview-card overview-card-link" role="button" tabIndex={0} onClick={() => onOpenSystemSettings('network')} onKeyDown={(event) => activateCard(event, () => onOpenSystemSettings('network'))} title={text('打开系统网络设置', 'Open network settings')}>
           <header><span><Network size={15} />{text('网络', 'Network')}</span><small>{metrics.network.interfaceName ?? text('未连接', 'Offline')}</small></header>
           <div className="overview-network-values"><strong>↓ {formatRate(metrics.network.receivedBytesPerSecond)}</strong><span>↑ {formatRate(metrics.network.sentBytesPerSecond)}</span></div>
           <Sparkline values={networkReceivedHistory} maximum={maxNetwork} />
           <Sparkline values={networkSentHistory} maximum={maxNetwork} secondary />
-          <footer><span>{text('当前接口', 'Interface')} · {metrics.network.interfaceName ?? '--'}</span></footer>
+          <footer><span>{text('当前接口', 'Interface')} · {metrics.network.interfaceName ?? '--'}</span><span className="overview-card-link-label">{text('系统设置', 'System Settings')}</span></footer>
         </article>
 
-        <article className="overview-card">
-          <header><span><ThermometerSun size={15} />{text('性能状态', 'Performance')}</span><small>{metrics.thermal.state === 'limited' ? text('受限', 'Limited') : metrics.thermal.state === 'normal' ? text('正常', 'Normal') : text('不可用', 'Unavailable')}</small></header>
-          <div className="overview-metric-value"><strong>{metrics.thermal.cpuSpeedLimitPercent ?? '--'}</strong>{metrics.thermal.cpuSpeedLimitPercent !== null && <em>%</em>}</div>
-          <div className="overview-progress"><i style={{ width: `${metrics.thermal.cpuSpeedLimitPercent ?? 0}%` }} /></div>
-          <footer><span>{text('已运行', 'Uptime')} {formatUptime(metrics.uptimeSeconds, language)}</span><span>{metrics.thermal.availableCpus ?? metrics.hardware.logicalCores} {text('线程可用', 'threads available')}</span></footer>
+        <article className="overview-card overview-card-link overview-application-card" role="button" tabIndex={0} onClick={onOpenApplications} onKeyDown={(event) => activateCard(event, onOpenApplications)} title={text('打开应用管理', 'Open Applications')}>
+          <header><span><AppWindow size={15} />{text('应用分析', 'Application analysis')}</span><small>{text('点击查看', 'Open list')}</small></header>
+          <div className="overview-application-total"><strong>{applications.length}</strong><span>{text('已安装应用', 'installed apps')}</span></div>
+          <div className="overview-application-stats">
+            <span><strong>{unusedApplications}</strong>{text('不常用', 'unused')}</span>
+            <span><strong>{updateableApplications}</strong>{text('需要更新', 'updates')}</span>
+          </div>
+          <footer><span>{text('应用版本和使用情况', 'Versions and usage')}</span><span className="overview-card-link-label">{text('应用管理', 'Applications')}</span></footer>
         </article>
       </div>
 
       <section
+        ref={processPanelRef}
         className="overview-process-panel"
         onPointerEnter={beginProcessInteraction}
         onPointerLeave={endProcessInteraction}
@@ -370,13 +343,11 @@ export function OverviewPage({
         }}
       >
         <header>
-          <div><strong>{text('高占用进程', 'Top processes')}</strong><span>{text(`${metrics.processes.length} 个进程样本`, `${metrics.processes.length} sampled processes`)}</span></div>
+          <div className="overview-process-title"><div><strong>{text('进程列表', 'Processes')}</strong><span>{text(`${metrics.processes.length} 个进程样本`, `${metrics.processes.length} sampled processes`)}</span></div><div className="process-scope-filter" role="tablist" aria-label={text('进程类型', 'Process type')}>
+            {(['all', 'user', 'system'] as const).map((scope) => <button key={scope} type="button" role="tab" aria-selected={processScope === scope} className={processScope === scope ? 'is-active' : ''} onClick={() => setProcessScope(scope)}>{scope === 'all' ? text('全部', 'All') : scope === 'user' ? text('用户', 'User') : text('系统', 'System')}</button>)}
+          </div></div>
           <label className="search-field overview-process-search"><Search size={15} /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={text('搜索名称或 PID', 'Search name or PID')} aria-label={text('搜索进程', 'Search processes')} /></label>
         </header>
-        <div className="overview-process-insights">
-          <ProcessPie title="CPU" processes={metrics.processes} metric="cpuPercent" formatValue={(value) => `${value.toFixed(1)}%`} />
-          <ProcessPie title={text('内存', 'Memory')} processes={metrics.processes} metric="memoryBytes" formatValue={formatBytes} />
-        </div>
         <div className="overview-process-head">
           <button type="button" className={processSort === 'name' ? 'is-active' : ''} onClick={() => chooseProcessSort('name')} aria-sort={processSort === 'name' ? processSortDirection === 'asc' ? 'ascending' : 'descending' : 'none'}>{text('进程', 'Process')}<ArrowDownUp size={11} /></button>
           <span>PID</span>
@@ -385,9 +356,10 @@ export function OverviewPage({
           <span aria-hidden="true" />
         </div>
         <div className="overview-process-list">
-          {processes.length ? processes.map((process) => (
-            <div className="overview-process-row" key={process.pid}>
-              <span className="overview-process-name"><span className="process-logo">{applicationForProcess(process, applications) ? <ApplicationIcon application={applicationForProcess(process, applications)!} /> : <span className="process-logo-fallback"><Activity size={13} /></span>}</span><strong>{process.name}</strong><small>{process.command} · {process.isSystem ? text('系统进程', 'System process') : text('用户进程', 'User process')}</small></span>
+          {processes.length ? processes.map((process) => {
+            const processApplication = applicationForProcess(process, applications)
+            return <div className={`overview-process-row ${process.isSystem ? 'is-system' : 'is-user'}`} key={process.pid}>
+              <span className="overview-process-name"><span className="process-logo">{processApplication ? <ApplicationIcon application={processApplication} /> : <span className="process-logo-fallback"><Activity size={13} /></span>}</span><strong>{process.name}</strong><small>{process.command} · {process.isSystem ? text('系统进程', 'System process') : text('用户进程', 'User process')}</small></span>
               <span>{process.pid}</span>
               <span className={process.cpuPercent >= 80 ? 'is-hot' : ''}><i className="process-meter"><b style={{ width: `${Math.min(100, process.cpuPercent)}%` }} /></i><strong>{process.cpuPercent.toFixed(1)}%</strong></span>
               <span><strong>{formatBytes(process.memoryBytes)}</strong><small>{process.memoryPercent.toFixed(1)}%</small></span>
@@ -405,7 +377,7 @@ export function OverviewPage({
                 </span>}
               </span>
             </div>
-          )) : <div className="overview-process-empty">{text('没有匹配的进程', 'No matching processes')}</div>}
+          }) : <div className="overview-process-empty">{text('没有匹配的进程', 'No matching processes')}</div>}
         </div>
       </section>
     </section>
