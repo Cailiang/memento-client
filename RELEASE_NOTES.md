@@ -1,3 +1,35 @@
+# Memento Agent 0.7.13 - 应用分析进度与卡片交互 / Application Scan Progress and Card Interaction
+
+## 简体中文
+
+`0.7.13` 优化应用扫描反馈和应用卡片的空间使用。
+
+### 主要变化
+
+- **应用分析：** 概览首次扫描时在卡片内显示动画进度条，完成后显示已安装、不常用和可更新应用数量。
+- **应用卡片：** 点击卡片即可打开应用；移除独立“打开”按钮，更新状态改为标题下方的紧凑徽标。
+- **卡片入口：** CPU/内存卡片跳到对应降序进程列表，磁盘卡片打开磁盘分析，电池卡片打开系统设置，网络卡片打开活动监视器网络面板。
+- **进程列表：** 移除“高占用进程”板块，扩展实时采样数量，支持用户/系统筛选和颜色区分。
+- **应用更新：** 应用管理支持 Homebrew Cask、Mac App Store（`mas`）和 Sparkle appcast 来源，并为每个来源使用对应的更新动作。
+- **首次加载：** 概览页启动应用扫描，应用分析统计、进程 Logo 和 Memento 自身图标不再依赖先打开应用管理。
+- **终端诊断：** 没有自动修复的诊断也可以直接打开相关 shell 配置文件查看。
+
+## English
+
+`0.7.13` improves application scan feedback and application-card interaction density.
+
+### Highlights
+
+- **Application analysis:** Overview shows an animated in-card progress bar during the first inventory scan, then shows installed, unused, and updateable counts.
+- **Application cards:** Clicking or keyboard-activating a card opens the app; the standalone Open button is removed and update status is shown as a compact badge under the title.
+- **Card navigation:** CPU and Memory cards jump to descending process lists, Disk opens Disk analysis, Battery opens System Settings, and Network opens Activity Monitor's Network panel.
+- **Process list:** The high-usage process block is replaced by a larger live sample with User/System filters and distinct colors.
+- **Application updates:** Applications recognizes Homebrew Cask, Mac App Store (`mas`), and Sparkle appcast sources and routes each update action to its matching updater.
+- **First-load inventory:** Overview starts the application scan itself, so counts, process logos, and Memento's own icon are ready without visiting Applications first.
+- **Terminal diagnostics:** Findings without safe automatic edits can still open their related shell configuration file.
+
+---
+
 # Memento Agent 0.7.12 - 应用更新来源与概览初始化 / Application Updates and Overview Initialization
 
 ## 简体中文
@@ -11,7 +43,6 @@
 - **进程列表：** 移除“高占用进程”板块，扩展实时采样数量，支持用户/系统筛选和颜色区分。
 - **应用更新：** 应用管理支持 Homebrew Cask、Mac App Store（`mas`）和 Sparkle appcast 来源，并为每个来源使用对应的更新动作。
 - **首次加载：** 概览页启动应用扫描，应用分析统计、进程 Logo 和 Memento 自身图标不再依赖先打开应用管理。
-- **终端诊断：** 没有自动修复的诊断也可以直接打开相关 shell 配置文件查看。
 
 ## English
 
@@ -24,6 +55,33 @@
 - **Process list:** The high-usage process block is replaced by a larger live sample with User/System filters and distinct colors.
 - **Application updates:** Applications recognizes Homebrew Cask, Mac App Store (`mas`), and Sparkle appcast sources and routes each update action to its matching updater.
 - **First-load inventory:** Overview starts the application scan itself, so counts, process logos, and Memento's own icon are ready without visiting Applications first.
+
+---
+
+# Memento Agent 0.7.11 - 概览分析与进程筛选 / Overview Analysis and Process Filters
+
+## 简体中文
+
+`0.7.11` 让概览页面成为可操作的设备入口，并补齐应用更新和终端诊断操作。
+
+### 主要变化
+
+- **应用分析：** 概览显示已安装、不常用和可更新应用数量，点击进入应用管理。
+- **卡片入口：** CPU/内存卡片跳到对应降序进程列表，磁盘卡片打开磁盘分析，电池和网络卡片打开 macOS 系统设置。
+- **进程列表：** 移除“高占用进程”板块，扩展实时采样数量，支持用户/系统筛选和颜色区分。
+- **应用更新：** 应用管理增加检查更新和更新按钮；Homebrew Cask 应用在检测到安全更新来源时可直接更新。
+- **终端诊断：** 没有自动修复的诊断也可以直接打开相关 shell 配置文件查看。
+
+## English
+
+`0.7.11` turns Overview into an actionable device workspace and adds application update and terminal diagnostic actions.
+
+### Highlights
+
+- **Application analysis:** Overview shows installed, unused, and updateable application counts and opens Applications.
+- **Card navigation:** CPU and Memory cards jump to descending process lists, Disk opens Disk analysis, and Battery/Network open macOS System Settings.
+- **Process list:** The high-usage process block is replaced by a larger live sample with User/System filters and distinct colors.
+- **Application updates:** Applications adds Check updates and per-app Update actions when Homebrew Cask provides a safe update source.
 - **Terminal diagnostics:** Findings without safe automatic edits can still open their related shell configuration file.
 
 ---

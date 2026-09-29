@@ -8,6 +8,20 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.7.13 - 2026-09-29
+
+### English
+
+- Added a compact animated progress bar to Overview's Application analysis card while the first inventory scan is running.
+- Made application cards open the app when clicked or activated with the keyboard, removing the space-consuming standalone Open action.
+- Moved update status into the application title area as a compact badge and kept update actions available without covering the card.
+
+### 简体中文
+
+- 概览页首次扫描应用时，在“应用分析”卡片内显示紧凑的动画进度条。
+- 应用卡片支持鼠标点击和键盘激活打开应用，移除占空间的独立“打开”按钮。
+- 将更新状态移到应用标题下方，用紧凑徽标标识，避免顶部标签遮挡内容并保留更新操作。
+
 ## 0.7.12 - 2026-09-29
 
 ### English

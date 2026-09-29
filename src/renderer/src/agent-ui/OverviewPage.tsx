@@ -151,6 +151,7 @@ export function OverviewPage({
   paused,
   error,
   applicationsLoading,
+  applicationScanProgress,
   onRefresh,
   onPausedChange,
   onAskProcess,
@@ -168,6 +169,7 @@ export function OverviewPage({
   paused: boolean
   error: string | null
   applicationsLoading: boolean
+  applicationScanProgress: number | null
   onRefresh: () => void
   onPausedChange: (paused: boolean) => void
   onAskProcess: (process: OverviewMetrics['processes'][number]) => void
@@ -294,6 +296,9 @@ export function OverviewPage({
   const maxNetwork = Math.max(...networkReceivedHistory, ...networkSentHistory, 1024)
   const unusedApplications = applications.filter((application) => application.unused).length
   const updateableApplications = applications.filter((application) => application.updateAvailable).length
+  const applicationProgress = applicationsLoading
+    ? Math.min(96, Math.max(8, applicationScanProgress ?? 12))
+    : 100
 
   return (
     <section className="page content-page overview-page is-active">
@@ -361,6 +366,7 @@ export function OverviewPage({
         <article className="overview-card overview-card-link overview-application-card" role="button" tabIndex={0} onClick={onOpenApplications} onKeyDown={(event) => activateCard(event, onOpenApplications)} title={text('打开应用管理', 'Open Applications')}>
           <header><span><AppWindow size={15} />{text('应用分析', 'Application analysis')}</span><small>{text('点击查看', 'Open list')}</small></header>
           <div className="overview-application-total"><strong>{applicationsLoading ? '—' : applications.length}</strong><span>{applicationsLoading ? text('扫描中', 'Scanning') : text('已安装应用', 'installed apps')}</span></div>
+          {applicationsLoading && <div className="overview-application-loading" role="progressbar" aria-label={text('应用扫描进度', 'Application scan progress')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={applicationProgress}><span style={{ width: `${applicationProgress}%` }} /></div>}
           <div className="overview-application-stats">
             <span><strong>{applicationsLoading ? '—' : unusedApplications}</strong>{text('不常用', 'unused')}</span>
             <span><strong>{applicationsLoading ? '—' : updateableApplications}</strong>{text('需要更新', 'updates')}</span>

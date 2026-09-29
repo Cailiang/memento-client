@@ -585,6 +585,9 @@ try {
   if (!await applicationCard.locator('.app-update-action').count()) {
     failures.push('applications: available update button is missing')
   }
+  if (!await applicationCard.locator('.app-update-badge').count()) {
+    failures.push('applications: available update marker is missing from the card content')
+  }
   await applicationCard.locator('.uninstall-app').click()
   await page.locator('[role="dialog"] .danger-button').click()
   await page.locator('.uninstall-progress').waitFor()

@@ -211,13 +211,30 @@ export function ApplicationsPage({
       {filtered.length ? (
         <div className="app-grid">
           {filtered.map((application) => (
-            <article className={`app-card ${removingId === application.id ? 'is-removing' : ''}`} key={application.id} aria-busy={removingId === application.id} data-focus-id={application.id} tabIndex={-1}>
-              {(application.scope === 'system' || application.backgroundOnly || application.updateAvailable) && <span className="app-scope-label">{application.updateAvailable ? text(`可更新 · ${updateSourceLabel(application.updateSource, language)}${application.latestVersion ? ` · ${application.latestVersion}` : ''}`, `Update · ${updateSourceLabel(application.updateSource, language)}${application.latestVersion ? ` · ${application.latestVersion}` : ''}`) : application.scope === 'system' ? text('系统', 'System') : text('后台组件', 'Helper')}</span>}
+            <article
+              className={`app-card is-openable ${removingId === application.id ? 'is-removing' : ''}`}
+              key={application.id}
+              aria-busy={removingId === application.id || openingId === application.id}
+              aria-label={text(`打开 ${application.name}`, `Open ${application.name}`)}
+              data-focus-id={application.id}
+              tabIndex={0}
+              title={text(`点击打开 ${application.name}`, `Click to open ${application.name}`)}
+              onClick={(event) => {
+                if ((event.target as HTMLElement).closest('button, a, input, select')) return
+                onOpen(application)
+              }}
+              onKeyDown={(event) => {
+                if ((event.key !== 'Enter' && event.key !== ' ') || event.target !== event.currentTarget) return
+                event.preventDefault()
+                onOpen(application)
+              }}
+            >
+              {(application.scope === 'system' || application.backgroundOnly) && <span className="app-scope-label">{application.scope === 'system' ? text('系统', 'System') : text('后台组件', 'Helper')}</span>}
               <button type="button" className="icon-button app-ignore-button" onClick={() => onIgnore(application)} disabled={removingId === application.id} title={text('忽略应用', 'Ignore application')} aria-label={text(`忽略 ${application.name}`, `Ignore ${application.name}`)}>
                 <EyeOff size={14} />
               </button>
               <ApplicationIcon application={application} />
-              <div className="app-title"><strong title={application.name}>{application.name}</strong><small>{text(`版本 ${application.version || '未知'}`, `Version ${application.version || 'unknown'}`)}</small></div>
+              <div className="app-title"><strong title={application.name}>{application.name}</strong><small>{text(`版本 ${application.version || '未知'}`, `Version ${application.version || 'unknown'}`)}</small>{application.updateAvailable && <span className="app-update-badge" title={updateSourceLabel(application.updateSource, language)}><ArrowUpCircle size={12} />{text(`可更新${application.latestVersion ? `至 ${application.latestVersion}` : ''}`, `Update${application.latestVersion ? ` to ${application.latestVersion}` : ''}`)}</span>}</div>
               <div className="app-meta">
                 <div><span>{text('最后使用', 'Last used')}</span><strong>{relativeDate(application.lastUsedAt, language)}</strong></div>
                 <div><span>{text('大小', 'Size')}</span><strong>{formatBytes(application.sizeBytes)}</strong></div>
@@ -228,9 +245,6 @@ export function ApplicationsPage({
                   `Analyze the application "${application.name}". Bundle ID: ${application.bundleId ?? 'unknown'}; version: ${application.version}; path: ${application.location}; last used: ${relativeDate(application.lastUsedAt, language)}; type: ${application.scope === 'system' ? 'macOS system application' : application.backgroundOnly ? 'background helper' : 'user-installed application'}; executable: ${application.executable ?? 'unknown'}; registered URL schemes: ${application.urlSchemes?.join(', ') || 'none'}. Explain what it is, its purpose, whether it is a driver, security component, or helper, whether it can be uninstalled, the impact, and your recommendation.`
                 ), application.id)} disabled={removingId === application.id}>
                   <Sparkles size={14} />{text('问 Agent', 'Ask Agent')}
-                </button>
-                <button type="button" className="icon-button" onClick={() => onOpen(application)} disabled={openingId === application.id || removingId === application.id} title={text(`打开 ${application.name}`, `Open ${application.name}`)} aria-label={text(`打开 ${application.name}`, `Open ${application.name}`)}>
-                  {openingId === application.id ? <LoaderCircle className="spinner" size={14} /> : <ExternalLink size={14} />}
                 </button>
                 {application.updateAvailable && <button type="button" className="secondary-button app-update-action" onClick={() => onUpdate(application)} disabled={updatingId === application.id || removingId === application.id} title={text(`更新 ${application.name}`, `Update ${application.name}`)}>
                   {updatingId === application.id ? <LoaderCircle className="spinner" size={14} /> : <ArrowUpCircle size={14} />}{application.updateSource === 'sparkle' ? text('打开更新', 'Open updater') : text('更新', 'Update')}
@@ -245,6 +259,7 @@ export function ApplicationsPage({
                   </button>
                 )}
               </div>
+              <span className="app-open-hint" aria-hidden="true"><ExternalLink size={12} />{text('打开', 'Open')}</span>
               {removingId === application.id && <div className="app-removing-status" role="status"><LoaderCircle className="spinner" size={18} /><strong>{text('正在卸载', 'Uninstalling')}</strong></div>}
             </article>
           ))}
