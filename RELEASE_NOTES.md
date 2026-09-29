@@ -1,27 +1,29 @@
-# Memento Agent 0.7.11 - 概览分析与进程筛选 / Overview Analysis and Process Filters
+# Memento Agent 0.7.12 - 应用更新来源与概览初始化 / Application Updates and Overview Initialization
 
 ## 简体中文
 
-`0.7.11` 让概览页面成为可操作的设备入口，并补齐应用更新和终端诊断操作。
+`0.7.12` 扩展应用更新来源，并让概览页面首次打开就拥有完整的应用和进程图标数据。
 
 ### 主要变化
 
 - **应用分析：** 概览显示已安装、不常用和可更新应用数量，点击进入应用管理。
-- **卡片入口：** CPU/内存卡片跳到对应降序进程列表，磁盘卡片打开磁盘分析，电池和网络卡片打开 macOS 系统设置。
+- **卡片入口：** CPU/内存卡片跳到对应降序进程列表，磁盘卡片打开磁盘分析，电池卡片打开系统设置，网络卡片打开活动监视器网络面板。
 - **进程列表：** 移除“高占用进程”板块，扩展实时采样数量，支持用户/系统筛选和颜色区分。
-- **应用更新：** 应用管理增加检查更新和更新按钮；Homebrew Cask 应用在检测到安全更新来源时可直接更新。
+- **应用更新：** 应用管理支持 Homebrew Cask、Mac App Store（`mas`）和 Sparkle appcast 来源，并为每个来源使用对应的更新动作。
+- **首次加载：** 概览页启动应用扫描，应用分析统计、进程 Logo 和 Memento 自身图标不再依赖先打开应用管理。
 - **终端诊断：** 没有自动修复的诊断也可以直接打开相关 shell 配置文件查看。
 
 ## English
 
-`0.7.11` turns Overview into an actionable device workspace and adds application update and terminal diagnostic actions.
+`0.7.12` broadens application update sources and makes Overview initialize its application inventory immediately.
 
 ### Highlights
 
 - **Application analysis:** Overview shows installed, unused, and updateable application counts and opens Applications.
-- **Card navigation:** CPU and Memory cards jump to descending process lists, Disk opens Disk analysis, and Battery/Network open macOS System Settings.
+- **Card navigation:** CPU and Memory cards jump to descending process lists, Disk opens Disk analysis, Battery opens System Settings, and Network opens Activity Monitor's Network panel.
 - **Process list:** The high-usage process block is replaced by a larger live sample with User/System filters and distinct colors.
-- **Application updates:** Applications adds Check updates and per-app Update actions when Homebrew Cask provides a safe update source.
+- **Application updates:** Applications recognizes Homebrew Cask, Mac App Store (`mas`), and Sparkle appcast sources and routes each update action to its matching updater.
+- **First-load inventory:** Overview starts the application scan itself, so counts, process logos, and Memento's own icon are ready without visiting Applications first.
 - **Terminal diagnostics:** Findings without safe automatic edits can still open their related shell configuration file.
 
 ---

@@ -725,7 +725,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       !result &&
       !scanBusy &&
       !automaticScanStarted.current &&
-      (view === 'health' || view === 'apps' || view === 'terminal' || view === 'agent')
+      (view === 'overview' || view === 'health' || view === 'apps' || view === 'terminal' || view === 'agent')
     ) {
       automaticScanStarted.current = true
       void scanNow()
@@ -1437,6 +1437,14 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
     }
   }
 
+  const openActivityMonitorNetwork = async (): Promise<void> => {
+    try {
+      if (window.memento) await window.memento.openActivityMonitorNetwork()
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : appText('无法打开活动监视器', 'Could not open Activity Monitor.'))
+    }
+  }
+
   const revealTerminalFinding = async (finding: TerminalFinding): Promise<void> => {
     try {
       if (window.memento) await window.memento.revealTerminalFinding(finding.id)
@@ -1841,7 +1849,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       onNavigate={setView}
       onInstallUpdate={installUpdate}
     >
-      {view === 'overview' && <OverviewPage metrics={overviewMetrics} applications={result?.applications ?? []} busy={overviewBusy} paused={overviewPaused} error={overviewError} onRefresh={() => void refreshOverview(true)} onPausedChange={setOverviewPaused} onAskProcess={(process) => void askOverviewProcess(process)} onCopyProcessName={(name) => void copyOverviewProcessName(name)} onCopyProcessPid={(pid) => void copyOverviewProcessPid(pid)} onTerminateProcess={(process, force) => void terminateOverviewProcess(process, force)} onOpenApplications={() => setView('apps')} onOpenDisk={() => setView('disk')} onOpenSystemSettings={(section) => void openSystemSettings(section)} />}
+      {view === 'overview' && <OverviewPage metrics={overviewMetrics} applications={result?.applications ?? []} applicationsLoading={scanBusy && !result} busy={overviewBusy} paused={overviewPaused} error={overviewError} onRefresh={() => void refreshOverview(true)} onPausedChange={setOverviewPaused} onAskProcess={(process) => void askOverviewProcess(process)} onCopyProcessName={(name) => void copyOverviewProcessName(name)} onCopyProcessPid={(pid) => void copyOverviewProcessPid(pid)} onTerminateProcess={(process, force) => void terminateOverviewProcess(process, force)} onOpenApplications={() => setView('apps')} onOpenDisk={() => setView('disk')} onOpenSystemSettings={(section) => void openSystemSettings(section)} onOpenActivityMonitorNetwork={() => void openActivityMonitorNetwork()} />}
       {view === 'agent' && <AgentPage scan={result} run={activeRun} conversationRuns={conversationRuns} workspaceRuns={workspaceRuns} statusMessage={runStatusMessage} selectedPlanIds={selectedPlanIds} providerConfigured={Boolean(defaultProvider)} addingOperationId={addingOperationId} openingApplicationId={openingApplicationId} returnLabel={agentOriginLabel} onSubmit={startAgentRun} onSelectWorkspaceRun={selectWorkspaceRun} onCloseWorkspaceRun={closeWorkspaceRun} onNewTask={() => { setActiveRun(null); activeRunId.current = null; setSelectedPlanIds(new Set()); setRunStatusMessage(''); setAgentOrigin(null) }} onOpenHistory={() => setView('history')} onOpenSettings={() => setView('settings')} onReturn={returnToAgentOrigin} onOpenApplication={openAgentApplication} onAddPlanItem={(id) => void addAgentPlanItem(id)} onTogglePlanItem={(id) => setSelectedPlanIds((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next })} onExecutePlan={() => void executePlan()} onDiscardPlan={discardPlan} />}
       {view === 'health' && <HealthPage
         result={result}

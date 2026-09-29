@@ -1526,6 +1526,7 @@ interface ApplicationMetadata {
   backgroundOnly: boolean
   executable: string | null
   urlSchemes: string[]
+  sparkleFeedUrl: string | null
 }
 
 interface ApplicationScan {
@@ -1536,6 +1537,12 @@ interface ApplicationScan {
 interface HomebrewCaskUpdate {
   token: string
   name: string
+  latestVersion: string | null
+}
+
+interface ApplicationUpdate {
+  source: 'homebrew-cask' | 'mac-app-store' | 'sparkle'
+  token: string
   latestVersion: string | null
 }
 
@@ -1557,12 +1564,147 @@ function caskUpdateTokens(update: HomebrewCaskUpdate): string[] {
     .filter(Boolean)
 }
 
+function parseJsonLines<T>(value: string): T | null {
+  try {
+    return JSON.parse(value) as T
+  } catch {
+    const lines = value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+    for (let index = lines.length; index > 0; index -= 1) {
+      try {
+        return JSON.parse(lines.slice(0, index).join('\n')) as T
+      } catch {
+        // mas versions have emitted both a JSON array and one JSON object per line.
+      }
+    }
+    return null
+  }
+}
+
+function parseJsonObjects(value: string): Record<string, unknown>[] {
+  const objects: Record<string, unknown>[] = []
+  let depth = 0
+  let start = -1
+  let quoted = false
+  let escaped = false
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index]
+    if (quoted) {
+      if (escaped) escaped = false
+      else if (character === '\\') escaped = true
+      else if (character === '"') quoted = false
+      continue
+    }
+    if (character === '"') {
+      quoted = true
+      continue
+    }
+    if (character === '{') {
+      if (depth === 0) start = index
+      depth += 1
+    } else if (character === '}' && depth > 0) {
+      depth -= 1
+      if (depth === 0 && start >= 0) {
+        try {
+          const parsed = JSON.parse(value.slice(start, index + 1)) as unknown
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) objects.push(parsed as Record<string, unknown>)
+        } catch {
+          // Ignore malformed object fragments and continue with the remaining stream.
+        }
+        start = -1
+      }
+    }
+  }
+  return objects
+}
+
+function updateVersionParts(value: string): number[] {
+  return value.replace(/^v/i, '').match(/\d+/g)?.map((part) => Number(part)) ?? []
+}
+
+function isVersionNewer(latest: string, current: string): boolean {
+  const left = updateVersionParts(latest)
+  const right = updateVersionParts(current)
+  if (!left.length || !right.length) return false
+  const length = Math.max(left.length, right.length)
+  for (let index = 0; index < length; index += 1) {
+    const a = left[index] ?? 0
+    const b = right[index] ?? 0
+    if (a !== b) return a > b
+  }
+  return false
+}
+
+function masExecutable(): string | null {
+  return ['/opt/homebrew/bin/mas', '/usr/local/bin/mas', '/usr/bin/mas']
+    .find((candidate) => existsSync(candidate)) ?? null
+}
+
+async function discoverMacAppStoreUpdates(): Promise<Map<string, ApplicationUpdate>> {
+  const mas = masExecutable()
+  if (!mas) return new Map()
+  try {
+    const { stdout } = await run(mas, ['outdated', '--json'], 15_000)
+    const payload = parseJsonLines<unknown>(stdout)
+    const items = Array.isArray(payload)
+      ? payload
+      : parseJsonObjects(stdout)
+    return new Map(items.flatMap((value) => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return []
+      const item = value as Record<string, unknown>
+      const token = [item.adamID, item.appID, item.appId, item.id].find((candidate) => (
+        typeof candidate === 'string' || typeof candidate === 'number'
+      ))
+      const bundleId = [item.bundleID, item.bundleId, item.bundleIdentifier].find((candidate): candidate is string => typeof candidate === 'string')?.trim().toLowerCase() ?? ''
+      const latestVersion = [item.newVersion, item.latestVersion, item.version].find((candidate): candidate is string => (
+        typeof candidate === 'string' && candidate.trim().length > 0
+      ))?.trim() ?? null
+      if ((typeof token !== 'string' && typeof token !== 'number') || !bundleId) return []
+      return [[bundleId, { source: 'mac-app-store', token: String(token), latestVersion }]] as const
+    }))
+  } catch {
+    return new Map()
+  }
+}
+
+export function sparkleVersionFromFeed(xml: string): string | null {
+  const items = [...xml.matchAll(/<item\b[\s\S]*?<\/item>/gi)]
+  const versions = items.flatMap((item) => {
+    const block = item[0]
+    const match = block.match(/sparkle:(?:shortVersionString|version)\s*=\s*["']([^"']+)["']/i) ??
+      block.match(/<sparkle:(?:shortVersionString|version)>([^<]+)<\/sparkle:/i)
+    return match?.[1]?.trim() ? [match[1].trim()] : []
+  })
+  return versions.sort((left, right) => {
+    const leftParts = updateVersionParts(left)
+    const rightParts = updateVersionParts(right)
+    for (let index = 0; index < Math.max(leftParts.length, rightParts.length); index += 1) {
+      const difference = (rightParts[index] ?? 0) - (leftParts[index] ?? 0)
+      if (difference) return difference
+    }
+    return right.localeCompare(left)
+  })[0] ?? null
+}
+
+async function discoverSparkleUpdate(application: ApplicationMetadata): Promise<ApplicationUpdate | null> {
+  const feedUrl = application.sparkleFeedUrl
+  if (!feedUrl || !/^https?:\/\//i.test(feedUrl)) return null
+  try {
+    const response = await fetch(feedUrl, { signal: AbortSignal.timeout(5_000), headers: { accept: 'application/rss+xml, application/xml, text/xml' } })
+    if (!response.ok) return null
+    const latestVersion = sparkleVersionFromFeed(await response.text())
+    if (!latestVersion || !isVersionNewer(latestVersion, application.version)) return null
+    return { source: 'sparkle', token: feedUrl, latestVersion }
+  } catch {
+    return null
+  }
+}
+
 async function discoverHomebrewCaskUpdates(): Promise<HomebrewCaskUpdate[]> {
   const brew = ['/opt/homebrew/bin/brew', '/usr/local/bin/brew', '/home/linuxbrew/.linuxbrew/bin/brew']
     .find((candidate) => existsSync(candidate))
   if (!brew) return []
   try {
-    const { stdout } = await run(brew, ['outdated', '--cask', '--json=v2'], 10_000)
+    const { stdout } = await run(brew, ['outdated', '--cask', '--greedy', '--json=v2'], 15_000)
     const payload = JSON.parse(stdout) as { casks?: unknown }
     if (!Array.isArray(payload.casks)) return []
     return payload.casks.flatMap((value) => {
@@ -1621,6 +1763,7 @@ export function applicationPlistCapabilities(info: Record<string, unknown> | nul
   backgroundOnly: boolean
   executable: string | null
   urlSchemes: string[]
+  sparkleFeedUrl: string | null
 } {
   const urlTypes = Array.isArray(info?.CFBundleURLTypes) ? info.CFBundleURLTypes : []
   const urlSchemes = urlTypes.flatMap((value) => {
@@ -1633,7 +1776,8 @@ export function applicationPlistCapabilities(info: Record<string, unknown> | nul
   return {
     backgroundOnly: info?.LSBackgroundOnly === true,
     executable: typeof info?.CFBundleExecutable === 'string' ? info.CFBundleExecutable : null,
-    urlSchemes: [...new Set(urlSchemes)].slice(0, 20)
+    urlSchemes: [...new Set(urlSchemes)].slice(0, 20),
+    sparkleFeedUrl: typeof info?.SUFeedURL === 'string' ? info.SUFeedURL.trim() || null : null
   }
 }
 
@@ -1745,9 +1889,10 @@ async function scanApplications(
 ): Promise<ApplicationScan> {
   const discovered = await Promise.all(APPLICATION_ROOTS.map((root) => findApplications(root)))
   const appPaths = discovered.flat()
-  const [inspected, homebrewUpdates] = await Promise.all([
+  const [inspected, homebrewUpdates, macAppStoreUpdates] = await Promise.all([
     mapLimit([...new Set(appPaths)], 8, (target) => inspectApplication(target, language)),
-    discoverHomebrewCaskUpdates()
+    discoverHomebrewCaskUpdates(),
+    discoverMacAppStoreUpdates()
   ])
   const applications = inspected.filter((item): item is ApplicationMetadata => item !== null)
   const inventoryApplications = applications.filter(
@@ -1759,6 +1904,7 @@ async function scanApplications(
   const candidatePaths = new Set<string>()
   const candidates: ScanCandidate[] = []
 
+  const sparkleUpdatesPromise = mapLimit(inventoryApplications, 4, discoverSparkleUpdate)
   const inventory = inventoryApplications.map((application): InstalledApplication => {
     const id = randomUUID()
     const scope = applicationScope(application.target)
@@ -1773,11 +1919,17 @@ async function scanApplications(
         }
     if (action) actions.set(action.id, { kind: 'trash', target: application.target })
     revealTargets.set(id, application.target)
-    const update = homebrewUpdates.find((candidate) => {
+    const brewUpdate = homebrewUpdates.find((candidate) => {
       const applicationTokens = applicationUpdateTokens(application)
       const updateTokens = caskUpdateTokens(candidate)
       return applicationTokens.some((token) => updateTokens.includes(token))
     })
+    const masUpdate = application.bundleId
+      ? macAppStoreUpdates.get(application.bundleId.toLocaleLowerCase())
+      : undefined
+    const update = brewUpdate
+      ? { source: 'homebrew-cask' as const, token: brewUpdate.token, latestVersion: brewUpdate.latestVersion }
+      : masUpdate
     return {
       id,
       name: application.name,
@@ -1795,13 +1947,23 @@ async function scanApplications(
       unused: isApplicationUnused(application.lastUsedAt),
       updateAvailable: Boolean(update),
       latestVersion: update?.latestVersion ?? null,
-      updateSource: update ? 'homebrew-cask' : undefined,
+      updateSource: update?.source,
       updateToken: update?.token,
       protectedReason: scope === 'system'
         ? t(language, 'macOS 系统应用', 'macOS system application')
         : undefined,
       action
     }
+  })
+  const sparkleUpdates = await sparkleUpdatesPromise
+  sparkleUpdates.forEach((sparkleUpdate, index) => {
+    const application = inventory[index]
+    if (!application || !sparkleUpdate) return
+    if (application.updateAvailable) return
+    application.updateAvailable = true
+    application.latestVersion = sparkleUpdate.latestVersion
+    application.updateSource = sparkleUpdate.source
+    application.updateToken = sparkleUpdate.token
   })
   const inventoryByPath = new Map(
     inventory.map((application) => [application.location, application])

@@ -119,6 +119,13 @@ try {
         if (!await page.locator('.overview-process-row').first().isVisible()) {
           failures.push(`${viewportName}/overview: process table is missing`)
         }
+        const applicationCard = page.locator('.overview-application-card')
+        if (!await applicationCard.isVisible() || (await applicationCard.locator('.overview-application-total strong').textContent())?.trim() === '0') {
+          failures.push(`${viewportName}/overview: application analysis did not initialize with the overview scan`)
+        }
+        if (!await page.locator('.overview-card[title*="活动监视器"]').count()) {
+          failures.push(`${viewportName}/overview: network card does not target Activity Monitor`)
+        }
         if (await page.locator('.overview-process-row .process-logo').count() < 1) {
           failures.push(`${viewportName}/overview: process logos are missing`)
         }

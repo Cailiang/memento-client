@@ -7,7 +7,8 @@ import {
   applicationNamePlistPaths,
   applicationScope,
   isApplicationUnused,
-  plistApplicationName
+  plistApplicationName,
+  sparkleVersionFromFeed
 } from './scanner'
 
 describe('application cleanup threshold', () => {
@@ -55,7 +56,15 @@ describe('application cleanup threshold', () => {
     })).toEqual({
       backgroundOnly: true,
       executable: 'claude',
-      urlSchemes: ['claude-cli']
+      urlSchemes: ['claude-cli'],
+      sparkleFeedUrl: null
     })
+  })
+
+  it('selects the newest Sparkle appcast version', () => {
+    expect(sparkleVersionFromFeed(`<?xml version="1.0"?><rss><channel>
+      <item><sparkle:version>4.2.0</sparkle:version></item>
+      <item sparkle:shortVersionString="4.4.0"></item>
+    </channel></rss>`)).toBe('4.4.0')
   })
 })

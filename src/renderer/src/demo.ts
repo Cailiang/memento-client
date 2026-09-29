@@ -580,6 +580,7 @@ export const demoResult: ScanResult = {
       version: '1.102.2',
       updateAvailable: true,
       latestVersion: '1.103.0',
+      updateSource: 'homebrew-cask',
       bundleId: 'com.microsoft.VSCode',
       location: '/Applications/Visual Studio Code.app',
       sizeBytes: 548 * MB,

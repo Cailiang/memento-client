@@ -97,6 +97,7 @@ export interface ServiceRuntimeMetrics {
 }
 
 export type ApplicationScope = 'user' | 'shared' | 'system'
+export type ApplicationUpdateSource = 'homebrew-cask' | 'mac-app-store' | 'sparkle'
 
 export interface InstalledApplication {
   id: string
@@ -113,7 +114,7 @@ export interface InstalledApplication {
   unused: boolean
   updateAvailable?: boolean
   latestVersion?: string | null
-  updateSource?: 'homebrew-cask'
+  updateSource?: ApplicationUpdateSource
   updateToken?: string
   protectedReason?: string
   action?: CandidateOperation
@@ -379,9 +380,11 @@ export interface MementoApi extends MementoAgentApi, MementoSettingsApi {
   trashDiskUsageNode: (id: string) => Promise<void>
   onDiskUsageNodeRemoved: (callback: (id: string) => void) => () => void
   getApplicationIcon: (id: string) => Promise<string | null>
+  getProcessIcon: (command: string) => Promise<string | null>
   openApplication: (id: string) => Promise<void>
   updateApplication: (id: string) => Promise<void>
   openSystemSettings: (section: 'battery' | 'network') => Promise<void>
+  openActivityMonitorNetwork: () => Promise<void>
   revealTerminalFinding: (id: string) => Promise<void>
   runActions: (ids: string[]) => Promise<ActionResult[]>
   runTerminalFixes: (ids: string[]) => Promise<TerminalFixRunResult>

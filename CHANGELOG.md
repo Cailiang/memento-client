@@ -8,6 +8,20 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 0.7.12 - 2026-09-29
+
+### English
+
+- Expanded application update detection beyond Homebrew Cask to Mac App Store apps through `mas` and Sparkle apps that publish a signed appcast; update actions use the matching package manager or open the app's updater.
+- Overview now starts the application scan so application counts and process logos are available on first load, including Memento's own bundle icon.
+- Network navigation now opens Activity Monitor and attempts to select its Network panel.
+
+### 简体中文
+
+- 应用更新检测不再只支持 Homebrew Cask：安装 `mas` 时可识别 Mac App Store 更新，也支持发布 Sparkle appcast 的应用；更新按钮会调用对应包管理器或打开应用自带更新器。
+- 概览页进入时即启动应用扫描，首次加载就能显示应用统计和进程 Logo，也能显示 Memento 自身图标。
+- 网络卡片现在打开活动监视器，并尝试直接切换到网络面板。
+
 ## 0.7.11 - 2026-09-29
 
 ### English

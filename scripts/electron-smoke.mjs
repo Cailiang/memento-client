@@ -27,6 +27,8 @@ try {
     window.memento.terminateOverviewProcess &&
     window.memento.updateApplication &&
     window.memento.openSystemSettings &&
+    window.memento.openActivityMonitorNetwork &&
+    window.memento.getProcessIcon &&
     window.memento.revealTerminalFinding &&
     window.memento.listMaintenanceRuns &&
     window.memento.deleteMaintenanceRuns &&
@@ -54,6 +56,7 @@ try {
     throw new Error(`overview metrics did not render real system data: ${JSON.stringify(overview)}`)
   }
   await page.screenshot({ path: '/tmp/memento-electron-overview.png' })
+  await page.locator('.overview-process-row .process-logo img').first().waitFor({ timeout: 20_000 })
 
   await page.locator('.nav-button[title="清理"]').click()
   await page.locator('.cleanup-summary-band').waitFor({ timeout: 45_000 })

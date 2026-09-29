@@ -133,6 +133,106 @@ function homebrewExecutable(): string | null {
     .find((candidate) => existsSync(candidate)) ?? null
 }
 
+function masExecutable(): string | null {
+  return ['/opt/homebrew/bin/mas', '/usr/local/bin/mas', '/usr/bin/mas']
+    .find((candidate) => existsSync(candidate)) ?? null
+}
+
+function applicationBundleFromProcessCommand(command: string): string | null {
+  if (typeof command !== 'string' || command.length > 2_000) return null
+  const match = command.match(/((?:\/|~\/)[^\n]*?\.app)(?:\/|$)/i)
+  const ownBundle = path.resolve(app.getAppPath(), '../..')
+  const candidate = match
+    ? (match[1].startsWith('~/')
+    ? path.join(os.homedir(), match[1].slice(2))
+    : path.normalize(match[1]))
+    : /^memento(?: helper)?$/i.test(path.basename(command.trim()))
+      ? ownBundle
+      : null
+  if (!candidate) return null
+  if (!existsSync(candidate) || path.extname(candidate).toLowerCase() !== '.app') return null
+  const allowedRoots = [
+    '/Applications',
+    path.join(os.homedir(), 'Applications'),
+    '/System/Applications',
+    '/System/Library/CoreServices'
+  ]
+  if (![...allowedRoots, ownBundle].some((root) => candidate === root || candidate.startsWith(`${root}${path.sep}`))) return null
+  try {
+    if (!lstatSync(candidate).isDirectory()) return null
+  } catch {
+    return null
+  }
+  return candidate
+}
+
+async function openActivityMonitorNetwork(): Promise<void> {
+  await execFileAsync('/usr/bin/open', ['-a', 'Activity Monitor'], { timeout: 8_000 })
+  const script = `
+tell application "System Events"
+  tell process "Activity Monitor"
+    set selectedNetwork to false
+    repeat 12 times
+      try
+        repeat with toolbarButton in (every button of toolbar 1 of window 1)
+          set buttonDescription to description of toolbarButton
+          if buttonDescription is "Network" or buttonDescription is "网络" then
+            click toolbarButton
+            set selectedNetwork to true
+            exit repeat
+          end if
+        end repeat
+      end try
+      if selectedNetwork then exit repeat
+      delay 0.25
+    end repeat
+  end tell
+end tell`
+  try {
+    await execFileAsync('/usr/bin/osascript', ['-e', script], { timeout: 5_000 })
+  } catch {
+    // Activity Monitor still opened; Accessibility permission can prevent tab selection.
+  }
+}
+
+function appleScriptString(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
+
+async function openSparkleUpdater(target: string): Promise<void> {
+  const openError = await shell.openPath(target)
+  if (openError) throw new Error(mainText(`无法打开应用：${openError}`, `Could not open the application: ${openError}`))
+  const processName = appleScriptString(path.basename(target, '.app'))
+  const script = `
+tell application "System Events"
+  tell process "${processName}"
+    set selectedUpdater to false
+    repeat 16 times
+      try
+        repeat with menuBarItem in (every menu bar item of menu bar 1)
+          repeat with menuItem in (every menu item of menu 1 of menuBarItem)
+            set itemName to name of menuItem
+            if itemName is "Check for Updates…" or itemName is "Check for Updates..." or itemName is "检查更新…" or itemName is "检查更新..." then
+              click menuItem
+              set selectedUpdater to true
+              exit repeat
+            end if
+          end repeat
+          if selectedUpdater then exit repeat
+        end repeat
+      end try
+      if selectedUpdater then exit repeat
+      delay 0.25
+    end repeat
+  end tell
+end tell`
+  try {
+    await execFileAsync('/usr/bin/osascript', ['-e', script], { timeout: 6_000 })
+  } catch {
+    // Opening the app is still a valid fallback for updaters that check on launch.
+  }
+}
+
 function terminalFindingConfigTarget(source: string | undefined): string {
   const sourcePath = source?.match(/^(~\/[^:]+|\/[^:]+)(?::\d+)?$/)?.[1]
   const target = sourcePath?.startsWith('~/')
@@ -1512,6 +1612,10 @@ app.whenReady().then(async () => {
     if (!application || !target || !existsSync(target)) return null
     return readApplicationIcon(target)
   })
+  ipcMain.handle('memento:get-process-icon', async (_event, command: string) => {
+    const target = applicationBundleFromProcessCommand(command)
+    return target ? readApplicationIcon(target) : null
+  })
   ipcMain.handle('memento:open-application', async (_event, id: string) => {
     if (typeof id !== 'string' || id.length > 100) {
       throw new Error(mainText('应用入口无效，请重新扫描', 'The application is invalid. Scan again.'))
@@ -1538,18 +1642,37 @@ app.whenReady().then(async () => {
     }
     const application = currentScanResult?.applications.find((item) => item.id === id)
     const brew = homebrewExecutable()
+    const mas = masExecutable()
     const token = application?.updateToken
-    if (!application?.updateAvailable || application.updateSource !== 'homebrew-cask' || !token || !brew) {
+    const target = application ? registeredRevealTargets.get(id) : null
+    if (!application?.updateAvailable || !application.updateSource || !token) {
       throw new Error(mainText('这个应用没有可执行的更新来源，请先重新扫描', 'This application has no executable update source. Scan again first.'))
     }
-    if (!/^[A-Za-z0-9@._+/-]+$/.test(token)) {
-      throw new Error(mainText('更新来源无效，已停止操作', 'The update source is invalid, so the operation was stopped.'))
+    if (application.updateSource === 'homebrew-cask') {
+      if (!/^[A-Za-z0-9@._+/-]+$/.test(token)) {
+        throw new Error(mainText('更新来源无效，已停止操作', 'The update source is invalid, so the operation was stopped.'))
+      }
+      if (!brew) throw new Error(mainText('未找到 Homebrew，请先安装 Homebrew', 'Homebrew is not installed.'))
+      await execFileAsync(brew, ['upgrade', '--cask', token], {
+        timeout: 10 * 60_000,
+        maxBuffer: 4 * 1024 * 1024,
+        env: { ...process.env, HOMEBREW_NO_AUTO_UPDATE: '1', LC_ALL: 'C' }
+      })
+      return
     }
-    await execFileAsync(brew, ['upgrade', '--cask', token], {
-      timeout: 10 * 60_000,
-      maxBuffer: 4 * 1024 * 1024,
-      env: { ...process.env, HOMEBREW_NO_AUTO_UPDATE: '1', LC_ALL: 'C' }
-    })
+    if (application.updateSource === 'mac-app-store') {
+      if (!mas) throw new Error(mainText('未找到 mas，请安装 mas 后重试', 'The mas command is not installed.'))
+      if (!/^\d+$/.test(token)) throw new Error(mainText('App Store 更新编号无效', 'The App Store update identifier is invalid.'))
+      await execFileAsync(mas, ['upgrade', token], { timeout: 10 * 60_000, maxBuffer: 4 * 1024 * 1024 })
+      return
+    }
+    if (!/^https?:\/\//i.test(token)) {
+      throw new Error(mainText('应用更新地址无效', 'The application update URL is invalid.'))
+    }
+    if (!target || !existsSync(target)) {
+      throw new Error(mainText('应用已经不存在，请重新扫描', 'The application no longer exists. Scan again.'))
+    }
+    await openSparkleUpdater(target)
   })
   ipcMain.handle('memento:open-system-settings', async (_event, section: string) => {
     const urls: Record<string, string> = {
@@ -1564,6 +1687,7 @@ app.whenReady().then(async () => {
       await execFileAsync('/usr/bin/open', ['-a', 'System Settings'])
     }
   })
+  ipcMain.handle('memento:open-activity-monitor-network', () => openActivityMonitorNetwork())
   ipcMain.handle('memento:settings:get', () => appSettings)
   ipcMain.handle('memento:settings:update', (_event, input: UpdateAppSettingsInput) => {
     const previousLanguage = appSettings.language

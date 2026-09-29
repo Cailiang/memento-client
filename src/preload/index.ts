@@ -45,9 +45,11 @@ const api: MementoApi = {
     return () => ipcRenderer.removeListener('memento:disk-usage-node-removed', listener)
   },
   getApplicationIcon: (id) => ipcRenderer.invoke('memento:get-application-icon', id),
+  getProcessIcon: (command) => ipcRenderer.invoke('memento:get-process-icon', command),
   openApplication: (id) => ipcRenderer.invoke('memento:open-application', id),
   updateApplication: (id) => ipcRenderer.invoke('memento:update-application', id),
   openSystemSettings: (section) => ipcRenderer.invoke('memento:open-system-settings', section),
+  openActivityMonitorNetwork: () => ipcRenderer.invoke('memento:open-activity-monitor-network'),
   revealTerminalFinding: (id) => ipcRenderer.invoke('memento:reveal-terminal-finding', id),
   runActions: (ids) => ipcRenderer.invoke('memento:run-actions', ids),
   runTerminalFixes: (ids) => ipcRenderer.invoke('memento:run-terminal-fixes', ids),

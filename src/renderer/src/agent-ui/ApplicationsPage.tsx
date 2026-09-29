@@ -19,6 +19,12 @@ import { formatBytes, relativeDate } from './utils'
 export type ApplicationFilter = 'all' | 'recent' | 'unused' | 'system'
 export type ApplicationSort = 'recent' | 'size' | 'name'
 
+function updateSourceLabel(source: InstalledApplication['updateSource'], language: 'zh-CN' | 'en-US'): string {
+  if (source === 'mac-app-store') return language === 'en-US' ? 'Mac App Store' : 'Mac App Store'
+  if (source === 'sparkle') return language === 'en-US' ? 'App self-updater' : '应用自更新'
+  return language === 'en-US' ? 'Homebrew Cask' : 'Homebrew Cask'
+}
+
 export function filterAndSortApplications(
   applications: readonly InstalledApplication[],
   search: string,
@@ -206,7 +212,7 @@ export function ApplicationsPage({
         <div className="app-grid">
           {filtered.map((application) => (
             <article className={`app-card ${removingId === application.id ? 'is-removing' : ''}`} key={application.id} aria-busy={removingId === application.id} data-focus-id={application.id} tabIndex={-1}>
-              {(application.scope === 'system' || application.backgroundOnly || application.updateAvailable) && <span className="app-scope-label">{application.updateAvailable ? text(`可更新${application.latestVersion ? ` · ${application.latestVersion}` : ''}`, `Update${application.latestVersion ? ` · ${application.latestVersion}` : ''}`) : application.scope === 'system' ? text('系统', 'System') : text('后台组件', 'Helper')}</span>}
+              {(application.scope === 'system' || application.backgroundOnly || application.updateAvailable) && <span className="app-scope-label">{application.updateAvailable ? text(`可更新 · ${updateSourceLabel(application.updateSource, language)}${application.latestVersion ? ` · ${application.latestVersion}` : ''}`, `Update · ${updateSourceLabel(application.updateSource, language)}${application.latestVersion ? ` · ${application.latestVersion}` : ''}`) : application.scope === 'system' ? text('系统', 'System') : text('后台组件', 'Helper')}</span>}
               <button type="button" className="icon-button app-ignore-button" onClick={() => onIgnore(application)} disabled={removingId === application.id} title={text('忽略应用', 'Ignore application')} aria-label={text(`忽略 ${application.name}`, `Ignore ${application.name}`)}>
                 <EyeOff size={14} />
               </button>
@@ -227,7 +233,7 @@ export function ApplicationsPage({
                   {openingId === application.id ? <LoaderCircle className="spinner" size={14} /> : <ExternalLink size={14} />}
                 </button>
                 {application.updateAvailable && <button type="button" className="secondary-button app-update-action" onClick={() => onUpdate(application)} disabled={updatingId === application.id || removingId === application.id} title={text(`更新 ${application.name}`, `Update ${application.name}`)}>
-                  {updatingId === application.id ? <LoaderCircle className="spinner" size={14} /> : <ArrowUpCircle size={14} />}{text('更新', 'Update')}
+                  {updatingId === application.id ? <LoaderCircle className="spinner" size={14} /> : <ArrowUpCircle size={14} />}{application.updateSource === 'sparkle' ? text('打开更新', 'Open updater') : text('更新', 'Update')}
                 </button>}
                 {application.action ? (
                   <button type="button" className="icon-button uninstall-app" onClick={() => onUninstall(application)} disabled={removingId === application.id} title={text(`卸载 ${application.name}`, `Uninstall ${application.name}`)} aria-label={text(`卸载 ${application.name}`, `Uninstall ${application.name}`)}>

@@ -88,6 +88,40 @@ function applicationForProcess(
   )) ?? null
 }
 
+function ProcessIcon({ process, application }: {
+  process: OverviewMetrics['processes'][number]
+  application: InstalledApplication | null
+}): React.JSX.Element {
+  const [source, setSource] = useState<string | null>(null)
+  const [visible, setVisible] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const node = ref.current
+    if (!node) return
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) setVisible(true)
+    }, { rootMargin: '120px' })
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    if (!visible || application || !window.memento) return
+    void window.memento.getProcessIcon(process.command).then((value) => {
+      if (active) setSource(value)
+    })
+    return () => { active = false }
+  }, [application, process.command, visible])
+
+  return <div className="app-logo" ref={ref}>{application
+    ? <ApplicationIcon application={application} />
+    : source
+      ? <img src={source} alt="" />
+      : <span className="process-logo-fallback"><Activity size={13} /></span>}</div>
+}
+
 function healthIssueLabel(issue: OverviewHealthIssue, language: 'zh-CN' | 'en-US'): string {
   const labels: Record<OverviewHealthIssue, [string, string]> = {
     'cpu-high': ['CPU 持续高负载', 'High CPU load'],
@@ -116,6 +150,7 @@ export function OverviewPage({
   busy,
   paused,
   error,
+  applicationsLoading,
   onRefresh,
   onPausedChange,
   onAskProcess,
@@ -125,12 +160,14 @@ export function OverviewPage({
   applications,
   onOpenApplications,
   onOpenDisk,
-  onOpenSystemSettings
+  onOpenSystemSettings,
+  onOpenActivityMonitorNetwork
 }: {
   metrics: OverviewMetrics | null
   busy: boolean
   paused: boolean
   error: string | null
+  applicationsLoading: boolean
   onRefresh: () => void
   onPausedChange: (paused: boolean) => void
   onAskProcess: (process: OverviewMetrics['processes'][number]) => void
@@ -141,6 +178,7 @@ export function OverviewPage({
   onOpenApplications: () => void
   onOpenDisk: () => void
   onOpenSystemSettings: (section: 'battery' | 'network') => void
+  onOpenActivityMonitorNetwork: () => void
 }): React.JSX.Element {
   const { language, text } = useI18n()
   const [query, setQuery] = useState('')
@@ -312,20 +350,20 @@ export function OverviewPage({
           <footer><span>{text('含 macOS 可清除空间', 'Includes macOS purgeable space')}</span><span className="overview-card-link-label">{text('打开分析', 'Open analysis')}</span></footer>
         </article>
 
-        <article className="overview-card overview-card-link" role="button" tabIndex={0} onClick={() => onOpenSystemSettings('network')} onKeyDown={(event) => activateCard(event, () => onOpenSystemSettings('network'))} title={text('打开系统网络设置', 'Open network settings')}>
+        <article className="overview-card overview-card-link" role="button" tabIndex={0} onClick={onOpenActivityMonitorNetwork} onKeyDown={(event) => activateCard(event, onOpenActivityMonitorNetwork)} title={text('打开活动监视器的网络面板', 'Open Activity Monitor Network')}>
           <header><span><Network size={15} />{text('网络', 'Network')}</span><small>{metrics.network.interfaceName ?? text('未连接', 'Offline')}</small></header>
           <div className="overview-network-values"><strong>↓ {formatRate(metrics.network.receivedBytesPerSecond)}</strong><span>↑ {formatRate(metrics.network.sentBytesPerSecond)}</span></div>
           <Sparkline values={networkReceivedHistory} maximum={maxNetwork} />
           <Sparkline values={networkSentHistory} maximum={maxNetwork} secondary />
-          <footer><span>{text('当前接口', 'Interface')} · {metrics.network.interfaceName ?? '--'}</span><span className="overview-card-link-label">{text('系统设置', 'System Settings')}</span></footer>
+          <footer><span>{text('当前接口', 'Interface')} · {metrics.network.interfaceName ?? '--'}</span><span className="overview-card-link-label">{text('活动监视器', 'Activity Monitor')}</span></footer>
         </article>
 
         <article className="overview-card overview-card-link overview-application-card" role="button" tabIndex={0} onClick={onOpenApplications} onKeyDown={(event) => activateCard(event, onOpenApplications)} title={text('打开应用管理', 'Open Applications')}>
           <header><span><AppWindow size={15} />{text('应用分析', 'Application analysis')}</span><small>{text('点击查看', 'Open list')}</small></header>
-          <div className="overview-application-total"><strong>{applications.length}</strong><span>{text('已安装应用', 'installed apps')}</span></div>
+          <div className="overview-application-total"><strong>{applicationsLoading ? '—' : applications.length}</strong><span>{applicationsLoading ? text('扫描中', 'Scanning') : text('已安装应用', 'installed apps')}</span></div>
           <div className="overview-application-stats">
-            <span><strong>{unusedApplications}</strong>{text('不常用', 'unused')}</span>
-            <span><strong>{updateableApplications}</strong>{text('需要更新', 'updates')}</span>
+            <span><strong>{applicationsLoading ? '—' : unusedApplications}</strong>{text('不常用', 'unused')}</span>
+            <span><strong>{applicationsLoading ? '—' : updateableApplications}</strong>{text('需要更新', 'updates')}</span>
           </div>
           <footer><span>{text('应用版本和使用情况', 'Versions and usage')}</span><span className="overview-card-link-label">{text('应用管理', 'Applications')}</span></footer>
         </article>
@@ -359,7 +397,7 @@ export function OverviewPage({
           {processes.length ? processes.map((process) => {
             const processApplication = applicationForProcess(process, applications)
             return <div className={`overview-process-row ${process.isSystem ? 'is-system' : 'is-user'}`} key={process.pid}>
-              <span className="overview-process-name"><span className="process-logo">{processApplication ? <ApplicationIcon application={processApplication} /> : <span className="process-logo-fallback"><Activity size={13} /></span>}</span><strong>{process.name}</strong><small>{process.command} · {process.isSystem ? text('系统进程', 'System process') : text('用户进程', 'User process')}</small></span>
+              <span className="overview-process-name"><span className="process-logo"><ProcessIcon process={process} application={processApplication} /></span><strong>{process.name}</strong><small>{process.command} · {process.isSystem ? text('系统进程', 'System process') : text('用户进程', 'User process')}</small></span>
               <span>{process.pid}</span>
               <span className={process.cpuPercent >= 80 ? 'is-hot' : ''}><i className="process-meter"><b style={{ width: `${Math.min(100, process.cpuPercent)}%` }} /></i><strong>{process.cpuPercent.toFixed(1)}%</strong></span>
               <span><strong>{formatBytes(process.memoryBytes)}</strong><small>{process.memoryPercent.toFixed(1)}%</small></span>
