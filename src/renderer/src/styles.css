@@ -409,7 +409,11 @@ select { -webkit-app-region: no-drag; }
 .overview-application-loading span::after { position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .52), transparent); content: ""; animation: overview-application-scan 1.25s ease-in-out infinite; transform: translateX(-100%); }
 @keyframes overview-application-scan { to { transform: translateX(100%); } }
 .overview-application-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 2px; }
-.overview-application-stats span { display: flex; align-items: baseline; justify-content: space-between; padding: 6px 7px; border-radius: 5px; color: var(--text-tertiary); background: var(--surface-subtle); font-size: 8px; }
+.overview-application-stat { display: flex; min-width: 0; align-items: baseline; justify-content: space-between; padding: 6px 7px; border: 1px solid transparent; border-radius: 5px; color: var(--text-tertiary); background: var(--surface-subtle); font-size: 8px; text-align: left; }
+.overview-application-stat:not(:disabled) { cursor: pointer; }
+.overview-application-stat:not(:disabled):hover,
+.overview-application-stat:not(:disabled):focus-visible { border-color: var(--line-strong); color: var(--text); outline: none; }
+.overview-application-stat:disabled { cursor: default; }
 .overview-application-stats strong { color: var(--text-secondary); font-size: 14px; font-variant-numeric: tabular-nums; }
 .overview-process-panel { margin-top: 10px; overflow: visible; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); }
 .overview-process-panel > header { display: flex; min-height: 54px; align-items: center; justify-content: space-between; gap: 18px; padding: 7px 12px; border-bottom: 1px solid var(--line); }
@@ -446,6 +450,7 @@ select { -webkit-app-region: no-drag; }
 .overview-process-name small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .overview-process-name strong { align-self: end; color: var(--text); font-size: 12px; }
 .overview-process-name small { align-self: start; color: var(--text-tertiary); font-size: 9px; }
+.overview-process-row.is-system .process-scope-label { color: var(--danger); font-weight: 760; }
 .overview-process-row > span:nth-child(3) { display: grid; grid-template-columns: minmax(60px, 1fr) 44px; align-items: center; gap: 8px; }
 .overview-process-row > span:nth-child(3) strong { color: var(--text-secondary); font-size: 11px; text-align: right; }
 .overview-process-row > span:nth-child(3).is-hot strong { color: var(--danger); }

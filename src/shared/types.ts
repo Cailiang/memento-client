@@ -385,7 +385,7 @@ export interface MementoApi extends MementoAgentApi, MementoSettingsApi {
   openApplication: (id: string) => Promise<void>
   updateApplication: (id: string) => Promise<void>
   openSystemSettings: (section: 'battery' | 'network') => Promise<void>
-  openActivityMonitorNetwork: () => Promise<void>
+  openActivityMonitorNetwork: () => Promise<boolean>
   revealTerminalFinding: (id: string) => Promise<void>
   runActions: (ids: string[]) => Promise<ActionResult[]>
   runTerminalFixes: (ids: string[]) => Promise<TerminalFixRunResult>

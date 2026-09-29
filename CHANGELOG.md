@@ -8,6 +8,22 @@ Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are 
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。
 
+## 1.0.0 - 2026-09-29
+
+### English
+
+- Clarified that Accessibility permission is only used to select Activity Monitor's Network panel automatically; the rest of the scan and cleanup workflow does not require it.
+- Widened the default macOS window so application cards keep comfortable space for Agent, update, and management actions.
+- Made Overview application-analysis shortcuts open Applications with the Unused or Updates available filter already selected.
+- Marked the System process label in red in the live process list.
+
+### 简体中文
+
+- 明确说明“辅助功能”权限仅用于自动切换活动监视器的“网络”面板，扫描和清理主流程不依赖此权限。
+- 调宽 macOS 默认窗口，给应用卡片中的 Agent、更新和管理操作留出更舒适的空间。
+- 概览页应用分析中的“不常用”和“需要更新”数字现在会带着对应筛选条件进入应用管理。
+- 进程列表中的“系统进程”标签改为红色，强化风险提示。
+
 ## 0.7.15 - 2026-09-29
 
 ### English

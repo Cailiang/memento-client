@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { InstalledApplication, OverviewHealthIssue, OverviewMetrics } from '../../../shared/types'
+import type { ApplicationFilter } from './ApplicationsPage'
 import { useI18n } from '../i18n'
 import { formatBytes, formatStorageBytes } from './utils'
 import { ApplicationIcon } from './ApplicationsPage'
@@ -177,7 +178,7 @@ export function OverviewPage({
   onCopyProcessPid: (pid: number) => void
   onTerminateProcess: (process: OverviewMetrics['processes'][number], force: boolean) => void
   applications: readonly InstalledApplication[]
-  onOpenApplications: () => void
+  onOpenApplications: (filter?: ApplicationFilter) => void
   onOpenDisk: () => void
   onOpenSystemSettings: (section: 'battery' | 'network') => void
   onOpenActivityMonitorNetwork: () => void
@@ -363,15 +364,15 @@ export function OverviewPage({
           <footer><span>{text('当前接口', 'Interface')} · {metrics.network.interfaceName ?? '--'}</span><span className="overview-card-link-label">{text('活动监视器', 'Activity Monitor')}</span></footer>
         </article>
 
-        <article className="overview-card overview-card-link overview-application-card" role="button" tabIndex={0} onClick={onOpenApplications} onKeyDown={(event) => activateCard(event, onOpenApplications)} title={text('打开应用管理', 'Open Applications')}>
+        <article className="overview-card overview-card-link overview-application-card" role="button" tabIndex={0} onClick={() => onOpenApplications()} onKeyDown={(event) => activateCard(event, () => onOpenApplications())} title={text('打开应用管理', 'Open Applications')}>
           <header><span><AppWindow size={15} />{text('应用分析', 'Application analysis')}</span><small>{text('点击查看', 'Open list')}</small></header>
           <div className="overview-application-total"><strong>{applicationsLoading ? '—' : applications.length}</strong><span>{applicationsLoading ? text('扫描中', 'Scanning') : text('已安装应用', 'installed apps')}</span></div>
           {applicationsLoading && <div className="overview-application-loading" role="progressbar" aria-label={text('应用扫描进度', 'Application scan progress')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={applicationProgress}><span style={{ width: `${applicationProgress}%` }} /></div>}
           <div className="overview-application-stats">
-            <span><strong>{applicationsLoading ? '—' : unusedApplications}</strong>{text('不常用', 'unused')}</span>
-            <span><strong>{applicationsLoading ? '—' : updateableApplications}</strong>{text('需要更新', 'updates')}</span>
+            <button type="button" className="overview-application-stat" onClick={(event) => { event.stopPropagation(); onOpenApplications('unused') }} disabled={applicationsLoading} title={text('查看不常用应用', 'View unused applications')}><strong>{applicationsLoading ? '—' : unusedApplications}</strong>{text('不常用', 'unused')}</button>
+            <button type="button" className="overview-application-stat" onClick={(event) => { event.stopPropagation(); onOpenApplications('updates') }} disabled={applicationsLoading} title={text('查看需要更新的应用', 'View applications with updates')}><strong>{applicationsLoading ? '—' : updateableApplications}</strong>{text('需要更新', 'updates')}</button>
           </div>
-          <footer><span>{text('应用版本和使用情况', 'Versions and usage')}</span><span className="overview-card-link-label">{text('应用管理', 'Applications')}</span></footer>
+          <footer><span>{text('点击数字可直接筛选', 'Click a number to filter')}</span><span className="overview-card-link-label">{text('应用管理', 'Applications')}</span></footer>
         </article>
       </div>
 
@@ -403,7 +404,7 @@ export function OverviewPage({
           {processes.length ? processes.map((process) => {
             const processApplication = applicationForProcess(process, applications)
             return <div className={`overview-process-row ${process.isSystem ? 'is-system' : 'is-user'}`} key={process.pid}>
-              <span className="overview-process-name"><span className="process-logo"><ProcessIcon process={process} application={processApplication} /></span><strong>{process.name}</strong><small>{process.command} · {process.isSystem ? text('系统进程', 'System process') : text('用户进程', 'User process')}</small></span>
+              <span className="overview-process-name"><span className="process-logo"><ProcessIcon process={process} application={processApplication} /></span><strong>{process.name}</strong><small>{process.command} · <span className="process-scope-label">{process.isSystem ? text('系统进程', 'System process') : text('用户进程', 'User process')}</span></small></span>
               <span>{process.pid}</span>
               <span className={process.cpuPercent >= 80 ? 'is-hot' : ''}><i className="process-meter"><b style={{ width: `${Math.min(100, process.cpuPercent)}%` }} /></i><strong>{process.cpuPercent.toFixed(1)}%</strong></span>
               <span><strong>{formatBytes(process.memoryBytes)}</strong><small>{process.memoryPercent.toFixed(1)}%</small></span>

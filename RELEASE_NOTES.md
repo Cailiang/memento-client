@@ -1,3 +1,29 @@
+# Memento Agent 1.0.0 - 首个稳定版本 / First Stable Release
+
+## 简体中文
+
+`1.0.0` 完成首个稳定版本的交互收口。
+
+### 主要变化
+
+- **辅助功能说明：** 网络卡片在无法自动切换活动监视器面板时，会说明权限用途、设置路径和权限边界。它只用于点击“网络”标签。
+- **应用卡片空间：** 默认窗口宽度调整为 1440 像素，应用卡片中的“问 Agent”、更新和管理操作不再拥挤。
+- **快捷筛选：** 从概览页点击“不常用”或“需要更新”的数字，会直接进入应用管理并选中对应筛选。
+- **系统进程提示：** 进程列表中的“系统进程”标签使用红色显示。
+
+## English
+
+`1.0.0` closes the first stable interaction pass for Memento Agent.
+
+### Highlights
+
+- **Accessibility explanation:** If Memento cannot switch Activity Monitor to the Network panel automatically, it explains the permission purpose, settings path, and scope. The permission is used only to click the Network tab.
+- **Application-card space:** The default window width is now 1440 pixels, giving Agent, update, and management actions room to breathe.
+- **Filter shortcuts:** Clicking Unused or Updates available in Overview opens Applications with that filter selected.
+- **System-process warning:** The System process label is now red in the live process list.
+
+---
+
 # Memento Agent 0.7.15 - 应用内更新与进程列表可读性 / In-App Updates and Process Readability
 
 ## 简体中文

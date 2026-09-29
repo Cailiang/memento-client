@@ -133,6 +133,25 @@ try {
         if (await page.locator('.overview-process-row .process-logo').count() < 1) {
           failures.push(`${viewportName}/overview: process logos are missing`)
         }
+        if (!await page.locator('.overview-process-row.is-system .process-scope-label').count()) {
+          failures.push(`${viewportName}/overview: system process warning labels are missing`)
+        }
+        if (viewportName === '1440x900') {
+          const unusedStat = applicationCard.locator('.overview-application-stat').first()
+          const updatesStat = applicationCard.locator('.overview-application-stat').nth(1)
+          await unusedStat.click()
+          if (await page.locator('select[aria-label="筛选应用"]').inputValue() !== 'unused') {
+            failures.push('overview: unused application shortcut did not set the unused filter')
+          }
+          await navigate(page, '概览')
+          if (await updatesStat.count() && !(await updatesStat.isDisabled())) {
+            await updatesStat.click()
+            if (await page.locator('select[aria-label="筛选应用"]').inputValue() !== 'updates') {
+              failures.push('overview: update application shortcut did not set the updates filter')
+            }
+            await navigate(page, '概览')
+          }
+        }
         if (await page.locator('.overview-process-chart').count()) {
           failures.push(`${viewportName}/overview: removed high-usage process charts are still rendered`)
         }

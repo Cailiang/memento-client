@@ -167,7 +167,7 @@ function applicationBundleFromProcessCommand(command: string): string | null {
   return candidate
 }
 
-async function openActivityMonitorNetwork(): Promise<void> {
+async function openActivityMonitorNetwork(): Promise<boolean> {
   await execFileAsync('/usr/bin/open', ['-a', 'Activity Monitor'], { timeout: 8_000 })
   const script = `
 tell application "System Events"
@@ -188,11 +188,14 @@ tell application "System Events"
       delay 0.25
     end repeat
   end tell
+  if not selectedNetwork then error number -1712
 end tell`
   try {
     await execFileAsync('/usr/bin/osascript', ['-e', script], { timeout: 5_000 })
+    return true
   } catch {
     // Activity Monitor still opened; Accessibility permission can prevent tab selection.
+    return false
   }
 }
 
@@ -200,7 +203,7 @@ function appleScriptString(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
 }
 
-async function openSparkleUpdater(target: string): Promise<void> {
+async function openSparkleUpdater(target: string): Promise<boolean> {
   const openError = await shell.openPath(target)
   if (openError) throw new Error(mainText(`无法打开应用：${openError}`, `Could not open the application: ${openError}`))
   const processName = appleScriptString(path.basename(target, '.app'))
@@ -224,13 +227,16 @@ tell application "System Events"
       end try
       if selectedUpdater then exit repeat
       delay 0.25
-    end repeat
+  end repeat
   end tell
+  if not selectedUpdater then error number -1712
 end tell`
   try {
     await execFileAsync('/usr/bin/osascript', ['-e', script], { timeout: 6_000 })
+    return true
   } catch {
     // Opening the app is still a valid fallback for updaters that check on launch.
+    return false
   }
 }
 
@@ -1044,9 +1050,9 @@ function applyWindowSettings(): void {
 
 function createWindow(): void {
   const window = new BrowserWindow({
-    width: 1320,
+    width: 1440,
     height: 840,
-    minWidth: 980,
+    minWidth: 1080,
     minHeight: 680,
     show: false,
     title: `Memento ${app.getVersion()}`,
@@ -1682,7 +1688,13 @@ app.whenReady().then(async () => {
       await runSparkleUpdater(target, sparkle)
       return
     }
-    await openSparkleUpdater(target)
+    const updaterMenuSelected = await openSparkleUpdater(target)
+    if (!updaterMenuSelected) {
+      throw new Error(mainText(
+        '应用已打开。若要自动点击“检查更新”，请在“系统设置 → 隐私与安全性 → 辅助功能”中允许 Memento；此权限仅用于控制更新菜单。',
+        'The application is open. To click “Check for Updates” automatically, allow Memento in System Settings → Privacy & Security → Accessibility. This permission is only used to control the updater menu.'
+      ))
+    }
   })
   ipcMain.handle('memento:open-system-settings', async (_event, section: string) => {
     const urls: Record<string, string> = {

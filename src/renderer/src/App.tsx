@@ -38,7 +38,7 @@ import type {
   TerminalFinding
 } from '../../shared/types'
 import { AgentPage } from './agent-ui/AgentPage'
-import { ApplicationsPage } from './agent-ui/ApplicationsPage'
+import { ApplicationsPage, type ApplicationFilter } from './agent-ui/ApplicationsPage'
 import { DiskAnalysisPage } from './agent-ui/DiskAnalysisPage'
 import {
   ApplicationIgnoreConfirmDialog,
@@ -409,6 +409,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
   const [overviewError, setOverviewError] = useState<string | null>(null)
   const [result, setResult] = useState<ScanResult | null>(null)
   const [view, setView] = useState<AgentViewKey>('overview')
+  const [applicationEntryFilter, setApplicationEntryFilter] = useState<ApplicationFilter>('all')
   const [scanBusy, setScanBusy] = useState(false)
   const [progress, setProgress] = useState<ScanProgress | null>(null)
   const [scanError, setScanError] = useState<string | null>(null)
@@ -1439,7 +1440,17 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
 
   const openActivityMonitorNetwork = async (): Promise<void> => {
     try {
-      if (window.memento) await window.memento.openActivityMonitorNetwork()
+      setToast(appText(
+        '正在打开活动监视器。自动选择“网络”面板只需要辅助功能权限来点击该标签。',
+        'Opening Activity Monitor. Accessibility is only needed to click the Network tab automatically.'
+      ))
+      const selected = window.memento ? await window.memento.openActivityMonitorNetwork() : true
+      if (!selected) {
+        setToast(appText(
+          '活动监视器已打开。若要自动切换到“网络”面板，请在“系统设置 → 隐私与安全性 → 辅助功能”中允许 Memento。此权限仅用于点击活动监视器的“网络”标签。',
+          'Activity Monitor is open. To switch to the Network panel automatically, allow Memento in System Settings → Privacy & Security → Accessibility. This permission is only used to click Activity Monitor’s Network tab.'
+        ))
+      }
     } catch (error) {
       setToast(error instanceof Error ? error.message : appText('无法打开活动监视器', 'Could not open Activity Monitor.'))
     }
@@ -1846,10 +1857,13 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       updateState={updateState}
       hostname={overviewMetrics?.hostname ?? result?.system.hostname ?? ''}
       osVersion={overviewMetrics?.osVersion ?? result?.system.osVersion ?? ''}
-      onNavigate={setView}
+      onNavigate={(nextView) => {
+        if (nextView === 'apps') setApplicationEntryFilter('all')
+        setView(nextView)
+      }}
       onInstallUpdate={installUpdate}
     >
-      {view === 'overview' && <OverviewPage metrics={overviewMetrics} applications={result?.applications ?? []} applicationsLoading={scanBusy && !result} applicationScanProgress={scanBusy && !result ? progress?.progress ?? null : null} busy={overviewBusy} paused={overviewPaused} error={overviewError} onRefresh={() => void refreshOverview(true)} onPausedChange={setOverviewPaused} onAskProcess={(process) => void askOverviewProcess(process)} onCopyProcessName={(name) => void copyOverviewProcessName(name)} onCopyProcessPid={(pid) => void copyOverviewProcessPid(pid)} onTerminateProcess={(process, force) => void terminateOverviewProcess(process, force)} onOpenApplications={() => setView('apps')} onOpenDisk={() => setView('disk')} onOpenSystemSettings={(section) => void openSystemSettings(section)} onOpenActivityMonitorNetwork={() => void openActivityMonitorNetwork()} />}
+      {view === 'overview' && <OverviewPage metrics={overviewMetrics} applications={result?.applications ?? []} applicationsLoading={scanBusy && !result} applicationScanProgress={scanBusy && !result ? progress?.progress ?? null : null} busy={overviewBusy} paused={overviewPaused} error={overviewError} onRefresh={() => void refreshOverview(true)} onPausedChange={setOverviewPaused} onAskProcess={(process) => void askOverviewProcess(process)} onCopyProcessName={(name) => void copyOverviewProcessName(name)} onCopyProcessPid={(pid) => void copyOverviewProcessPid(pid)} onTerminateProcess={(process, force) => void terminateOverviewProcess(process, force)} onOpenApplications={(filter = 'all') => { setApplicationEntryFilter(filter); setView('apps') }} onOpenDisk={() => setView('disk')} onOpenSystemSettings={(section) => void openSystemSettings(section)} onOpenActivityMonitorNetwork={() => void openActivityMonitorNetwork()} />}
       {view === 'agent' && <AgentPage scan={result} run={activeRun} conversationRuns={conversationRuns} workspaceRuns={workspaceRuns} statusMessage={runStatusMessage} selectedPlanIds={selectedPlanIds} providerConfigured={Boolean(defaultProvider)} addingOperationId={addingOperationId} openingApplicationId={openingApplicationId} returnLabel={agentOriginLabel} onSubmit={startAgentRun} onSelectWorkspaceRun={selectWorkspaceRun} onCloseWorkspaceRun={closeWorkspaceRun} onNewTask={() => { setActiveRun(null); activeRunId.current = null; setSelectedPlanIds(new Set()); setRunStatusMessage(''); setAgentOrigin(null) }} onOpenHistory={() => setView('history')} onOpenSettings={() => setView('settings')} onReturn={returnToAgentOrigin} onOpenApplication={openAgentApplication} onAddPlanItem={(id) => void addAgentPlanItem(id)} onTogglePlanItem={(id) => setSelectedPlanIds((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next })} onExecutePlan={() => void executePlan()} onDiscardPlan={discardPlan} />}
       {view === 'health' && <HealthPage
         result={result}
@@ -1894,7 +1908,7 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
         onIgnore={setPendingIgnore}
         onManageIgnored={openIgnoredManager}
       />}
-      {view === 'apps' && <ApplicationsPage applications={result?.applications ?? []} hasResult={Boolean(result)} loading={scanBusy || (!result && !scanError)} progress={progress} error={scanError} openingId={openingApplicationId} removingId={removingApplicationId} updatingId={updatingApplicationId} restoreTarget={restoreTarget?.view === 'apps' ? restoreTarget : null} onRestoreComplete={() => setRestoreTarget(null)} ignoredCount={settings.applicationWhitelist.length} onOpen={(application) => void openApplication(application)} onUpdate={(application) => void updateApplication(application)} onUninstall={setPendingUninstall} onIgnore={setPendingApplicationIgnore} onManageIgnored={() => openIgnoredManager('applications')} onAgentPrompt={(prompt, origin) => startAgentRun(prompt, { isolated: true, origin: { view: 'apps', ...origin } })} onScan={() => void scanNow()} />}
+      {view === 'apps' && <ApplicationsPage applications={result?.applications ?? []} hasResult={Boolean(result)} loading={scanBusy || (!result && !scanError)} progress={progress} error={scanError} openingId={openingApplicationId} removingId={removingApplicationId} updatingId={updatingApplicationId} initialFilter={applicationEntryFilter} restoreTarget={restoreTarget?.view === 'apps' ? restoreTarget : null} onRestoreComplete={() => setRestoreTarget(null)} ignoredCount={settings.applicationWhitelist.length} onOpen={(application) => void openApplication(application)} onUpdate={(application) => void updateApplication(application)} onUninstall={setPendingUninstall} onIgnore={setPendingApplicationIgnore} onManageIgnored={() => openIgnoredManager('applications')} onAgentPrompt={(prompt, origin) => startAgentRun(prompt, { isolated: true, origin: { view: 'apps', ...origin } })} onScan={() => void scanNow()} />}
       {view === 'disk' && <DiskAnalysisPage result={diskUsage} progress={diskUsageProgress} busy={diskUsageBusy} error={diskUsageError} onScan={() => void scanDiskUsage()} onCancel={cancelDiskUsageScan} onReveal={revealDiskUsageNode} onAskAI={(node) => void askDiskUsageNode(node)} onRequestTrash={setPendingDiskUsageTrash} />}
       {view === 'history' && <HistoryPage runs={runs} maintenanceRuns={maintenanceRuns} onOpenRun={(run) => { setActiveRun(run); activeRunId.current = run.id; setSelectedPlanIds(new Set()); setView('agent') }} onDeleteRuns={setPendingHistoryDelete} onDeleteMaintenanceRuns={setPendingMaintenanceDelete} onRevealRecovery={revealMaintenanceRecovery} />}
       {view === 'settings' && <SettingsPage settings={settings} providers={providers} appVersion={appVersion} updateState={updateState} onUpdateSettings={updateSettings} onDiscoverModels={discoverProviderModels} onSaveProvider={saveProvider} onTestProvider={testProvider} onDeleteProvider={deleteProvider} onSetDefaultProvider={setDefaultProvider} onImportLocalAi={importLocalAiConfigurations} onImportCcSwitch={importCcSwitchProviders} onCheckUpdates={checkForUpdates} onManageIgnored={() => openIgnoredManager()} onToast={setToast} />}

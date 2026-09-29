@@ -16,7 +16,7 @@ import { useI18n } from '../i18n'
 import type { PageRestoreTarget } from './HealthPage'
 import { formatBytes, relativeDate } from './utils'
 
-export type ApplicationFilter = 'all' | 'recent' | 'unused' | 'system'
+export type ApplicationFilter = 'all' | 'recent' | 'unused' | 'updates' | 'system'
 export type ApplicationSort = 'recent' | 'size' | 'name'
 
 function updateSourceLabel(source: InstalledApplication['updateSource'], language: 'zh-CN' | 'en-US'): string {
@@ -42,6 +42,7 @@ export function filterAndSortApplications(
     .filter((application) => (
       filter === 'all' ||
       (filter === 'unused' && application.unused) ||
+      (filter === 'updates' && application.updateAvailable) ||
       (filter === 'recent' && !application.unused) ||
       (filter === 'system' && application.scope === 'system')
     ))
@@ -94,6 +95,7 @@ export function ApplicationsPage({
   openingId,
   removingId,
   updatingId,
+  initialFilter = 'all',
   restoreTarget,
   onRestoreComplete,
   ignoredCount,
@@ -113,6 +115,7 @@ export function ApplicationsPage({
   openingId: string | null
   removingId: string | null
   updatingId: string | null
+  initialFilter?: ApplicationFilter
   restoreTarget: PageRestoreTarget | null
   onRestoreComplete: () => void
   ignoredCount: number
@@ -126,7 +129,7 @@ export function ApplicationsPage({
 }): React.JSX.Element {
   const { language, text } = useI18n()
   const [search, setSearch] = useState('')
-  const [filter, setFilter] = useState<ApplicationFilter>('all')
+  const [filter, setFilter] = useState<ApplicationFilter>(initialFilter)
   const [sort, setSort] = useState<ApplicationSort>('recent')
   const pageRef = useRef<HTMLElement>(null)
   const manageable = applications.filter((application) => application.action && !application.protectedReason && application.scope !== 'system')
@@ -136,6 +139,10 @@ export function ApplicationsPage({
     [applications, filter, language, search, sort]
   )
   const initialLoading = loading && !hasResult
+
+  useEffect(() => {
+    setFilter(initialFilter)
+  }, [initialFilter])
 
   useEffect(() => {
     if (!restoreTarget || !pageRef.current) return
@@ -199,6 +206,7 @@ export function ApplicationsPage({
           <option value="all">{text('全部应用', 'All applications')}</option>
           <option value="recent">{text('最近使用', 'Recently used')}</option>
           <option value="unused">{text('3 个月未使用', 'Unused for 3 months')}</option>
+          <option value="updates">{text('需要更新', 'Updates available')}</option>
           <option value="system">{text('系统应用', 'System applications')}</option>
         </select>
         <select aria-label={text('应用排序', 'Sort applications')} value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}>

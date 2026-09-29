@@ -32,6 +32,7 @@ describe('application inventory controls', () => {
     application('Recent', { lastUsedAt: '2026-07-25T00:00:00.000Z', sizeBytes: 200 }),
     application('Old', { lastUsedAt: '2025-01-01T00:00:00.000Z', unused: true, sizeBytes: 500 }),
     application('Unknown', { lastUsedAt: null }),
+    application('NeedsUpdate', { updateAvailable: true, latestVersion: '2.0' }),
     application('Safari', {
       bundleId: 'com.apple.Safari',
       location: '/System/Applications/Safari.app',
@@ -52,15 +53,17 @@ describe('application inventory controls', () => {
     expect(filterAndSortApplications(applications, '', 'unused', 'name').map((item) => item.name))
       .toEqual(['Old'])
     expect(filterAndSortApplications(applications, '', 'recent', 'name').map((item) => item.name))
-      .toEqual(['Recent', 'Safari', 'Unknown'])
+      .toEqual(['NeedsUpdate', 'Recent', 'Safari', 'Unknown'])
+    expect(filterAndSortApplications(applications, '', 'updates', 'name').map((item) => item.name))
+      .toEqual(['NeedsUpdate'])
     expect(filterAndSortApplications(applications, '', 'system', 'name').map((item) => item.name))
       .toEqual(['Safari'])
   })
 
   it('sorts by recent usage and keeps unknown dates at the end', () => {
     expect(filterAndSortApplications(applications, '', 'all', 'recent').map((item) => item.name))
-      .toEqual(['Recent', 'Safari', 'Old', 'Unknown'])
+      .toEqual(['Recent', 'NeedsUpdate', 'Safari', 'Old', 'Unknown'])
     expect(filterAndSortApplications(applications, '', 'all', 'size').map((item) => item.name))
-      .toEqual(['Old', 'Recent', 'Unknown', 'Safari'])
+      .toEqual(['Old', 'Recent', 'Unknown', 'NeedsUpdate', 'Safari'])
   })
 })
