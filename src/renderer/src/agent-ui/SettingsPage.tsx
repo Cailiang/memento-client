@@ -72,7 +72,7 @@ function inferProviderPreset(provider: Pick<AgentProvider, 'type' | 'baseUrl'>):
 }
 
 function providerSource(id: string): [string, string] | null {
-  if (id.startsWith('cc-switch-')) return ['CC Switch', 'CC Switch']
+  if (id.startsWith('cc-switch-')) return ['已导入副本', 'Imported copy']
   if (id.startsWith('local-config-claude-')) return ['Claude', 'Claude']
   if (id.startsWith('local-config-codex-')) return ['Codex', 'Codex']
   if (id.startsWith('local-config-gemini-')) return ['Gemini', 'Gemini']
@@ -409,10 +409,10 @@ export function SettingsPage({
         <section className="settings-section provider-settings-section">
           <div className="settings-label">
             <h2>{text('模型供应商', 'Model providers')}</h2>
-            <p>{text('自动读取本机已经配置好的 Claude、Codex、Gemini 和 Grok；只有密钥、服务地址和模型通过连接校验的配置才会加入列表。CC Switch 仅在你选择导入时读取，并执行相同校验。', 'Read configured Claude, Codex, Gemini, and Grok credentials from this Mac. Only configurations whose credentials, endpoint, and model pass connection validation are added. CC Switch is read only when you choose to import it and uses the same validation.')}</p>
+            <p>{text('自动读取本机已经配置好的 Claude、Codex、Gemini 和 Grok；只有密钥、服务地址和模型通过连接校验的配置才会加入列表。CC Switch 只在首次检测到时询问一次，也可以在这里手动导入。导入后会成为 Memento 的独立副本，修改不会跟随 CC Switch。', 'Read configured Claude, Codex, Gemini, and Grok credentials from this Mac. Only configurations whose credentials, endpoint, and model pass connection validation are added. CC Switch is offered once when it is first detected, and can also be imported manually here. Imported providers are independent Memento copies and never follow CC Switch changes.')}</p>
             <div className="provider-import-actions">
               <button type="button" className="secondary-button" disabled={localImportBusy || ccSwitchBusy} onClick={() => void importLocalAi()}>{localImportBusy ? <LoaderCircle className="spinner" size={14} /> : <ScanSearch size={14} />}{localImportBusy ? text('正在扫描', 'Scanning') : text('扫描本机 AI 配置', 'Scan local AI configurations')}</button>
-              <button type="button" className="quiet-button" disabled={localImportBusy || ccSwitchBusy} onClick={() => void importCcSwitch()}>{ccSwitchBusy ? <LoaderCircle className="spinner" size={14} /> : <Download size={14} />}{ccSwitchBusy ? text('正在导入', 'Importing') : text('导入 CC Switch', 'Import CC Switch')}</button>
+              <button type="button" className="quiet-button" disabled={localImportBusy || ccSwitchBusy} onClick={() => void importCcSwitch()}>{ccSwitchBusy ? <LoaderCircle className="spinner" size={14} /> : <Download size={14} />}{ccSwitchBusy ? text('正在复制', 'Copying') : text('复制 CC Switch 配置', 'Copy CC Switch configurations')}</button>
             </div>
           </div>
           <div className="provider-manager">

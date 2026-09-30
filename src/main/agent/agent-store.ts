@@ -246,6 +246,23 @@ export class AgentStore {
     `).run(now())
   }
 
+  hasCompletedCcSwitchImportPrompt(): boolean {
+    const row = this.database.prepare(`
+      SELECT value_json FROM app_settings WHERE key = 'cc_switch_import_prompt_v1'
+    `).get() as { value_json: string } | undefined
+    return row?.value_json === 'true'
+  }
+
+  markCcSwitchImportPromptCompleted(): void {
+    this.database.prepare(`
+      INSERT INTO app_settings (key, value_json, updated_at)
+      VALUES ('cc_switch_import_prompt_v1', 'true', ?)
+      ON CONFLICT(key) DO UPDATE SET
+        value_json = excluded.value_json,
+        updated_at = excluded.updated_at
+    `).run(now())
+  }
+
   listProviders(): AgentProvider[] {
     const rows = this.database.prepare(`
       SELECT * FROM ai_providers
@@ -405,7 +422,12 @@ export class AgentStore {
   }
 
   syncCcSwitchImportedProviders(inputs: ImportedProviderCandidate[]): { imported: number; removed: number } {
-    return this.syncManagedImportedProviders(inputs, 'cc-switch-')
+    // CC Switch is a one-time source of credentials. Keep the deterministic
+    // imported id so an explicit re-import can update the copied row, but do
+    // not prune rows that disappeared from CC Switch or re-sync them in the
+    // background. Once copied, the provider belongs to Memento and can be
+    // edited freely here.
+    return { imported: this.syncImportedProviders(inputs), removed: 0 }
   }
 
   private syncManagedImportedProviders(

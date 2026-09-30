@@ -244,11 +244,11 @@ try {
   if (!await settingsPage.getByRole('button', { name: '扫描本机 AI 配置' }).isVisible()) {
     failures.push('settings: local AI configuration scan is missing')
   }
-  if (!await settingsPage.getByRole('button', { name: '导入 CC Switch' }).isVisible()) {
-    failures.push('settings: optional CC Switch import is missing')
+  if (!await settingsPage.getByRole('button', { name: '复制 CC Switch 配置' }).isVisible()) {
+    failures.push('settings: CC Switch copy action is missing')
   }
-  if (!await settingsPage.getByText(/CC Switch 仅在你选择导入时读取，并执行相同校验/).isVisible()) {
-    failures.push('settings: CC Switch import is not explained as optional and validated')
+  if (!await settingsPage.getByText(/CC Switch 只在首次检测到时询问一次/).isVisible()) {
+    failures.push('settings: one-time CC Switch import behavior is not explained')
   }
   if (await settingsPage.getByLabel('接口类型').count()) {
     failures.push('settings: API type is still exposed as a user choice')

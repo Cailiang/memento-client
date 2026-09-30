@@ -4,6 +4,18 @@ All notable changes to Memento Client are documented here in English and Simplif
 
 Memento Client 的重要变更会在这里使用英文和简体中文同步记录。
 
+## 1.0.2 - 2026-09-30
+
+### English
+
+- Changed CC Switch integration to a one-time, user-confirmed import. Imported providers are independent encrypted Memento copies that can be edited freely and are never synchronized, pruned, or written back to CC Switch.
+- Added an explicit Settings action to copy CC Switch configurations again when the user chooses to do so.
+
+### 简体中文
+
+- 将 CC Switch 集成改为首次检测到配置时只询问一次、由用户确认的一次性导入。导入后的供应商会成为 Memento 独立加密副本，可以自由修改，不再同步、删除或回写 CC Switch。
+- 设置页新增手动复制 CC Switch 配置入口，只有用户主动点击时才会再次读取。
+
 ## 1.0.1 - 2026-09-30
 
 ### English

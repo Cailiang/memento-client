@@ -555,6 +555,9 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       setDiskUsage((current) => current ? withoutDiskUsageNode(current, id) : current)
     })
     const unsubscribeUpdate = window.memento?.onUpdateState(setUpdateState)
+    const unsubscribeProviders = window.memento?.onAgentProvidersChanged(() => {
+      void refreshProviders()
+    })
     const unsubscribeAgent = window.memento?.onAgentRunEvent((event: AgentRunEvent) => {
       if (event.type === 'status') {
         if (event.runId === activeRunId.current) {
@@ -607,9 +610,10 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
       unsubscribeDiskUsage?.()
       unsubscribeDiskUsageRemoval?.()
       unsubscribeUpdate?.()
+      unsubscribeProviders?.()
       unsubscribeAgent?.()
     }
-  }, [])
+  }, [refreshProviders])
 
   const scanDiskUsage = useCallback(async (): Promise<void> => {
     if (diskUsageBusy) return
@@ -1709,27 +1713,21 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
         ? await window.memento.importCcSwitchProviders()
         : { databaseFound: true, detected: 2, imported: 1, rejected: 1, removed: 0 }
       await refreshProviders()
-      const removedText = imported.removed > 0
-        ? appText(
-            `；同时移除 ${imported.removed} 个已失效或已删除的旧配置`,
-            `; ${imported.removed} previously imported invalid or deleted configurations removed`
-          )
-        : ''
       setToast(!imported.databaseFound
         ? appText('没有找到本地 CC Switch 配置', 'No local CC Switch configuration was found.')
         : imported.detected === 0
           ? appText(
-              `CC Switch 中没有可校验的完整配置${removedText}`,
-              `CC Switch has no complete configuration to validate${removedText}.`
+              'CC Switch 中没有可校验的完整配置',
+              'CC Switch has no complete configuration to validate.'
             )
           : imported.detected === imported.rejected
             ? appText(
-                `CC Switch 配置均未通过密钥、服务地址和模型校验，已全部过滤${removedText}`,
-                `All CC Switch configurations failed credential, endpoint, or model validation and were filtered out${removedText}.`
+                'CC Switch 配置均未通过密钥、服务地址和模型校验，已全部过滤',
+                'All CC Switch configurations failed credential, endpoint, or model validation and were filtered out.'
               )
             : appText(
-                `已读取 ${imported.detected} 个配置，新增或更新 ${imported.imported} 个，过滤 ${imported.rejected} 个无效配置${removedText}`,
-                `${imported.detected} configurations read; ${imported.imported} added or updated and ${imported.rejected} invalid configurations filtered out${removedText}.`
+                `已复制 ${imported.imported} 个 CC Switch 配置，过滤 ${imported.rejected} 个无效配置。复制后可在 Memento 中自由修改。`,
+                `${imported.imported} CC Switch configurations were copied; ${imported.rejected} invalid configurations were filtered out. Copies can be edited freely in Memento.`
               ))
       return imported
     } catch (error) {

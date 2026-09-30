@@ -189,7 +189,7 @@ describe('AgentStore', () => {
     store.close()
   })
 
-  it('removes invalid or deleted CC Switch imports and keeps a remaining default', () => {
+  it('keeps CC Switch imports as independent editable copies', () => {
     const directory = temporaryDirectory()
     const store = new AgentStore(directory)
     const claude = {
@@ -215,16 +215,27 @@ describe('AgentStore', () => {
     })
     expect(store.listProviders().find((provider) => provider.id === claude.id)?.isDefault).toBe(true)
 
-    expect(store.syncCcSwitchImportedProviders([gemini])).toEqual({ imported: 0, removed: 1 })
-    expect(store.listProviders()).toEqual([
-      expect.objectContaining({ id: gemini.id, isDefault: true })
-    ])
+    expect(store.syncCcSwitchImportedProviders([gemini])).toEqual({ imported: 0, removed: 0 })
+    expect(store.listProviders()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: claude.id, name: 'Claude relay', isDefault: true }),
+      expect.objectContaining({ id: gemini.id, name: 'Gemini relay', isDefault: false })
+    ]))
 
-    store.saveProvider(providerInput('Manual provider', 'manual-secret'))
-    expect(store.syncCcSwitchImportedProviders([])).toEqual({ imported: 0, removed: 1 })
-    expect(store.listProviders()).toEqual([
-      expect.objectContaining({ name: 'Manual provider', isDefault: true })
-    ])
+    const edited = store.saveProvider({
+      id: claude.id,
+      name: 'My editable relay',
+      type: 'anthropic',
+      baseUrl: 'https://memento.example.com/v1',
+      model: 'edited-model',
+      apiKey: ''
+    })
+    expect(edited.name).toBe('My editable relay')
+    expect(store.syncCcSwitchImportedProviders([])).toEqual({ imported: 0, removed: 0 })
+    expect(store.getPrivateProvider(claude.id)).toMatchObject({
+      name: 'My editable relay',
+      baseUrl: 'https://memento.example.com/v1',
+      model: 'edited-model'
+    })
     store.close()
   })
 
@@ -238,6 +249,19 @@ describe('AgentStore', () => {
 
     const reopened = new AgentStore(directory)
     expect(reopened.hasCompletedLocalAiConfigImport()).toBe(true)
+    reopened.close()
+  })
+
+  it('persists the one-time CC Switch import prompt independently from copied providers', () => {
+    const directory = temporaryDirectory()
+    const store = new AgentStore(directory)
+    expect(store.hasCompletedCcSwitchImportPrompt()).toBe(false)
+    store.markCcSwitchImportPromptCompleted()
+    expect(store.hasCompletedCcSwitchImportPrompt()).toBe(true)
+    store.close()
+
+    const reopened = new AgentStore(directory)
+    expect(reopened.hasCompletedCcSwitchImportPrompt()).toBe(true)
     reopened.close()
   })
 

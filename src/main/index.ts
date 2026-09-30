@@ -2,6 +2,7 @@ import {
   app,
   BrowserWindow,
   clipboard,
+  dialog,
   ipcMain,
   Menu,
   nativeImage,
@@ -549,6 +550,51 @@ async function importCcSwitchProviders(): Promise<CcSwitchImportResult> {
     detected: candidates.length,
     rejected: validated.rejected,
     ...synchronized
+  }
+}
+
+async function offerCcSwitchImportOnce(): Promise<void> {
+  if (process.env.MEMENTO_TEST_RUN === '1') return
+  if (agentStore!.hasCompletedCcSwitchImportPrompt()) return
+  // Older builds already imported CC Switch rows without a prompt. Treat
+  // those existing rows as an earlier consent so upgrading does not ask again.
+  if (agentStore!.listProviders().some((provider) => provider.id.startsWith('cc-switch-'))) {
+    agentStore!.markCcSwitchImportPromptCompleted()
+    return
+  }
+  const databasePath = findCcSwitchDatabase(app.getPath('home'), app.getPath('appData'))
+  if (!databasePath) return
+  const candidates = readCcSwitchProviders(databasePath)
+  if (!candidates.length) return
+
+  // Mark the prompt before importing so a rejected or failed import is still
+  // a one-time question. The Settings action remains available for an
+  // explicit retry and is never used as a background synchronisation hook.
+  agentStore!.markCcSwitchImportPromptCompleted()
+  const language = agentStore!.getAppSettings().language
+  const response = await dialog.showMessageBox({
+    type: 'question',
+    title: mainText('发现 CC Switch 配置', 'CC Switch configuration found'),
+    message: language === 'en-US'
+      ? `Memento found ${candidates.length} CC Switch provider${candidates.length === 1 ? '' : 's'}. Import a copy into Memento?`
+      : `检测到 ${candidates.length} 个 CC Switch 供应商配置，要复制到 Memento 吗？`,
+    detail: mainText(
+      '导入后会保存为 Memento 自己的配置。之后修改 Memento 中的名称、地址、模型或密钥，不会回写或跟随 CC Switch。',
+      'Memento saves an independent copy. Later edits to its name, URL, model, or key stay in Memento and are not written back to or synchronized with CC Switch.'
+    ),
+    buttons: [
+      mainText('导入配置', 'Import configuration'),
+      mainText('暂不导入', 'Not now')
+    ],
+    defaultId: 0,
+    cancelId: 1,
+    noLink: true
+  })
+  if (response.response === 0) {
+    await importCcSwitchProviders()
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('memento:agent-providers-changed')
+    }
   }
 }
 
@@ -2032,6 +2078,16 @@ app.whenReady().then(async () => {
   ipcMain.handle('memento:run-actions', (_event, ids: string[]) => executeActionBatch(ids))
 
   createWindow()
+  const promptForCcSwitchImport = (): void => {
+    void offerCcSwitchImportOnce().catch((error) => {
+      console.error('CC Switch one-time import prompt failed:', error)
+    })
+  }
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.once('did-finish-load', promptForCcSwitchImport)
+  } else {
+    promptForCcSwitchImport()
+  }
   const initialUpdateCheck = setTimeout(() => {
     void checkForAppUpdate()
   }, 3_000)

@@ -74,6 +74,11 @@ const api: MementoApi = {
   getAgentRun: (runId) => ipcRenderer.invoke('memento:agent:runs:get', runId),
   deleteAgentRun: (runId) => ipcRenderer.invoke('memento:agent:runs:delete', runId),
   deleteAgentRuns: (runIds) => ipcRenderer.invoke('memento:agent:runs:delete-many', runIds),
+  onAgentProvidersChanged: (callback) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('memento:agent-providers-changed', listener)
+    return () => ipcRenderer.removeListener('memento:agent-providers-changed', listener)
+  },
   onAgentRunEvent: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, runEvent: AgentRunEvent): void => {
       callback(runEvent)

@@ -1,3 +1,19 @@
+# Memento Agent 1.0.2 - CC Switch 一次性导入 / One-Time CC Switch Import
+
+## 简体中文
+
+- **只询问一次：** 首次检测到可用 CC Switch 配置时，Memento 会询问是否导入；选择后不会重复弹出。
+- **独立副本：** 导入结果保存为 Memento 自己的加密供应商配置，用户可以自由修改名称、地址、模型和密钥，不会跟随 CC Switch 变化，也不会回写 CC Switch。
+- **手动复制：** 设置页可以按需再次复制 CC Switch 配置，除此之外 Memento 不会读取或同步 CC Switch。
+
+## English
+
+- **One-time prompt:** Memento asks once whether to import usable CC Switch providers when it first detects them.
+- **Independent copies:** Imported providers are encrypted Memento configurations that can be edited freely. They do not follow or write back to CC Switch.
+- **Explicit copy action:** Settings can copy CC Switch configurations again when requested; there is no background synchronization.
+
+---
+
 # Memento Agent 1.0.1 - App Store 更新检测 / App Store Update Detection
 
 ## 简体中文

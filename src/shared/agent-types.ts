@@ -278,5 +278,6 @@ export interface MementoAgentApi {
   getAgentRun: (runId: string) => Promise<AgentRunRecord | null>
   deleteAgentRun: (runId: string) => Promise<void>
   deleteAgentRuns: (runIds: string[]) => Promise<void>
+  onAgentProvidersChanged: (callback: () => void) => () => void
   onAgentRunEvent: (callback: (event: AgentRunEvent) => void) => () => void
 }
