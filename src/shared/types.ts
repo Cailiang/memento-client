@@ -98,6 +98,8 @@ export interface ServiceRuntimeMetrics {
 
 export type ApplicationScope = 'user' | 'shared' | 'system'
 export type ApplicationUpdateSource = 'homebrew-cask' | 'mac-app-store' | 'sparkle'
+export type ApplicationUpdateMode = 'direct' | 'external'
+export type ApplicationUpdateResult = { status: 'updated' } | { status: 'opened'; destination: 'app-store' | 'application' }
 
 export interface InstalledApplication {
   id: string
@@ -115,6 +117,7 @@ export interface InstalledApplication {
   updateAvailable?: boolean
   latestVersion?: string | null
   updateSource?: ApplicationUpdateSource
+  updateMode?: ApplicationUpdateMode
   updateToken?: string
   updateUrl?: string
   protectedReason?: string
@@ -383,7 +386,7 @@ export interface MementoApi extends MementoAgentApi, MementoSettingsApi {
   getApplicationIcon: (id: string) => Promise<string | null>
   getProcessIcon: (command: string) => Promise<string | null>
   openApplication: (id: string) => Promise<void>
-  updateApplication: (id: string) => Promise<void>
+  updateApplication: (id: string) => Promise<ApplicationUpdateResult>
   openSystemSettings: (section: 'battery' | 'network') => Promise<void>
   openActivityMonitorNetwork: () => Promise<boolean>
   revealTerminalFinding: (id: string) => Promise<void>

@@ -56,6 +56,18 @@ describe('application inventory controls', () => {
       .toEqual(['NeedsUpdate', 'Recent', 'Safari', 'Unknown'])
     expect(filterAndSortApplications(applications, '', 'updates', 'name').map((item) => item.name))
       .toEqual(['NeedsUpdate'])
+    expect(filterAndSortApplications([
+      ...applications,
+      application('DirectUpdate', { updateAvailable: true, updateMode: 'direct' }),
+      application('ExternalUpdate', { updateAvailable: true, updateMode: 'external' })
+    ], '', 'direct-updates', 'name').map((item) => item.name))
+      .toEqual(['DirectUpdate'])
+    expect(filterAndSortApplications([
+      ...applications,
+      application('DirectUpdate', { updateAvailable: true, updateMode: 'direct' }),
+      application('ExternalUpdate', { updateAvailable: true, updateMode: 'external' })
+    ], '', 'external-updates', 'name').map((item) => item.name))
+      .toEqual(['ExternalUpdate'])
     expect(filterAndSortApplications(applications, '', 'system', 'name').map((item) => item.name))
       .toEqual(['Safari'])
   })

@@ -6,6 +6,7 @@ import {
   applicationPlistCapabilities,
   applicationNamePlistPaths,
   applicationScope,
+  homebrewCaskUpdatesFromJson,
   isApplicationUnused,
   parseApplicationLastUsedDate,
   plistApplicationName,
@@ -89,5 +90,17 @@ describe('application cleanup threshold', () => {
       version: '4.5.0',
       downloadUrl: 'https://updates.example.test/Memento%204.5.0.dmg'
     }])
+  })
+
+  it('parses current and legacy Homebrew cask update fields and ignores pinned entries', () => {
+    expect(homebrewCaskUpdatesFromJson({ casks: [
+      { name: 'dingtalk', installed_versions: ['8.3.5'], current_version: '9.0.1' },
+      { token: 'legacy-app', version: '2.0.0' },
+      { name: 'pinned-app', current_version: '9.0.0', pinned: true },
+      { name: 'invalid token with spaces', current_version: '9.0.0' }
+    ] })).toEqual([
+      { token: 'dingtalk', name: 'dingtalk', latestVersion: '9.0.1' },
+      { token: 'legacy-app', name: 'legacy-app', latestVersion: '2.0.0' }
+    ])
   })
 })

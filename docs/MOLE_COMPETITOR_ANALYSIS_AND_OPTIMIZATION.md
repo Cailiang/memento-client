@@ -281,7 +281,7 @@ README 明确 Windows/Linux 仅用于桌面壳可移植性验证，但 Release �
 
 ### 应用更新实现边界
 
-Mole 公开仓库是免费 CLI；其中的 `mo update` 只负责更新 Mole 自身。Mole for Mac 原生应用是单独发布的闭源产品，公开仓库没有它的软件管理器实现可直接复用。Memento 因此按可验证来源执行更新：Homebrew Cask 和 Mac App Store 走各自的包管理器命令；Sparkle appcast 有 HTTPS 安装包时，在替换前校验 Bundle ID、签名团队和严格代码签名；只有无法安全取得安装包时，才打开应用自带更新器。Sparkle 的外部命令行接口也保留为兼容路径，参考 [Sparkle CLI 文档](https://sparkle-project.org/documentation/sparkle-cli/)。
+Mole 公开仓库是免费 CLI；其中的 `mo update` 只负责更新 Mole 自身。Mole for Mac 原生应用是单独发布的闭源产品，公开仓库没有它的软件管理器实现可直接复用。Memento 因此按可验证来源执行更新，并明确区分“可以在 Memento 内完成”和“需要打开外部更新器”：Homebrew Cask 与安装了 `mas` 的 Mac App Store 应用可直接更新；没有 `mas` 时，带 App Store 收据的应用通过 Apple lookup 检查版本并打开 App Store；Sparkle appcast 有 HTTPS 安装包时，在替换前校验 Bundle ID、签名团队和严格代码签名，无法安全取得安装包时打开应用自带更新器。Sparkle 的外部命令行接口也保留为兼容路径，参考 [Sparkle CLI 文档](https://sparkle-project.org/documentation/sparkle-cli/)。
 | 实时状态 | 仅扫描期指标与服务异常 | 完整实时状态 TUI | 暂不正面追赶，只保留可行动异常 |
 | 系统优化 | 终端修复、少量服务/清理动作 | 21 类维护任务目录 | 不追求数量，仅做能复检的高价值动作 |
 | 自动化 | 内部 typed IPC | JSON、NDJSON、CLI | 先提供脱敏诊断导出，后评估只读 CLI |
@@ -730,7 +730,7 @@ Memento 最值得保留的也不是“接入了多少模型”，而是确定性
 
 清理页现在把后台服务作为独立菜单类别展示；命令行启动优化已经提升为与应用管理、磁盘分析同一级的主模块。服务操作沿用扫描复检路径，shell 修复沿用带备份的终端修复注册表；从任意清理项目进入 AI 解释后返回，会保留原类别和已勾选项目。清理执行过程会逐项展示动画，失败项保留错误原因并支持仅重试失败项。
 
-概览页现在承担资源入口导航：应用分析显示安装、不常用和可更新数量，进入概览即启动应用扫描，并在扫描期间显示卡片内动画进度条；CPU/内存卡片将进程列表切换到对应降序排序，磁盘卡片进入磁盘分析，电池卡片打开系统设置，网络卡片打开活动监视器网络面板。进程采样扩展到最多 100 项，并提供用户/系统筛选与颜色区分；应用管理会合并 Homebrew Cask、Mac App Store（`mas`）和 Sparkle appcast 更新来源，并通过对应更新器执行；应用卡片点击即可打开应用，更新状态用标题下方徽目标识，避免操作按钮挤压；进程图标支持扫描结果和 Memento 自身 Bundle，终端分析项即使没有自动修复也能打开相关 shell 配置。
+概览页现在承担资源入口导航：应用分析显示安装、不常用和可更新数量，进入概览即启动应用扫描，并在扫描期间显示卡片内动画进度条；CPU/内存卡片将进程列表切换到对应降序排序，磁盘卡片进入磁盘分析，电池卡片打开系统设置，网络卡片打开活动监视器网络面板。进程采样扩展到最多 100 项，并提供用户/系统筛选与颜色区分；应用管理会合并 Homebrew Cask、App Store 收据/Apple lookup 和 Sparkle appcast 更新来源，通过更新能力标记筛选为 Memento 内更新或外部更新；应用卡片点击即可打开应用，更新状态用标题下方徽目标识，避免操作按钮挤压；进程图标支持扫描结果和 Memento 自身 Bundle，终端分析项即使没有自动修复也能打开相关 shell 配置。
 
 ## 14. 参考资料
 

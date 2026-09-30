@@ -4,6 +4,20 @@ All notable changes to Memento Client are documented here in English and Simplif
 
 Memento Client 的重要变更会在这里使用英文和简体中文同步记录。
 
+## 1.0.1 - 2026-09-30
+
+### English
+
+- Added receipt-aware Mac App Store update detection through Apple's lookup service, so direct App Store installs such as DingTalk are detected even when `mas` is not installed.
+- Distinguished updates that Memento can install from updates that require the App Store or the application's own updater, with matching card labels and filters.
+- Hardened Homebrew Cask matching against the current `brew outdated --json=v2` field shape and ignored reports that are not newer than the installed version.
+
+### 简体中文
+
+- 新增基于 App Store 收据和 Apple 查询服务的更新检测，即使没有安装 `mas`，也能识别钉钉这类直接从 App Store 安装的软件更新。
+- 区分 Memento 可直接完成的更新，以及需要打开 App Store 或应用自身更新器的更新，并在应用卡片和筛选器中明确展示。
+- 兼容当前 `brew outdated --json=v2` 的字段形式，并忽略并未高于当前版本的误报。
+
 Version 0.6.21 begins the rebuilt Memento Agent product line. Older entries are retained as historical records of the previous implementation.
 
 0.6.21 版本开始记录从头重建的 Memento Agent 产品线；更早条目仅作为旧实现的历史记录保留。

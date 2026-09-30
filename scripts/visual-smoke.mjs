@@ -625,6 +625,26 @@ try {
   if (!await applicationCard.locator('.app-update-badge').count()) {
     failures.push('applications: available update marker is missing from the card content')
   }
+  if (await applicationCard.locator('.app-update-method').textContent() !== '更新方式可在 Memento 内更新') {
+    failures.push('applications: direct update method is not explained on the card')
+  }
+  await page.locator('select[aria-label="筛选应用"]').selectOption('direct-updates')
+  if (await page.locator('.app-card').count() < 1) {
+    failures.push('applications: direct update filter returned no applications')
+  }
+  await page.locator('select[aria-label="筛选应用"]').selectOption('external-updates')
+  await page.locator('input[aria-label="搜索应用名称"]').fill('')
+  const externalUpdateCard = page.locator('.app-card').filter({ hasText: '钉钉' }).first()
+  await externalUpdateCard.waitFor()
+  const externalUpdateMethod = await externalUpdateCard.locator('.app-update-method').textContent()
+  if (!externalUpdateMethod?.includes('需打开 App Store 更新')) {
+    failures.push('applications: App Store update method is not explained on the card')
+  }
+  if (await externalUpdateCard.locator('.app-update-action').textContent() !== '打开更新') {
+    failures.push('applications: external update action is not labelled Open update')
+  }
+  await page.locator('select[aria-label="筛选应用"]').selectOption('all')
+  await page.locator('input[aria-label="搜索应用名称"]').fill('Visual Studio Code')
   await applicationCard.locator('.uninstall-app').click()
   await page.locator('[role="dialog"] .danger-button').click()
   await page.locator('.uninstall-progress').waitFor()

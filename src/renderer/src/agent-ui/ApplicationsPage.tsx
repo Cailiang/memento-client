@@ -16,13 +16,19 @@ import { useI18n } from '../i18n'
 import type { PageRestoreTarget } from './HealthPage'
 import { formatBytes, relativeDate } from './utils'
 
-export type ApplicationFilter = 'all' | 'recent' | 'unused' | 'updates' | 'system'
+export type ApplicationFilter = 'all' | 'recent' | 'unused' | 'updates' | 'direct-updates' | 'external-updates' | 'system'
 export type ApplicationSort = 'recent' | 'size' | 'name'
 
 function updateSourceLabel(source: InstalledApplication['updateSource'], language: 'zh-CN' | 'en-US'): string {
   if (source === 'mac-app-store') return language === 'en-US' ? 'Mac App Store' : 'Mac App Store'
   if (source === 'sparkle') return language === 'en-US' ? 'App self-updater' : '应用自更新'
   return language === 'en-US' ? 'Homebrew Cask' : 'Homebrew Cask'
+}
+
+function updateModeLabel(application: Pick<InstalledApplication, 'updateMode' | 'updateSource'>, language: 'zh-CN' | 'en-US'): string {
+  if (application.updateMode === 'direct') return language === 'en-US' ? 'Can update in Memento' : '可在 Memento 内更新'
+  if (application.updateSource === 'mac-app-store') return language === 'en-US' ? 'Open App Store to update' : '需打开 App Store 更新'
+  return language === 'en-US' ? 'Open the app to update' : '需打开应用更新'
 }
 
 export function filterAndSortApplications(
@@ -43,6 +49,8 @@ export function filterAndSortApplications(
       filter === 'all' ||
       (filter === 'unused' && application.unused) ||
       (filter === 'updates' && application.updateAvailable) ||
+      (filter === 'direct-updates' && application.updateAvailable && application.updateMode === 'direct') ||
+      (filter === 'external-updates' && application.updateAvailable && application.updateMode === 'external') ||
       (filter === 'recent' && !application.unused) ||
       (filter === 'system' && application.scope === 'system')
     ))
@@ -207,6 +215,8 @@ export function ApplicationsPage({
           <option value="recent">{text('最近使用', 'Recently used')}</option>
           <option value="unused">{text('3 个月未使用', 'Unused for 3 months')}</option>
           <option value="updates">{text('需要更新', 'Updates available')}</option>
+          <option value="direct-updates">{text('可在 Memento 内更新', 'Update in Memento')}</option>
+          <option value="external-updates">{text('需打开更新', 'Open to update')}</option>
           <option value="system">{text('系统应用', 'System applications')}</option>
         </select>
         <select aria-label={text('应用排序', 'Sort applications')} value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}>
@@ -222,7 +232,7 @@ export function ApplicationsPage({
             <article
               className={`app-card is-openable ${removingId === application.id ? 'is-removing' : ''}`}
               key={application.id}
-              aria-busy={removingId === application.id || openingId === application.id}
+              aria-busy={removingId === application.id || openingId === application.id || updatingId === application.id}
               aria-label={text(`打开 ${application.name}`, `Open ${application.name}`)}
               data-focus-id={application.id}
               tabIndex={0}
@@ -242,8 +252,9 @@ export function ApplicationsPage({
                 <EyeOff size={14} />
               </button>
               <ApplicationIcon application={application} />
-              <div className="app-title"><strong title={application.name}>{application.name}</strong><small>{text(`版本 ${application.version || '未知'}`, `Version ${application.version || 'unknown'}`)}</small>{application.updateAvailable && <span className="app-update-badge" title={updateSourceLabel(application.updateSource, language)}><ArrowUpCircle size={12} />{text(`可更新${application.latestVersion ? `至 ${application.latestVersion}` : ''}`, `Update${application.latestVersion ? ` to ${application.latestVersion}` : ''}`)}</span>}</div>
+              <div className="app-title"><strong title={application.name}>{application.name}</strong><small>{text(`版本 ${application.version || '未知'}`, `Version ${application.version || 'unknown'}`)}</small>{application.updateAvailable && <span className="app-update-badge" title={`${updateSourceLabel(application.updateSource, language)} · ${updateModeLabel(application, language)}`}><ArrowUpCircle size={12} />{text(`可更新${application.latestVersion ? `至 ${application.latestVersion}` : ''}`, `Update${application.latestVersion ? ` to ${application.latestVersion}` : ''}`)}</span>}</div>
               <div className="app-meta">
+                {application.updateAvailable && <div className="app-update-method"><span>{text('更新方式', 'Update method')}</span><strong title={updateSourceLabel(application.updateSource, language)}>{updateModeLabel(application, language)}</strong></div>}
                 <div><span>{text('最后使用', 'Last used')}</span><strong>{relativeDate(application.lastUsedAt, language)}</strong></div>
                 <div><span>{text('大小', 'Size')}</span><strong>{formatBytes(application.sizeBytes)}</strong></div>
               </div>
@@ -254,8 +265,8 @@ export function ApplicationsPage({
                 ), application.id)} disabled={removingId === application.id}>
                   <Sparkles size={14} />{text('问 Agent', 'Ask Agent')}
                 </button>
-                {application.updateAvailable && <button type="button" className="secondary-button app-update-action" onClick={() => onUpdate(application)} disabled={updatingId === application.id || removingId === application.id} title={text(`更新 ${application.name}`, `Update ${application.name}`)}>
-                  {updatingId === application.id ? <LoaderCircle className="spinner" size={14} /> : <ArrowUpCircle size={14} />}{text('更新', 'Update')}
+                {application.updateAvailable && <button type="button" className="secondary-button app-update-action" onClick={() => onUpdate(application)} disabled={updatingId === application.id || removingId === application.id} title={`${updateModeLabel(application, language)} · ${application.name}`}>
+                  {updatingId === application.id ? <LoaderCircle className="spinner" size={14} /> : <ArrowUpCircle size={14} />}{text(application.updateMode === 'direct' ? '更新' : '打开更新', application.updateMode === 'direct' ? 'Update' : 'Open update')}
                 </button>}
                 {application.action ? (
                   <button type="button" className="icon-button uninstall-app" onClick={() => onUninstall(application)} disabled={removingId === application.id} title={text(`卸载 ${application.name}`, `Uninstall ${application.name}`)} aria-label={text(`卸载 ${application.name}`, `Uninstall ${application.name}`)}>

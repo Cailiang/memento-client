@@ -1,3 +1,19 @@
+# Memento Agent 1.0.1 - App Store 更新检测 / App Store Update Detection
+
+## 简体中文
+
+- **App Store 更新检测：** 通过应用内的 App Store 收据和 Apple lookup 服务识别更新；没有安装 `mas` 时，钉钉等 App Store 应用也能显示准确的版本差异。
+- **更新方式清晰：** 应用卡片会区分“可在 Memento 内更新”和“需打开 App Store/应用更新”，并提供对应的筛选器与操作按钮。
+- **来源校验：** Homebrew Cask 结果会比较实际版本，只保留确实更高的更新。
+
+## English
+
+- **Mac App Store detection:** Receipt-backed applications are checked through Apple's lookup service, so App Store installs such as DingTalk still show their exact version delta without `mas`.
+- **Clear update paths:** Application cards distinguish updates Memento can install from updates that need the App Store or the application's own updater, with matching filters and action labels.
+- **Source validation:** Homebrew Cask results are compared with the installed version to avoid stale update reports.
+
+---
+
 # Memento Agent 1.0.0 - 首个稳定版本 / First Stable Release
 
 ## 简体中文

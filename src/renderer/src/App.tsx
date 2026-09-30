@@ -1419,9 +1419,19 @@ function AppContent({ onLanguageChange }: { onLanguageChange: (language: AppSett
   const updateApplication = async (application: InstalledApplication): Promise<void> => {
     setUpdatingApplicationId(application.id)
     try {
-      if (window.memento) await window.memento.updateApplication(application.id)
-      await scanNow()
-      setToast(appText(`${application.name} 已更新`, `${application.name} was updated.`))
+      const outcome = window.memento
+        ? await window.memento.updateApplication(application.id)
+        : application.updateMode === 'external'
+          ? { status: 'opened' as const, destination: application.updateSource === 'mac-app-store' ? 'app-store' as const : 'application' as const }
+          : { status: 'updated' as const }
+      if (outcome.status === 'updated') {
+        await scanNow()
+        setToast(appText(`${application.name} 已更新`, `${application.name} was updated.`))
+      } else {
+        setToast(outcome.destination === 'app-store'
+          ? appText(`已打开 App Store，请完成 ${application.name} 的更新后重新检查。`, `The App Store is open. Finish updating ${application.name}, then check again.`)
+          : appText(`已打开 ${application.name} 的更新入口，请完成更新后重新检查。`, `${application.name}'s updater is open. Finish the update, then check again.`))
+      }
     } catch (error) {
       setToast(error instanceof Error ? error.message : appText('应用更新失败', 'Application update failed.'))
     } finally {

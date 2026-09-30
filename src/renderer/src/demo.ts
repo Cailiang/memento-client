@@ -581,6 +581,7 @@ export const demoResult: ScanResult = {
       updateAvailable: true,
       latestVersion: '1.103.0',
       updateSource: 'homebrew-cask',
+      updateMode: 'direct',
       bundleId: 'com.microsoft.VSCode',
       location: '/Applications/Visual Studio Code.app',
       sizeBytes: 548 * MB,
@@ -589,6 +590,29 @@ export const demoResult: ScanResult = {
       unused: false,
       action: {
         id: 'demo-app-vscode',
+        kind: 'trash',
+        label: '卸载',
+        consequence: '应用本体会移到废纸篓，其文稿、数据和偏好设置会保留。',
+        reversible: true
+      }
+    },
+    {
+      id: 'demo-inventory-dingtalk',
+      name: '钉钉',
+      version: '8.3.5',
+      bundleId: '5ZSL2CJU2T.com.dingtalk.mac',
+      location: '/Applications/DingTalk.app',
+      sizeBytes: 1.2 * GB,
+      lastUsedAt: '2026-07-26T01:00:00.000Z',
+      scope: 'shared',
+      unused: false,
+      updateAvailable: true,
+      latestVersion: '9.0.1',
+      updateSource: 'mac-app-store',
+      updateMode: 'external',
+      updateToken: '1435447041',
+      action: {
+        id: 'demo-app-dingtalk',
         kind: 'trash',
         label: '卸载',
         consequence: '应用本体会移到废纸篓，其文稿、数据和偏好设置会保留。',

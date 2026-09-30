@@ -20,6 +20,7 @@ import { promisify } from 'node:util'
 import type {
   ActionResult,
   AppUpdateState,
+  ApplicationUpdateResult,
   DiskUsageProgress,
   DiskUsageNode,
   ScanProgress,
@@ -62,6 +63,7 @@ import {
   trashDestination
 } from './application-trash'
 import { runFullScan, type RegisteredAction } from './scanner'
+import { appStoreUpdateUrl } from './app-store-updates'
 import { installSparkleUpdate, runSparkleUpdater, sparkleUpdaterCommand } from './application-updater'
 import { isSystemProcess, OverviewMonitor } from './overview-monitor'
 import { inferFindingTrust } from '../shared/finding-trust'
@@ -1643,7 +1645,7 @@ app.whenReady().then(async () => {
       throw new Error(mainText(`无法打开应用：${error}`, `Could not open the application: ${error}`))
     }
   })
-  ipcMain.handle('memento:update-application', async (_event, id: string) => {
+  ipcMain.handle('memento:update-application', async (_event, id: string): Promise<ApplicationUpdateResult> => {
     if (typeof id !== 'string' || id.length > 100) {
       throw new Error(mainText('应用入口无效，请重新扫描', 'The application is invalid. Scan again.'))
     }
@@ -1665,13 +1667,16 @@ app.whenReady().then(async () => {
         maxBuffer: 4 * 1024 * 1024,
         env: { ...process.env, HOMEBREW_NO_AUTO_UPDATE: '1', LC_ALL: 'C' }
       })
-      return
+      return { status: 'updated' }
     }
     if (application.updateSource === 'mac-app-store') {
-      if (!mas) throw new Error(mainText('未找到 mas，请安装 mas 后重试', 'The mas command is not installed.'))
-      if (!/^\d+$/.test(token)) throw new Error(mainText('App Store 更新编号无效', 'The App Store update identifier is invalid.'))
-      await execFileAsync(mas, ['upgrade', token], { timeout: 10 * 60_000, maxBuffer: 4 * 1024 * 1024 })
-      return
+      if (mas && application.updateMode === 'direct') {
+        if (!/^\d+$/.test(token)) throw new Error(mainText('App Store 更新编号无效', 'The App Store update identifier is invalid.'))
+        await execFileAsync(mas, ['upgrade', token], { timeout: 10 * 60_000, maxBuffer: 4 * 1024 * 1024 })
+        return { status: 'updated' }
+      }
+      await shell.openExternal(appStoreUpdateUrl(token))
+      return { status: 'opened', destination: 'app-store' }
     }
     if (!/^https?:\/\//i.test(token)) {
       throw new Error(mainText('应用更新地址无效', 'The application update URL is invalid.'))
@@ -1681,12 +1686,12 @@ app.whenReady().then(async () => {
     }
     if (application.updateUrl) {
       await installSparkleUpdate({ target, downloadUrl: application.updateUrl, expectedVersion: application.latestVersion })
-      return
+      return { status: 'updated' }
     }
     const sparkle = sparkleUpdaterCommand(target)
     if (sparkle) {
       await runSparkleUpdater(target, sparkle)
-      return
+      return { status: 'opened', destination: 'application' }
     }
     const updaterMenuSelected = await openSparkleUpdater(target)
     if (!updaterMenuSelected) {
@@ -1695,6 +1700,7 @@ app.whenReady().then(async () => {
         'The application is open. To click “Check for Updates” automatically, allow Memento in System Settings → Privacy & Security → Accessibility. This permission is only used to control the updater menu.'
       ))
     }
+    return { status: 'opened', destination: 'application' }
   })
   ipcMain.handle('memento:open-system-settings', async (_event, section: string) => {
     const urls: Record<string, string> = {

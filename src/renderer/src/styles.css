@@ -773,6 +773,8 @@ select { -webkit-app-region: no-drag; }
 .app-meta strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .app-meta span { color: var(--text-tertiary); font-size: 11px; }
 .app-meta strong { margin-top: 4px; font-size: 12px; }
+.app-meta > .app-update-method { grid-column: 1 / -1; border-right: 0; border-bottom: 1px solid var(--line); }
+.app-update-method strong { color: var(--accent); white-space: normal; font-size: 11px; }
 .app-actions { display: grid; grid-template-columns: minmax(0, 1fr) repeat(2, auto); gap: 5px; }
 .app-actions button { min-width: 0; min-height: 34px; padding: 0 7px; font-size: 11px; }
 .app-actions .icon-button { padding: 0; }
