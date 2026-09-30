@@ -61,6 +61,8 @@ API keys use this format:
 
 Changing only a provider's display name preserves its tested connection state. Changing type, URL, model, or key returns it to `untested`.
 
+The Settings editor keeps the current provider draft while the model list or connection test refreshes the provider registry. A newly typed key is sent to the test request immediately, but is only encrypted and persisted after the user clicks Save. After a successful save, the key field is cleared and its masked hint changes to the new key suffix; leaving the field blank on a later save preserves that encrypted key. Failed tests also leave the draft key and the saved key unchanged.
+
 ## 4. Provider Registry
 
 `provider-factory.ts` maps saved types to official AI SDK providers:

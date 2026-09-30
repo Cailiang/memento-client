@@ -153,12 +153,15 @@ export function SettingsPage({
   const [pendingDelete, setPendingDelete] = useState<AgentProvider | null>(null)
   const [updateBusy, setUpdateBusy] = useState(false)
   const discoverySequence = useRef(0)
+  const initializedDraftProviderId = useRef<string | null>(null)
 
   useEffect(() => {
     if (!selected) {
       if (selectedId !== 'new' && providers.length) setSelectedId(providers[0].id)
       return
     }
+    if (initializedDraftProviderId.current === selected.id) return
+    initializedDraftProviderId.current = selected.id
     setDraft({
       id: selected.id,
       name: selected.name,
@@ -235,6 +238,7 @@ export function SettingsPage({
   ])
 
   const selectNew = (): void => {
+    initializedDraftProviderId.current = null
     setSelectedId('new')
     setDraft(blankProvider())
     setPresetId('deepseek')
@@ -268,6 +272,7 @@ export function SettingsPage({
     try {
       const saved = await onSaveProvider(draft)
       setSelectedId(saved.id)
+      setDraft((current) => ({ ...current, id: saved.id, apiKey: '' }))
       onToast(text('供应商配置已加密保存', 'Provider saved with encrypted credentials'))
     } catch {
       // App owns the user-facing error toast.

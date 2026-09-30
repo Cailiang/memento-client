@@ -4,6 +4,18 @@ All notable changes to Memento Client are documented here in English and Simplif
 
 Memento Client 的重要变更会在这里使用英文和简体中文同步记录。
 
+## 1.0.3 - 2026-09-30
+
+### English
+
+- Fixed provider key editing so connection tests use the newly typed draft key, provider refreshes no longer erase unsaved edits, and a saved key is used by later requests after reopening Settings.
+- Added Electron smoke coverage for key replacement, failed tests, encrypted persistence, and blank-key preservation.
+
+### 简体中文
+
+- 修复供应商密钥编辑：测试连接会使用刚输入的草稿密钥，刷新供应商列表不会再清空未保存的编辑内容，保存后重新打开设置时后续请求会使用新密钥。
+- 新增 Electron 冒烟覆盖，验证密钥替换、失败测试、加密持久化和留空密钥保留逻辑。
+
 ## 1.0.2 - 2026-09-30
 
 ### English

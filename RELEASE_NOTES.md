@@ -1,3 +1,19 @@
+# Memento Agent 1.0.3 - 供应商密钥编辑 / Provider Key Editing
+
+## 简体中文
+
+- **编辑立即生效：** 在供应商页面输入新密钥后，测试连接和模型发现会使用当前输入的密钥。
+- **保存后持久化：** 点击保存后，后续请求和重新打开设置都会使用新密钥；页面只显示新的末尾提示，不会回传已保存密钥的明文。
+- **草稿稳定：** 测试失败或供应商列表刷新不会覆盖未保存的密钥和其它字段；留空密钥继续表示保留已保存的密钥。
+
+## English
+
+- **Edits take effect immediately:** Connection tests and model discovery use the key currently entered in the provider editor.
+- **Persistence after Save:** Requests after saving and reopening Settings use the replacement key; the Renderer only receives its masked suffix.
+- **Stable drafts:** Failed tests and provider-list refreshes no longer overwrite unsaved keys or fields; leaving the key blank still preserves the encrypted saved key.
+
+---
+
 # Memento Agent 1.0.2 - CC Switch 一次性导入 / One-Time CC Switch Import
 
 ## 简体中文

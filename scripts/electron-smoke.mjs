@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { _electron as electronLauncher } from 'playwright-core'
+import { verifyProviderKeyEditing } from './provider-key-smoke.mjs'
 
 const profileDirectory = mkdtempSync(path.join(tmpdir(), 'memento-electron-smoke-'))
 let electronApp
@@ -60,7 +61,8 @@ try {
 
   await page.locator('.nav-button[title="清理"]').click()
   await page.locator('.cleanup-summary-band').waitFor({ timeout: 45_000 })
-  await page.locator('.cleanup-row').first().waitFor({ timeout: 45_000 })
+  await page.locator('.cleanup-scan-progress').waitFor({ state: 'detached', timeout: 120_000 })
+  await page.locator('.cleanup-row').first().waitFor({ timeout: 120_000 })
   if (await page.locator('.cleanup-categories button').count() !== 8) {
     throw new Error('cleanup category registry did not render eight storage and service categories')
   }
@@ -126,6 +128,7 @@ try {
   if (thunderName !== '迅雷') {
     throw new Error(`localized Thunder name was not loaded: ${JSON.stringify(thunderName)}`)
   }
+  await verifyProviderKeyEditing(page)
   console.log(`Electron smoke test passed: ${JSON.stringify(result)}`)
 } finally {
   await electronApp?.close().catch(() => undefined)
