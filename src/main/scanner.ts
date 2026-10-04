@@ -1578,6 +1578,14 @@ interface ApplicationUpdate {
   downloadUrl?: string
 }
 
+export function selectApplicationUpdate(
+  homebrewUpdate: ApplicationUpdate | null | undefined,
+  macAppStoreUpdate: ApplicationUpdate | null | undefined,
+  sparkleUpdate: ApplicationUpdate | null | undefined
+): ApplicationUpdate | undefined {
+  return homebrewUpdate ?? macAppStoreUpdate ?? sparkleUpdate ?? undefined
+}
+
 const APPLICATION_ROOTS = [
   '/Applications',
   path.join(HOME, 'Applications'),
@@ -2009,7 +2017,7 @@ async function scanApplications(
   const [homebrewUpdates, macAppStoreUpdates, sparkleUpdates] = await Promise.all([
     discoverHomebrewCaskUpdates(),
     discoverMacAppStoreUpdates(applications, language),
-    mapLimit(applications, 4, (application) => application.appStoreReceipt ? Promise.resolve(null) : discoverSparkleUpdate(application))
+    mapLimit(applications, 4, (application) => discoverSparkleUpdate(application))
   ])
   const sparkleByPath = new Map(applications.map((application, index) => [application.target, sparkleUpdates[index]]))
   const inventoryApplications = applications.filter(
@@ -2044,9 +2052,13 @@ async function scanApplications(
     const masUpdate = application.appStoreReceipt && application.bundleId
       ? macAppStoreUpdates.get(application.bundleId.toLocaleLowerCase())
       : undefined
-    const update = brewUpdate
-      ? { source: 'homebrew-cask' as const, token: brewUpdate.token, latestVersion: brewUpdate.latestVersion, mode: 'direct' as const }
-      : masUpdate
+    const update = selectApplicationUpdate(
+      brewUpdate
+        ? { source: 'homebrew-cask' as const, token: brewUpdate.token, latestVersion: brewUpdate.latestVersion, mode: 'direct' as const }
+        : undefined,
+      masUpdate,
+      sparkleByPath.get(application.target)
+    )
     return {
       id,
       name: application.name,
@@ -2073,18 +2085,6 @@ async function scanApplications(
         : undefined,
       action
     }
-  })
-  inventoryApplications.forEach((metadata, index) => {
-    const sparkleUpdate = sparkleByPath.get(metadata.target)
-    const application = inventory[index]
-    if (!application || !sparkleUpdate) return
-    if (application.updateAvailable) return
-    application.updateAvailable = true
-    application.latestVersion = sparkleUpdate.latestVersion
-    application.updateSource = sparkleUpdate.source
-    application.updateMode = sparkleUpdate.downloadUrl ? 'direct' : 'external'
-    application.updateToken = sparkleUpdate.token
-    application.updateUrl = sparkleUpdate.downloadUrl
   })
   const inventoryByPath = new Map(
     inventory.map((application) => [application.location, application])

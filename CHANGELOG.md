@@ -4,6 +4,18 @@ All notable changes to Memento Client are documented here in English and Simplif
 
 Memento Client 的重要变更会在这里使用英文和简体中文同步记录。
 
+## 1.0.4 - 2026-10-04
+
+### English
+
+- Fixed update discovery for receipt-backed applications such as DuckDuckGo that also publish a Sparkle appcast. Valid macOS App Store results remain preferred, while the appcast is now used when Apple has no matching macOS record.
+- Added regression coverage for the App Store-to-Sparkle fallback selection.
+
+### 简体中文
+
+- 修复 DuckDuckGo 这类同时带有 Mac App Store 收据和 Sparkle 更新源的应用无法检测更新的问题。有效的 macOS App Store 结果仍优先，没有匹配记录时会回退到应用自己的 appcast。
+- 新增 App Store 到 Sparkle 回退选择的回归测试。
+
 ## 1.0.3 - 2026-09-30
 
 ### English

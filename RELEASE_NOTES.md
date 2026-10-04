@@ -1,3 +1,17 @@
+# Memento Agent 1.0.4 - DuckDuckGo 更新检测 / DuckDuckGo Update Detection
+
+## 简体中文
+
+- **更新检测回退：** 带有 Mac App Store 收据、同时提供 Sparkle appcast 的应用，现在会在 Apple 没有有效 macOS 更新记录时继续检查自己的更新源。
+- **来源优先级：** 有效的 Homebrew 和 Mac App Store 更新仍优先；Sparkle 仅作为没有更高优先级结果时的安全回退。
+
+## English
+
+- **Update fallback:** Receipt-backed applications that also publish a Sparkle appcast now continue checking their own feed when Apple has no valid macOS update record.
+- **Source priority:** Valid Homebrew and Mac App Store updates remain preferred; Sparkle is used as a safe fallback when no higher-priority result exists.
+
+---
+
 # Memento Agent 1.0.3 - 供应商密钥编辑 / Provider Key Editing
 
 ## 简体中文

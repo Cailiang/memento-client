@@ -10,6 +10,7 @@ import {
   isApplicationUnused,
   parseApplicationLastUsedDate,
   plistApplicationName,
+  selectApplicationUpdate,
   sparkleUpdateItemsFromFeed,
   sparkleVersionFromFeed
 } from './scanner'
@@ -90,6 +91,23 @@ describe('application cleanup threshold', () => {
       version: '4.5.0',
       downloadUrl: 'https://updates.example.test/Memento%204.5.0.dmg'
     }])
+  })
+
+  it('uses a Sparkle feed when a receipt-backed app has no valid macOS App Store update', () => {
+    const sparkle = {
+      source: 'sparkle' as const,
+      token: 'https://updates.example.test/appcast.xml',
+      latestVersion: '1.209.0',
+      mode: 'external' as const
+    }
+    const macAppStore = {
+      source: 'mac-app-store' as const,
+      token: '663592361',
+      latestVersion: '1.210.0',
+      mode: 'external' as const
+    }
+    expect(selectApplicationUpdate(undefined, null, sparkle)).toEqual(sparkle)
+    expect(selectApplicationUpdate(undefined, macAppStore, sparkle)).toEqual(macAppStore)
   })
 
   it('parses current and legacy Homebrew cask update fields and ignores pinned entries', () => {
