@@ -1556,6 +1556,7 @@ interface ApplicationMetadata {
   executable: string | null
   urlSchemes: string[]
   sparkleFeedUrl: string | null
+  buildVersion: string | null
   appStoreReceipt: boolean
 }
 
@@ -1674,6 +1675,17 @@ function isVersionNewer(latest: string, current: string): boolean {
   return false
 }
 
+function compareVersions(left: string, right: string): number {
+  const leftParts = updateVersionParts(left)
+  const rightParts = updateVersionParts(right)
+  if (!leftParts.length || !rightParts.length) return 0
+  for (let index = 0; index < Math.max(leftParts.length, rightParts.length); index += 1) {
+    const difference = (leftParts[index] ?? 0) - (rightParts[index] ?? 0)
+    if (difference) return difference
+  }
+  return 0
+}
+
 function masExecutable(): string | null {
   return ['/opt/homebrew/bin/mas', '/usr/local/bin/mas', '/usr/bin/mas']
     .find((candidate) => existsSync(candidate)) ?? null
@@ -1754,20 +1766,31 @@ function supportedSparkleDownloadUrl(value: string | null): string | undefined {
   }
 }
 
-export function sparkleUpdateItemsFromFeed(xml: string): Array<{ version: string; downloadUrl: string | null }> {
+interface ParsedSparkleUpdateItem {
+  version: string
+  buildVersion: string | null
+  downloadUrl: string | null
+}
+
+function parsedSparkleUpdateItemsFromFeed(xml: string): ParsedSparkleUpdateItem[] {
   return [...xml.matchAll(/<item\b[\s\S]*?<\/item>/gi)].flatMap((item) => {
     const block = item[0]
     const itemTag = block.match(/<item\b[^>]*>/i)?.[0] ?? ''
     const enclosure = block.match(/<enclosure\b[^>]*>/i)?.[0] ?? ''
-    const version = sparkleAttribute(enclosure, 'sparkle:version') ??
+    const buildVersion = sparkleAttribute(enclosure, 'sparkle:version') ??
       sparkleElement(block, 'sparkle:version') ??
-      sparkleAttribute(enclosure, 'sparkle:shortVersionString') ??
+      sparkleAttribute(itemTag, 'sparkle:version')
+    const shortVersion = sparkleAttribute(enclosure, 'sparkle:shortVersionString') ??
       sparkleElement(block, 'sparkle:shortVersionString') ??
-      sparkleAttribute(itemTag, 'sparkle:version') ??
       sparkleAttribute(itemTag, 'sparkle:shortVersionString')
+    const version = shortVersion ?? buildVersion
     if (!version) return []
-    return [{ version, downloadUrl: sparkleAttribute(enclosure, 'url') }]
+    return [{ version, buildVersion, downloadUrl: sparkleAttribute(enclosure, 'url') }]
   })
+}
+
+export function sparkleUpdateItemsFromFeed(xml: string): Array<{ version: string; downloadUrl: string | null }> {
+  return parsedSparkleUpdateItemsFromFeed(xml).map(({ version, downloadUrl }) => ({ version, downloadUrl }))
 }
 
 export function sparkleVersionFromFeed(xml: string): string | null {
@@ -1783,29 +1806,94 @@ export function sparkleVersionFromFeed(xml: string): string | null {
   })[0] ?? null
 }
 
-async function discoverSparkleUpdate(application: ApplicationMetadata): Promise<ApplicationUpdate | null> {
+const DUCKDUCKGO_RELEASES_ENDPOINT = 'https://api.github.com/repos/duckduckgo/apple-browsers/releases?per_page=100'
+
+interface DuckDuckGoRelease {
+  tag_name?: unknown
+  draft?: unknown
+}
+
+export function duckDuckGoReleaseUpdateFromPayload(
+  payload: unknown,
+  currentVersion: string,
+  currentBuildVersion: string | null,
+  feedUrl: string
+): ApplicationUpdate | null {
+  if (!Array.isArray(payload)) return null
+  const releases = payload.flatMap((value): Array<{ version: string; buildVersion: string | null }> => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return []
+    const release = value as DuckDuckGoRelease
+    if (release.draft === true || typeof release.tag_name !== 'string') return []
+    const match = release.tag_name.trim().match(/^(\d+(?:\.\d+){2})(?:-(\d+))?\+macos$/i)
+    if (!match) return []
+    return [{ version: match[1], buildVersion: match[2] ?? null }]
+  })
+  releases.sort((left, right) => compareVersions(right.version, left.version) || compareVersions(right.buildVersion ?? '', left.buildVersion ?? ''))
+  const latest = releases[0]
+  if (!latest) return null
+  const newerMarketing = compareVersions(latest.version, currentVersion)
+  const newerBuild = latest.buildVersion && currentBuildVersion
+    ? compareVersions(latest.buildVersion, currentBuildVersion) > 0
+    : false
+  if (newerMarketing <= 0 && !newerBuild) return null
+  return {
+    source: 'sparkle',
+    token: feedUrl,
+    latestVersion: latest.version,
+    mode: 'external'
+  }
+}
+
+function sparkleItemIsNewer(
+  item: ParsedSparkleUpdateItem,
+  currentVersion: string,
+  currentBuildVersion: string | null
+): boolean {
+  const marketingComparison = compareVersions(item.version, currentVersion)
+  if (marketingComparison > 0) return true
+  if (marketingComparison < 0 || !item.buildVersion || !currentBuildVersion) return false
+  return compareVersions(item.buildVersion, currentBuildVersion) > 0
+}
+
+function compareSparkleItems(left: ParsedSparkleUpdateItem, right: ParsedSparkleUpdateItem): number {
+  return compareVersions(right.version, left.version) || compareVersions(right.buildVersion ?? '', left.buildVersion ?? '')
+}
+
+export async function discoverSparkleUpdate(
+  application: Pick<ApplicationMetadata, 'sparkleFeedUrl' | 'version' | 'buildVersion' | 'bundleId'>,
+  fetcher: typeof fetch = fetch
+): Promise<ApplicationUpdate | null> {
   const feedUrl = application.sparkleFeedUrl
   if (!feedUrl || !/^https?:\/\//i.test(feedUrl)) return null
   try {
-    const response = await fetch(feedUrl, { signal: AbortSignal.timeout(5_000), headers: { accept: 'application/rss+xml, application/xml, text/xml' } })
-    if (!response.ok) return null
-    const items = sparkleUpdateItemsFromFeed(await response.text())
-      .filter((item) => isVersionNewer(item.version, application.version))
-      .sort((left, right) => {
-        if (isVersionNewer(left.version, right.version)) return -1
-        if (isVersionNewer(right.version, left.version)) return 1
-        return 0
-      })
-    const latest = items[0]
-    if (!latest) return null
-    const downloadUrl = supportedSparkleDownloadUrl(latest.downloadUrl)
-    return {
-      source: 'sparkle',
-      token: feedUrl,
-      latestVersion: latest.version,
-      mode: downloadUrl ? 'direct' : 'external',
-      downloadUrl
+    const response = await fetcher(feedUrl, { signal: AbortSignal.timeout(5_000), headers: { accept: 'application/rss+xml, application/xml, text/xml' } })
+    if (response.ok) {
+      const items = parsedSparkleUpdateItemsFromFeed(await response.text())
+        .filter((item) => sparkleItemIsNewer(item, application.version, application.buildVersion))
+        .sort(compareSparkleItems)
+      const latest = items[0]
+      if (latest) {
+        const downloadUrl = supportedSparkleDownloadUrl(latest.downloadUrl)
+        return {
+          source: 'sparkle',
+          token: feedUrl,
+          latestVersion: latest.version,
+          mode: downloadUrl ? 'direct' : 'external',
+          downloadUrl
+        }
+      }
     }
+  } catch {
+    // DuckDuckGo's static CDN can be unavailable independently of GitHub.
+  }
+  if (application.bundleId?.toLowerCase() !== 'com.duckduckgo.mobile.ios') return null
+  try {
+    const response = await fetcher(DUCKDUCKGO_RELEASES_ENDPOINT, {
+      signal: AbortSignal.timeout(8_000),
+      headers: { accept: 'application/vnd.github+json', 'user-agent': 'Memento application update checker' }
+    })
+    if (!response.ok) return null
+    return duckDuckGoReleaseUpdateFromPayload(await response.json(), application.version, application.buildVersion, feedUrl)
   } catch {
     return null
   }
@@ -1972,6 +2060,7 @@ async function inspectApplication(target: string, language: AppLanguage): Promis
       sizeBytes: Number.parseInt(sizeValue ?? '0', 10) || 0,
       lastUsedAt: parseApplicationLastUsedDate(dateValue, bundleModifiedAt),
       ...capabilities,
+      buildVersion: typeof info?.CFBundleVersion === 'string' ? info.CFBundleVersion : null,
       appStoreReceipt: await pathExists(path.join(target, 'Contents', '_MASReceipt', 'receipt'))
     }
   } catch {
@@ -1989,6 +2078,7 @@ async function inspectApplication(target: string, language: AppLanguage): Promis
         sizeBytes: await getPathSize(target),
         lastUsedAt: parseApplicationLastUsedDate(null, bundleModifiedAt),
         ...capabilities,
+        buildVersion: typeof info.CFBundleVersion === 'string' ? info.CFBundleVersion : null,
         appStoreReceipt: await pathExists(path.join(target, 'Contents', '_MASReceipt', 'receipt'))
       }
     }
@@ -2000,6 +2090,7 @@ async function inspectApplication(target: string, language: AppLanguage): Promis
       sizeBytes: 0,
       lastUsedAt: parseApplicationLastUsedDate(null, bundleModifiedAt),
       ...applicationPlistCapabilities(null),
+      buildVersion: null,
       appStoreReceipt: false
     }
   }

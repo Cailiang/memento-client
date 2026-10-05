@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import os from 'node:os'
 import path from 'node:path'
 import {
@@ -6,6 +6,8 @@ import {
   applicationPlistCapabilities,
   applicationNamePlistPaths,
   applicationScope,
+  discoverSparkleUpdate,
+  duckDuckGoReleaseUpdateFromPayload,
   homebrewCaskUpdatesFromJson,
   isApplicationUnused,
   parseApplicationLastUsedDate,
@@ -91,6 +93,41 @@ describe('application cleanup threshold', () => {
       version: '4.5.0',
       downloadUrl: 'https://updates.example.test/Memento%204.5.0.dmg'
     }])
+  })
+
+  it('uses Sparkle marketing versions while retaining DuckDuckGo build numbers for comparison', () => {
+    expect(sparkleUpdateItemsFromFeed(`<rss><channel><item>
+      <sparkle:shortVersionString>1.210.0</sparkle:shortVersionString>
+      <sparkle:version>821</sparkle:version>
+    </item></channel></rss>`)).toEqual([{ version: '1.210.0', downloadUrl: null }])
+  })
+
+  it('falls back to DuckDuckGo GitHub releases when its appcast CDN is unavailable', async () => {
+    const fetcher = vi.fn<typeof fetch>()
+      .mockRejectedValueOnce(new Error('appcast timeout'))
+      .mockResolvedValueOnce(new Response(JSON.stringify([
+        { tag_name: '1.210.0-821+macos', draft: false },
+        { tag_name: '7.240.0-6+ios', draft: false }
+      ])))
+    const update = await discoverSparkleUpdate({
+      bundleId: 'com.duckduckgo.mobile.ios',
+      sparkleFeedUrl: 'https://staticcdn.duckduckgo.com/macos-desktop-browser/appcast2.xml',
+      version: '1.186.1',
+      buildVersion: '680'
+    }, fetcher)
+    expect(update).toEqual({
+      source: 'sparkle',
+      token: 'https://staticcdn.duckduckgo.com/macos-desktop-browser/appcast2.xml',
+      latestVersion: '1.210.0',
+      mode: 'external'
+    })
+    expect(fetcher).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not report a DuckDuckGo release older than the installed marketing/build version', () => {
+    expect(duckDuckGoReleaseUpdateFromPayload([
+      { tag_name: '1.210.0-819+macos', draft: false }
+    ], '1.210.0', '820', 'https://updates.example.test/appcast.xml')).toBeNull()
   })
 
   it('uses a Sparkle feed when a receipt-backed app has no valid macOS App Store update', () => {

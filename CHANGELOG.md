@@ -4,6 +4,18 @@ All notable changes to Memento Client are documented here in English and Simplif
 
 Memento Client 的重要变更会在这里使用英文和简体中文同步记录。
 
+## 1.0.5 - 2026-10-05
+
+### English
+
+- Fixed DuckDuckGo update detection when its static Sparkle appcast CDN is unavailable by falling back to the official macOS release tags on GitHub.
+- Parsed Sparkle marketing versions separately from build numbers so same-version DuckDuckGo builds are compared correctly.
+
+### 简体中文
+
+- 修复 DuckDuckGo 的 Sparkle appcast 静态 CDN 不可用时无法检测更新的问题，改为回退到官方 GitHub macOS 发布标签。
+- 将 Sparkle 的展示版本与构建号分开解析，正确比较同一展示版本下的 DuckDuckGo 构建更新。
+
 ## 1.0.4 - 2026-10-04
 
 ### English

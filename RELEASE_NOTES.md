@@ -1,3 +1,17 @@
+# Memento Agent 1.0.5 - DuckDuckGo CDN 回退 / DuckDuckGo CDN Fallback
+
+## 简体中文
+
+- **可靠检测：** DuckDuckGo 的静态 Sparkle appcast CDN 暂时不可用时，使用官方 GitHub macOS 发布标签识别更新。
+- **版本比较：** 分别读取 Sparkle 展示版本和构建号，避免同一展示版本的新构建被漏报。
+
+## English
+
+- **Reliable discovery:** DuckDuckGo updates are detected from official GitHub macOS release tags when its static Sparkle appcast CDN is unavailable.
+- **Version comparison:** Sparkle marketing versions and build numbers are compared separately so newer builds with the same marketing version are not missed.
+
+---
+
 # Memento Agent 1.0.4 - DuckDuckGo 更新检测 / DuckDuckGo Update Detection
 
 ## 简体中文
