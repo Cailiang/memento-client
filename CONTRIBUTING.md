@@ -19,9 +19,12 @@ npm run typecheck
 npm run build
 npm run scan:smoke
 npm run electron:smoke
+npm run audit:runtime
 ```
 
 Run the four-viewport Renderer smoke test as documented in [docs/RELEASING.md](docs/RELEASING.md), and run `git diff --check`.
+
+Code and UI changes also require a patch-version bump, matching changelog and release notes, a verified local Developer ID-signed Intel x64 DMG, its SHA-256, and a source commit. Follow the complete [release checklist](docs/RELEASING.md) and [development contract](AGENTS.md). Documentation-only maintenance follows the exception in the release checklist; check affected links, examples, and formatting without creating an application package.
 
 ## Finding and Operation Rules
 

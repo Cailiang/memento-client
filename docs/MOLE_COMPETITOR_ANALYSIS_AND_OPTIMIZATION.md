@@ -6,6 +6,8 @@
 >
 > Mole 基线：`V1.49.2` / `ad82a47b157c289a0feb52a414d4515a83ea7aaf`
 
+> 文档性质：历史分析与后续实现摘录。比较数据、问题清单和路线图保留分析时的基线，不代表当前版本仍存在这些问题；第 12、13 节和“应用更新实现边界”为后续补充。当前产品行为以 [README](../README_ZH.md)、[架构文档](LOCAL_AGENT_DEVELOPMENT.md)和[发布流程](RELEASING.md)为准。
+
 ## 1. 执行摘要
 
 Memento 不应该把目标设为“做一个功能更多的 Mole”。Mole 已经在终端清理工具、规则覆盖、低门槛安装和社区反馈上形成明显优势；逐项追赶它的 `clean`、`status`、`optimize` 和大量清理规则，会让 Memento 陷入高风险、低差异化的长期维护战。
@@ -269,7 +271,7 @@ README 明确 Windows/Linux 仅用于桌面壳可移植性验证，但 Release �
 
 ### 5.3 能力对照
 
-| 维度 | Memento 当前 | Mole 当前 | 建议 |
+| 维度 | Memento 分析基线 | Mole 分析基线 | 建议 |
 | --- | --- | --- | --- |
 | 首次价值 | 自动扫描，但默认页是未配置模型的 Agent | 安装后直接运行任务 | Memento 首次进入确定性体检摘要 |
 | AI | 多供应商、本地证据、计划确认 | 无通用 AI 解释层 | 保持为差异化，但改成可选增强 |
@@ -278,16 +280,18 @@ README 明确 Windows/Linux 仅用于桌面壳可移植性验证，但 Release �
 | 批量清理 | 主要依赖 Agent 计划 | 原生命令预览和多选 | 增加无 AI 的统一选择托盘 |
 | 应用卸载 | 应用本体为主，部分服务场景能带数据 | 完整残留预览较成熟 | 建立精确证据驱动的卸载清单 |
 | 磁盘分析 | GUI 分栏、Ask AI、移到废纸篓 | Go TUI、缓存、Spotlight、JSON | 保留 GUI，补缓存、首屏和大文件索引 |
-
-### 应用更新实现边界
-
-Mole 公开仓库是免费 CLI；其中的 `mo update` 只负责更新 Mole 自身。Mole for Mac 原生应用是单独发布的闭源产品，公开仓库没有它的软件管理器实现可直接复用。Memento 因此按可验证来源执行更新，并明确区分“可以在 Memento 内完成”和“需要打开外部更新器”：Homebrew Cask 与安装了 `mas` 的 Mac App Store 应用可直接更新；没有 `mas` 时，带 App Store 收据的应用通过 Apple lookup 检查版本并打开 App Store；Sparkle appcast 有 HTTPS 安装包时，在替换前校验 Bundle ID、签名团队和严格代码签名，无法安全取得安装包时打开应用自带更新器。Sparkle 的外部命令行接口也保留为兼容路径，参考 [Sparkle CLI 文档](https://sparkle-project.org/documentation/sparkle-cli/)。
 | 实时状态 | 仅扫描期指标与服务异常 | 完整实时状态 TUI | 暂不正面追赶，只保留可行动异常 |
 | 系统优化 | 终端修复、少量服务/清理动作 | 21 类维护任务目录 | 不追求数量，仅做能复检的高价值动作 |
 | 自动化 | 内部 typed IPC | JSON、NDJSON、CLI | 先提供脱敏诊断导出，后评估只读 CLI |
 | 安装 | GitHub DMG + 自动更新 | Homebrew + curl | 增加 Homebrew Cask 和官网直接下载 |
 | 平台 | 发布三平台，能力仅 macOS | 明确 macOS-first | 公开产品聚焦 macOS |
 | 社区 | 尚未建立 | Issue/PR/安全/贡献闭环成熟 | 建立规则反馈与脱敏复现流程 |
+
+### 应用更新实现边界（后续补充）
+
+Mole 公开仓库是免费 CLI；其中的 `mo update` 只负责更新 Mole 自身。Mole for Mac 原生应用是单独发布的闭源产品，公开仓库没有它的软件管理器实现可直接复用。Memento 因此按可验证来源执行更新，并明确区分“可以在 Memento 内完成”和“需要打开外部更新器”：Homebrew Cask 与安装了 `mas` 的 Mac App Store 应用可直接更新；没有 `mas` 时，带 App Store 收据的应用通过 Apple lookup 检查版本并打开 App Store；Sparkle appcast 有 HTTPS 安装包时，在替换前校验 Bundle ID、签名团队和严格代码签名，无法安全取得安装包时打开应用自带更新器。Sparkle 的外部命令行接口也保留为兼容路径，参考 [Sparkle CLI 文档](https://sparkle-project.org/documentation/sparkle-cli/)。
+
+截至 `1.0.5`，带 App Store 收据的应用也可以在没有有效商店更新结果时使用 Sparkle；DuckDuckGo 的 appcast 没有更新结果或不可用时，还会使用官方 GitHub macOS 发布标签检测更新，并交给应用自带更新器安装。完整来源选择规则见[应用更新检测](LOCAL_AGENT_DEVELOPMENT.md#43-application-update-discovery)。
 
 ## 6. 推荐的产品策略
 
@@ -730,7 +734,7 @@ Memento 最值得保留的也不是“接入了多少模型”，而是确定性
 
 清理页现在把后台服务作为独立菜单类别展示；命令行启动优化已经提升为与应用管理、磁盘分析同一级的主模块。服务操作沿用扫描复检路径，shell 修复沿用带备份的终端修复注册表；从任意清理项目进入 AI 解释后返回，会保留原类别和已勾选项目。清理执行过程会逐项展示动画，失败项保留错误原因并支持仅重试失败项。
 
-概览页现在承担资源入口导航：应用分析显示安装、不常用和可更新数量，进入概览即启动应用扫描，并在扫描期间显示卡片内动画进度条；CPU/内存卡片将进程列表切换到对应降序排序，磁盘卡片进入磁盘分析，电池卡片打开系统设置，网络卡片打开活动监视器网络面板。进程采样扩展到最多 100 项，并提供用户/系统筛选与颜色区分；应用管理会合并 Homebrew Cask、App Store 收据/Apple lookup 和 Sparkle appcast 更新来源，通过更新能力标记筛选为 Memento 内更新或外部更新；应用卡片点击即可打开应用，更新状态用标题下方徽目标识，避免操作按钮挤压；进程图标支持扫描结果和 Memento 自身 Bundle，终端分析项即使没有自动修复也能打开相关 shell 配置。
+概览页现在承担资源入口导航：应用分析显示安装、不常用和可更新数量，进入概览即启动应用扫描，并在扫描期间显示卡片内动画进度条；CPU/内存卡片将进程列表切换到对应降序排序，磁盘卡片进入磁盘分析，电池卡片打开系统设置，网络卡片打开活动监视器网络面板。进程采样扩展到最多 100 项，并提供用户/系统筛选与颜色区分；应用管理会合并 Homebrew Cask、App Store 收据/Apple lookup 和 Sparkle appcast 更新来源，通过更新能力标记筛选为 Memento 内更新或外部更新；应用卡片点击即可打开应用，更新状态用标题下方徽目标识，避免操作按钮挤压；进程图标支持扫描结果和 Memento 自身 Bundle。命令行启动优化列表自 `0.7.15` 起只显示有已注册修复的项目，这些项目仍可打开相关 shell 配置供检查。
 
 ## 14. 参考资料
 
@@ -758,6 +762,6 @@ Memento 最值得保留的也不是“接入了多少模型”，而是确定性
 - [主扫描器](../src/main/scanner.ts)
 - [磁盘扫描器](../src/main/disk-usage-scanner.ts)
 - [Agent Runtime](../src/main/agent/local-agent-runtime.ts)
-- [健康页面](../src/renderer/src/agent-ui/HealthPage.tsx)
+- [清理与命令行启动优化页面](../src/renderer/src/agent-ui/HealthPage.tsx)
 - [应用页面](../src/renderer/src/agent-ui/ApplicationsPage.tsx)
 - [发布工作流](../.github/workflows/release.yml)

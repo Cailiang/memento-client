@@ -41,7 +41,7 @@ git diff --check
 Start the web development server in one terminal:
 
 ```bash
-npm run dev:web -- --port 4174
+npm run dev:web -- --port 4174 --strictPort
 ```
 
 Keep it running while the UI smoke test executes in another terminal:
@@ -50,11 +50,23 @@ Keep it running while the UI smoke test executes in another terminal:
 npm run ui:smoke -- http://127.0.0.1:4174
 ```
 
+`--strictPort` makes an occupied port fail visibly instead of silently starting Vite on another port while the smoke test connects to an older server. Confirm that the server on `4174` serves the checkout being verified.
+
 Build the required local package with the exact project identity qualifier:
 
 ```bash
 CSC_NAME='Beijing Digital Union Network Technology Co., Ltd. (6EDPX6CD7U)' npm run dist:mac -- --x64
 ```
+
+The local bundle check verifies the disk image, bundled version, executable architecture, and strict application signature. Record the DMG checksum after any signing or stapling step:
+
+```bash
+version="$(node -p "require('./package.json').version")"
+scripts/verify-mac-dmg.sh x64 "release/Memento-${version}-x64.dmg" bundle
+shasum -a 256 "release/Memento-${version}-x64.dmg"
+```
+
+The `bundle` mode also checks the application identifier; verify the Developer ID authority and Team ID separately as listed below. A local Developer ID-signed app can pass these checks without notarization credentials. The public workflow uses `developer-id` mode with `APPLE_SIGNING_IDENTITY` and `APPLE_TEAM_ID`; that stricter mode additionally requires the signed DMG, Gatekeeper acceptance, and valid stapled tickets on both the app and DMG. The local build and public CI build can have different checksums; use the Release's `SHA256SUMS.txt` for downloaded public installers.
 
 Before committing, verify all of the following:
 
@@ -80,6 +92,7 @@ Before committing, verify all of the following:
 ```bash
 git switch main
 git pull --ff-only origin main
+git push origin main
 version="$(node -p "require('./package.json').version")"
 git tag -a "v${version}" -m "Memento ${version}"
 git push origin "v${version}"

@@ -8,13 +8,13 @@ Memento is a local desktop maintenance agent. It combines deterministic device i
 
 ## Capabilities
 
-- **Agent:** describe a maintenance goal in plain language, inspect structured results, review a proposed plan, and verify the outcome.
+- **AI assistant:** describe a maintenance goal in plain language, inspect structured results, review a proposed plan, and verify the outcome.
 - **Overview:** inspect health, CPU, GPU, memory, battery, disk, network, application counts, and a larger live process list in one quiet workspace. Disk availability follows macOS's native capacity estimate, including purgeable space, and is displayed in decimal GB. CPU and memory cards jump to descending process views; Disk opens Disk analysis; Battery opens System Settings and Network opens Activity Monitor's Network panel. Filter processes by User or System, see matching application logos including Memento when available, ask the local Agent about a process and receive confirmable quit or force-quit actions, copy its name/PID, and quit only non-system processes with a revalidated action. The process list holds its current order while you interact with it so live refreshes do not move the action menu.
 - **Cleanup:** scan rebuildable data by system, application, browser, developer, log, device, and background-service categories; safe items are preselected while review items remain opt-in. Outside-rule clues expose a separately confirmed move-to-Trash action when a registered target is available, and AI explanations preserve your cleanup selection when you return. Cleanup runs show a fast per-item animation and keep failed entries visible with their error and a retry action.
-- **Terminal startup:** inspect shell startup and PATH findings as a first-class module alongside Applications and Disk analysis. Safe fixes create a backup before applying, and analysis-only findings can open the related shell configuration for review.
+- **Terminal startup:** review shell startup and PATH findings with registered fixes in a first-class module alongside Applications and Disk analysis. Open the related configuration for review and confirm fixes that create a backup before applying. Diagnostics without a registered fix are excluded from the optimization list.
 - **Applications:** inspect installed applications and metadata, see a staged loading view while the inventory is scanned, check Homebrew Cask, receipt-backed Mac App Store, and Sparkle appcast sources (including the DuckDuckGo release fallback), distinguish updates Memento can install from updates that need an external updater, click an application card to open it, ignore an app, and move supported apps to Trash after confirmation.
 - **Disk analysis:** browse storage hierarchically and use validated opaque node operations to reveal a directory, ask AI for an explanation, or move it to Trash.
-- **History:** audit every direct, Agent, disk-browser, terminal, and recovery operation in one local maintenance ledger; Agent conversations remain available on a separate tab.
+- **Activity:** audit every direct, Agent, disk-browser, terminal, and recovery operation in one local maintenance ledger; Agent conversations remain available on a separate tab.
 - **Settings:** manage model providers, automatic background updates, window behavior, ignored items, theme, and language.
 
 ## Safety Model
@@ -53,7 +53,11 @@ npm run dev
 
 The application opens on the local Overview. No model is required for live metrics, deterministic rule scanning, categorized selection, confirmed batch cleanup, or maintenance history. Configure a provider in **Settings** only when an item needs AI explanation or plan generation. Choose OpenAI, Anthropic, Google Gemini, DeepSeek, Grok/xAI, Antigravity, or a custom OpenAI-compatible endpoint; Memento supplies the protocol, official endpoint, and a tested recommended model for named providers.
 
-On its first local-configuration scan, Memento reads API configurations from `~/.claude`, `~/.codex`, `~/.gemini`, and `~/.grok`. Before importing, it uses the provider's read-only model catalog to validate the credential, endpoint, and configured model. Malformed, incomplete, unauthorized, OAuth-only, unsupported session-token, and unavailable-model configurations are filtered out; a new scan also removes previously imported local configurations that no longer pass validation. CC Switch is never required or read automatically; **Import CC Switch** is a separate user-initiated optional action that applies the same validation and removes invalid or deleted earlier CC Switch imports when repeated.
+On its first local-configuration scan, Memento reads API configurations from `~/.claude`, `~/.codex`, `~/.gemini`, and `~/.grok`. Before importing, it uses the provider's read-only model catalog to validate the credential, endpoint, and configured model. Malformed, incomplete, unauthorized, OAuth-only, unsupported session-token, and unavailable-model configurations are filtered out; a new scan also removes previously imported local configurations that no longer pass validation.
+
+CC Switch is optional. When Memento first detects complete provider configurations in its local database, it asks once whether to import them. Accepted configurations pass the same model-catalog validation and become independent, editable, encrypted copies in Memento. Settings offers **Copy CC Switch configurations** for an explicit retry; copying again can replace the corresponding imported row with the current source values, but it never removes earlier copies because the source was deleted or failed validation. There is no background synchronization or write-back to CC Switch.
+
+Application update checks use Homebrew Cask, receipt-backed Mac App Store lookup, and Sparkle feeds. App Store detection works without `mas`; without it, installation opens the App Store. If DuckDuckGo's appcast provides no newer version or cannot be reached, Memento checks its official GitHub macOS release tags and marks a detected update for the app's external updater. See [Application update discovery](docs/LOCAL_AGENT_DEVELOPMENT.md#43-application-update-discovery) for source selection and installation boundaries.
 
 ## Verification
 
@@ -69,7 +73,7 @@ npm run audit:runtime
 Start the web development server in one terminal:
 
 ```bash
-npm run dev:web -- --port 4174
+npm run dev:web -- --port 4174 --strictPort
 ```
 
 Then run the browser UI smoke test in a second terminal:
