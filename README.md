@@ -1,3 +1,9 @@
+> **This repository is archived. Memento is now DiskCollie.**
+> Development, issues and future updates have moved to [Cailiang/disk-collie](https://github.com/Cailiang/disk-collie).
+>
+> **本仓库已归档，Memento 已更名为 DiskCollie。**
+> 后续开发、问题反馈与更新请前往 [新仓库](https://github.com/Cailiang/disk-collie)。原有提交和发布记录保留。
+
 # Memento Agent
 
 [![Release](https://github.com/Cailiang/memento-client/actions/workflows/release.yml/badge.svg)](https://github.com/Cailiang/memento-client/actions/workflows/release.yml)
